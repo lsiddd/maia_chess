@@ -467,3 +467,57 @@ avisa sobre esse efeito antes da exclusão.
 reconstruíveis; `games` continua sendo a fonte de verdade. A migração v2
 acrescenta a contagem de partidas da janela de campanha e refaz essas
 projeções para bancos existentes.
+
+---
+
+## ADR-011: minificação e shrink de recursos desligados no build de release
+
+**Status:** aceito
+
+**Contexto:** a auditoria técnica registrada em `AUDITORIA_TECNICA.md`
+(AUD-007) constatou que `android/app/build.gradle.kts` não define
+`minifyEnabled`/`shrinkResources` no bloco `release`, portanto assumem o
+padrão `false` do Android Gradle Plugin: o APK de release sai maior e sem
+ofuscação de código Dart/Kotlin.
+
+**Decisão:** manter desligado por ora, decisão explícita em vez de omissão.
+
+**Justificativa:** o projeto é open source, distribuído por sideload
+(ver README), sem segredo comercial que a ofuscação protegeria. Ativar a
+minificação exigiria regras de ProGuard/R8 testadas contra um build de
+release real cobrindo Drift (reflexão via `sqlite3`) e os plugins FFI
+(`leela_chess_zero`, `stockfish`), e o ambiente de build usado no
+desenvolvimento já se mostrou pesado para builds nativos (ver ADR-001,
+observação de robustez sobre virtualização aninhada). Não há ganho
+imediato que justifique esse risco agora.
+
+**Consequência:** o APK fica maior e sem ofuscação enquanto esta decisão
+valer. Revisitar antes de publicar em um canal que cobre por tamanho de
+download, ou se o volume de código Dart/Kotlin crescer o suficiente para
+pesar de forma perceptível.
+
+---
+
+## ADR-012: campos de relógio de xadrez são scaffolding para fase futura
+
+**Status:** aceito, pendência registrada
+
+**Contexto:** `GameState`, `StoredGame`, a tabela `games` (Drift) e todo o
+caminho de persistência já carregam `clockEnabled`/`initialTimeMs`/
+`whiteTimeMs`/`blackTimeMs` (ver `AUDITORIA_TECNICA.md`, AUD-011), mas
+nenhum `Timer`/contagem regressiva os decrementa e nenhuma tela exibe um
+relógio.
+
+**Decisão:** manter os campos como estão, sem removê-los agora. Este ADR
+documenta que fazem parte do desenho de uma feature de relógio ainda não
+implementada, provavelmente junto da personalização citada no README como
+pendência das Fases 6-7.
+
+**Justificativa:** os campos já persistem e migram corretamente
+(`schemaVersion` 2 em `AppDatabase`); removê-los agora exigiria uma nova
+migração de banco sem ganho real, e a estrutura de dados já reflete o
+desenho pretendido para quando a feature for priorizada.
+
+**Consequência:** até a feature ser implementada (ou os campos removidos,
+se for descartada), um leitor do schema pode presumir que o relógio já
+funciona. Este ADR existe justamente para deixar isso explícito.
