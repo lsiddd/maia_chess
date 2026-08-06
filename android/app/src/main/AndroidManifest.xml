@@ -1,8 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- allowBackup explícito (decisão registrada em AUDITORIA_TECNICA.md,
+         AUD-008): os únicos dados do app são partidas de xadrez locais,
+         progresso de campanha e preferências, sem conta nem dado pessoal;
+         mantém o backup automático do Android ligado (comportamento padrão)
+         para não perder o progresso do jogador numa troca de aparelho. -->
     <application
         android:label="maia_chess"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
