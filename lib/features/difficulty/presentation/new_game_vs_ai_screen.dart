@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/difficulty_levels.dart';
 import '../../../core/theming/app_page_route.dart';
+import '../../../core/theming/app_theme.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 
@@ -58,38 +59,64 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Jogar contra a IA Maia')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          Text('Seu lado', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          SegmentedButton<Side>(
-            segments: const [
-              ButtonSegment(value: Side.white, label: Text('Brancas')),
-              ButtonSegment(value: Side.black, label: Text('Pretas')),
-            ],
-            selected: {_humanSide},
-            onSelectionChanged: (selection) =>
-                setState(() => _humanSide = selection.first),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.l),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionLabel(
+                    icon: Icons.swap_horiz,
+                    label: 'Seu lado',
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                  SegmentedButton<Side>(
+                    segments: const [
+                      ButtonSegment(value: Side.white, label: Text('Brancas')),
+                      ButtonSegment(value: Side.black, label: Text('Pretas')),
+                    ],
+                    selected: {_humanSide},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _humanSide = selection.first),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Nível (estilo Maia)',
-            style: Theme.of(context).textTheme.titleMedium,
+          const SizedBox(height: AppSpacing.l),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.l),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionLabel(
+                    icon: Icons.psychology_outlined,
+                    label: 'Nível (estilo Maia)',
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                  Wrap(
+                    spacing: AppSpacing.s,
+                    runSpacing: AppSpacing.s,
+                    children: DifficultyLevel.all.map((level) {
+                      final selected = level.rating == _levelRating;
+                      return ChoiceChip(
+                        label: Text('${level.rating}'),
+                        selected: selected,
+                        onSelected: (_) =>
+                            setState(() => _levelRating = level.rating),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: DifficultyLevel.all.map((level) {
-              final selected = level.rating == _levelRating;
-              return ChoiceChip(
-                label: Text('${level.rating}'),
-                selected: selected,
-                onSelected: (_) => setState(() => _levelRating = level.rating),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xl),
           FilledButton(
             onPressed: _starting ? null : _start,
             child: _starting
@@ -101,7 +128,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                 : const Text('Começar partida'),
           ),
           if (_starting) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.m),
             Text(
               'Carregando o peso do Maia $_levelRating... '
               'pode levar alguns segundos na primeira vez.',
@@ -111,6 +138,25 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: colors.primary),
+        const SizedBox(width: AppSpacing.s),
+        Text(label, style: Theme.of(context).textTheme.titleMedium),
+      ],
     );
   }
 }

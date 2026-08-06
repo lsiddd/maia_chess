@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theming/app_page_route.dart';
 import 'core/theming/app_theme.dart';
+import 'core/widgets/error_state_card.dart';
 import 'data/providers.dart';
 import 'data/repositories/game_repository.dart';
 import 'data/repositories/settings_repository.dart';
@@ -47,25 +48,21 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeGame = ref.watch(activeGameProvider);
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Xadrez Maia')),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          const SizedBox(height: 24),
-          const Text(
-            'Xadrez offline contra IA de estilo humano (Maia)',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 32),
+          _HomeHeader(colors: colors),
+          const SizedBox(height: AppSpacing.xl),
           if (activeGame.valueOrNull != null) ...[
             FilledButton.icon(
               onPressed: () => _resume(context, ref),
               icon: const Icon(Icons.play_arrow),
               label: const Text('Continuar partida salva'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.m),
           ],
           FilledButton.icon(
             onPressed: () => Navigator.of(
@@ -74,40 +71,54 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.flag_outlined),
             label: const Text('Campanha Maia'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.m),
           FilledButton.tonalIcon(
             onPressed: () => _openNewAiGame(context, ref),
             icon: const Icon(Icons.psychology_outlined),
             label: const Text('Modo livre contra a IA'),
           ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _startLocalGame(context, ref),
-            icon: const Icon(Icons.sports_esports_outlined),
-            label: const Text('Jogar (2 jogadores locais)'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Mais opções',
+            style: Theme.of(
               context,
-            ).push(AppPageRoute(builder: (_) => const StatsScreen())),
-            icon: const Icon(Icons.insights_outlined),
-            label: const Text('Meu desempenho'),
+            ).textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant),
           ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(
-              context,
-            ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
-            icon: const Icon(Icons.history),
-            label: const Text('Partidas salvas e PGN'),
+          const SizedBox(height: AppSpacing.s),
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.sports_esports_outlined),
+                  title: const Text('Jogar (2 jogadores locais)'),
+                  onTap: () => _startLocalGame(context, ref),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.insights_outlined),
+                  title: const Text('Meu desempenho'),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(AppPageRoute(builder: (_) => const StatsScreen())),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.history),
+                  title: const Text('Partidas salvas e PGN'),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
+                ),
+              ],
+            ),
           ),
           if (activeGame.hasError) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Falha ao verificar autosave: ${activeGame.error}',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: AppSpacing.m),
+            ErrorStateCard(
+              message: 'Falha ao verificar autosave: ${activeGame.error}',
+              onRetry: () => ref.invalidate(activeGameProvider),
             ),
           ],
         ],
@@ -200,5 +211,63 @@ class HomeScreen extends ConsumerWidget {
           ),
         ) ??
         false;
+  }
+}
+
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({required this.colors});
+
+  final ColorScheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl - 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [colors.primaryContainer, colors.tertiaryContainer],
+        ),
+        border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: colors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.medium),
+            ),
+            child: Icon(
+              Icons.castle_outlined,
+              color: colors.onPrimary,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.l),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Xadrez Maia',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                const Text(
+                  'Xadrez offline contra uma IA de estilo humano (Maia)',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
