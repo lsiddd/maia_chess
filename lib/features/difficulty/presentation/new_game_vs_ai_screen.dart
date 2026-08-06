@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/difficulty_levels.dart';
+import '../../../core/theming/app_page_route.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 
@@ -45,7 +46,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
       unawaited(
         Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const GameScreen())),
+        ).push(AppPageRoute(builder: (_) => const GameScreen())),
       );
     } finally {
       if (mounted) setState(() => _starting = false);

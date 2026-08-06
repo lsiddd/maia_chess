@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/theming/app_page_route.dart';
 import 'core/theming/app_theme.dart';
 import 'data/providers.dart';
 import 'data/repositories/game_repository.dart';
@@ -69,7 +70,7 @@ class HomeScreen extends ConsumerWidget {
           FilledButton.icon(
             onPressed: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute(builder: (_) => const CampaignScreen())),
+            ).push(AppPageRoute(builder: (_) => const CampaignScreen())),
             icon: const Icon(Icons.flag_outlined),
             label: const Text('Campanha Maia'),
           ),
@@ -89,7 +90,7 @@ class HomeScreen extends ConsumerWidget {
           OutlinedButton.icon(
             onPressed: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute(builder: (_) => const StatsScreen())),
+            ).push(AppPageRoute(builder: (_) => const StatsScreen())),
             icon: const Icon(Icons.insights_outlined),
             label: const Text('Meu desempenho'),
           ),
@@ -97,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
           OutlinedButton.icon(
             onPressed: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+            ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
             icon: const Icon(Icons.history),
             label: const Text('Partidas salvas e PGN'),
           ),
@@ -134,7 +135,7 @@ class HomeScreen extends ConsumerWidget {
     unawaited(
       Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => const GameScreen())),
+      ).push(AppPageRoute(builder: (_) => const GameScreen())),
     );
   }
 
@@ -143,7 +144,7 @@ class HomeScreen extends ConsumerWidget {
     if (!context.mounted) return;
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const NewGameVsAiScreen()));
+    ).push(AppPageRoute(builder: (_) => const NewGameVsAiScreen()));
   }
 
   Future<void> _startLocalGame(BuildContext context, WidgetRef ref) async {
@@ -159,7 +160,7 @@ class HomeScreen extends ConsumerWidget {
     }
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const GameScreen()));
+    ).push(AppPageRoute(builder: (_) => const GameScreen()));
   }
 
   Future<bool> _confirmReplacingActiveGame(
