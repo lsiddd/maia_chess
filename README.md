@@ -1,58 +1,58 @@
 # Xadrez Maia
 
-Aplicativo Android de xadrez offline, em Flutter/Dart, contra uma IA que
-imita estilos de jogo humano em diferentes faixas de rating usando os pesos
-do projeto [Maia Chess](https://github.com/CSSLab/maia-chess) (rodando sobre
-o motor lc0). Uma segunda IA (Stockfish) fornece o lance objetivamente
-melhor, para o sistema de dicas. Projeto de código aberto, distribuído como
-APK direto (sideload), sem dependência de rede em tempo de execução.
+Offline Android chess app, built in Flutter/Dart, against an AI that imitates
+human playing styles across different rating bands using weights from the
+[Maia Chess](https://github.com/CSSLab/maia-chess) project (running on the
+lc0 engine). A second AI (Stockfish) provides the objectively best move, for
+the hint system. Open source project, distributed as a direct APK (sideload),
+with no runtime network dependency.
 
-Documentação de referência:
-- [`docs/requisitos.md`](docs/requisitos.md) — requisitos de produto.
-- [`docs/especificacao.md`](docs/especificacao.md) — especificação técnica e
-  fases de implementação.
-- [`ADR.md`](ADR.md) — decisões de arquitetura e desvios em relação à
-  especificação original, com justificativa.
+Reference documentation:
+- [`docs/requisitos.md`](docs/requisitos.md) — product requirements.
+- [`docs/especificacao.md`](docs/especificacao.md) — technical specification
+  and implementation phases.
+- [`ADR.md`](ADR.md) — architecture decisions and deviations from the
+  original specification, with rationale.
 
 ## Status
 
-Fases 0–5 implementadas: motores nativos lc0/Stockfish, partida contra Maia,
-dica dupla, persistência Drift, autosave/retomada, biblioteca/replay,
-importação/exportação PGN, rating estimado, estatísticas e campanha 2 de 3.
-As Fases 6–7 (personalização e empacotamento final) continuam em
-desenvolvimento. Ver `ADR.md` para as decisões e validações já realizadas.
+Phases 0–5 implemented: native lc0/Stockfish engines, games against Maia,
+dual hint, Drift persistence, autosave/resume, library/replay, PGN
+import/export, estimated rating, statistics, and 2-of-3 campaign. Phases 6–7
+(personalization and final packaging) remain in development. See `ADR.md`
+for the decisions and validations already carried out.
 
-## Como rodar
+## How to run
 
-Pré-requisitos: Flutter (gerenciado neste ambiente via `fvm`), Android SDK +
-NDK `28.2.13676358` instalado, JDK 17.
+Prerequisites: Flutter (managed in this environment via `fvm`), Android SDK +
+NDK `28.2.13676358` installed, JDK 17.
 
 ```bash
 flutter pub get
-flutter run          # com um emulador/dispositivo Android conectado
+flutter run          # with an Android emulator/device connected
 flutter analyze
 flutter test
 flutter test integration_test/phase_4_android_test.dart -d <device>
 ```
 
-## Estrutura
+## Structure
 
-Organização feature-first — ver `docs/especificacao.md` seção 3 para o
-racional completo:
+Feature-first organization — see `docs/especificacao.md` section 3 for the
+full rationale:
 
 ```
 lib/
-├── core/            # theming, constantes
-├── engine_ffi/       # serviços lc0 (Maia) e Stockfish via FFI
+├── core/            # theming, constants
+├── engine_ffi/       # lc0 (Maia) and Stockfish services via FFI
 ├── features/         # game, difficulty, hints, history, stats, settings, pgn
-└── data/             # Drift database, repositórios, providers Riverpod
+└── data/             # Drift database, repositories, Riverpod providers
 
-native/                # dependências nativas vendorizadas (ver ADR-001)
-assets/maia_weights/   # pesos .pb.gz do Maia (1100-1900), a partir da Fase 2
+native/                # vendored native dependencies (see ADR-001)
+assets/maia_weights/   # Maia .pb.gz weights (1100-1900), from Phase 2 on
 ```
 
-Não há uma pasta de DI dedicada: os providers Riverpod ficam ao lado de
-quem os expõe (`data/providers.dart` para repositórios, e cada
-controller/serviço expõe os seus próprios, ex.:
-`GameController`/`lc0EngineFactoryProvider`), padrão idiomático do
-Riverpod.
+There is no dedicated DI folder: Riverpod providers live next to whoever
+exposes them (`data/providers.dart` for repositories, and each
+controller/service exposes its own, e.g.:
+`GameController`/`lc0EngineFactoryProvider`), the idiomatic Riverpod
+pattern.

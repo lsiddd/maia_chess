@@ -1,200 +1,195 @@
-# Auditoria Técnica: Xadrez Maia (maia_chess)
+# Technical Audit: Xadrez Maia (maia_chess)
 
-Auditoria realizada por leitura integral de `lib/` (30 arquivos, 6.177 linhas
-sem contar código gerado), `test/`, `integration_test/`, `android/`,
-`pubspec.yaml`, `analysis_options.yaml` e execução das ferramentas de
-análise estática. Todo achado abaixo cita arquivo e linha; onde a evidência é
-saída de comando, o comando e seu resultado estão reproduzidos.
+Audit performed by a full read of `lib/` (30 files, 6,177 lines not counting
+generated code), `test/`, `integration_test/`, `android/`, `pubspec.yaml`,
+`analysis_options.yaml`, and running the static analysis tools. Every
+finding below cites a file and line; where the evidence is a command's
+output, the command and its result are reproduced.
 
-## Status das correções
+## Fix status
 
-Relatório aprovado e corrigido em lotes revisáveis (um commit por
-categoria, `flutter analyze`/`flutter test` verdes em cada um). Histórico
-completo em `git log`.
+Report approved and fixed in reviewable batches (one commit per category,
+`flutter analyze`/`flutter test` green on each). Full history in `git log`.
 
-| ID | Achado | Situação |
+| ID | Finding | Status |
 |---|---|---|
-| AUD-001 | Sem controle de versão | Corrigido: `git init` + commit inicial |
-| AUD-002 | Sem pipeline de CI | Corrigido: `.github/workflows/ci.yaml` |
-| AUD-003 | 0% de cobertura em lc0_service/stockfish_service | Parcial: lógica de espera extraída para `uci_wait.dart` e testada (88%); `init()` continua só verificável via `integration_test/` (ver ADR-013 no commit correspondente e correção de escopo abaixo) |
-| AUD-004 | new_game_vs_ai_screen.dart quase sem teste | Corrigido: 2% → 83% |
-| AUD-005 | promotion_dialog/hint_dialog sem teste | Corrigido: 0%/0% → 100%/98% |
-| AUD-006 | Release assinado com chave de debug | Parcial: `build.gradle.kts` pronto para uma chave real via `key.properties`; geração do keystore em si bloqueada pelo classificador de permissões da sessão, documentada em ADR-013 para o responsável pelo projeto rodar |
-| AUD-007 | minify/shrink sem decisão registrada | Corrigido: ADR-011 |
-| AUD-008 | allowBackup implícito | Corrigido: explícito no Manifest |
-| AUD-009 | playerOutcome duplicado | Corrigido: função única em `game_repository.dart` |
-| AUD-010 | SpikeScreen morta | Corrigido: removida |
-| AUD-011 | Campos de relógio sem UI nem lógica | Corrigido (documentado): ADR-012 |
-| AUD-012 | core/theming e core/di vazios | Corrigido: `AppTheme` extraído, `core/di` removida |
-| AUD-013 | Dependências com major mais nova | Não aplicado: `flutter_riverpod` 2.x→3.x e `share_plus` 12→13 são bumps de major com API que quebra; risco de regressão não verificável nos testes deste projeto sem dedicar um lote à parte, como o próprio achado já recomendava |
-| AUD-014 | Lint só no padrão flutter_lints | Corrigido: 7 regras adicionais, diff de 5 ocorrências |
-| AUD-015 | dart format falha no vendorizado | Corrigido: CI restringe a `lib test integration_test` |
+| AUD-001 | No version control | Fixed: `git init` + initial commit |
+| AUD-002 | No CI pipeline | Fixed: `.github/workflows/ci.yaml` |
+| AUD-003 | 0% coverage in lc0_service/stockfish_service | Partial: wait logic extracted to `uci_wait.dart` and tested (88%); `init()` remains verifiable only via `integration_test/` (see ADR-013 in the corresponding commit and the scope correction below) |
+| AUD-004 | new_game_vs_ai_screen.dart barely tested | Fixed: 2% → 83% |
+| AUD-005 | promotion_dialog/hint_dialog untested | Fixed: 0%/0% → 100%/98% |
+| AUD-006 | Release signed with the debug key | Partial: `build.gradle.kts` ready for a real key via `key.properties`; generating the keystore itself is blocked by the session's permission classifier, documented in ADR-013 for the project owner to run |
+| AUD-007 | minify/shrink decision not recorded | Fixed: ADR-011 |
+| AUD-008 | Implicit allowBackup | Fixed: explicit in the Manifest |
+| AUD-009 | Duplicated playerOutcome | Fixed: single function in `game_repository.dart` |
+| AUD-010 | Dead SpikeScreen | Fixed: removed |
+| AUD-011 | Clock fields with no UI or logic | Fixed (documented): ADR-012 |
+| AUD-012 | Empty core/theming and core/di | Fixed: `AppTheme` extracted, `core/di` removed |
+| AUD-013 | Dependencies with a newer major available | Not applied: `flutter_riverpod` 2.x→3.x and `share_plus` 12→13 are breaking major bumps; the regression risk cannot be verified with this project's tests without dedicating a separate batch to it, as the finding itself already recommended |
+| AUD-014 | Lint limited to the flutter_lints default set | Fixed: 7 additional rules, a 5-occurrence diff |
+| AUD-015 | dart format fails on the vendored package | Fixed: CI restricted to `lib test integration_test` |
 
-Cobertura de teste após os lotes: **53,2%** (2.355/4.425 linhas), ante
-50,4% no relatório original.
+Test coverage after the batches: **53.2%** (2,355/4,425 lines), up from
+50.4% in the original report.
 
-## Resumo executivo
+## Executive summary
 
-- 🔴 Críticos: 0
-- 🟠 Altos: 4
-- 🟡 Médios: 5
-- 🟢 Baixos: 5
-- Informativo (fora do escopo do app): 1
-- Cobertura de testes (`flutter test --coverage`, unitários/widget): **50,4%**
-  (2.243/4.451 linhas instrumentadas). Os dois arquivos com a lógica mais
-  delicada do app, `lc0_service.dart` e `stockfish_service.dart`, estão em
-  **0%**: só são exercitados pelos `integration_test/` em dispositivo real.
-- Stack detectada: Riverpod (`flutter_riverpod` 2.6.1, `Notifier`/
-  `ConsumerWidget`, sem mistura com `setState` cru fora de estado puramente
-  visual local), arquitetura feature-first com camada `data/repositories`
-  separada da UI (padrão repository + Drift/SQLite), organização consistente
-  em todos os módulos. Flutter 3.41.9 (via `fvm`) • Dart 3.11.5 • minSdk 24 /
-  targetSdk 36 / compileSdk 36.
-- `flutter analyze --no-fatal-infos`: **nenhum problema encontrado**.
-- `flutter test`: **50/50 testes passando**.
-- O projeto **não está sob controle de versão** (não há diretório `.git`) e
-  **não possui pipeline de CI/CD** (ver AUD-001/AUD-002).
+- 🔴 Critical: 0
+- 🟠 High: 4
+- 🟡 Medium: 5
+- 🟢 Low: 5
+- Informational (out of the app's scope): 1
+- Test coverage (`flutter test --coverage`, unit/widget): **50.4%**
+  (2,243/4,451 instrumented lines). The two files with the app's most
+  delicate logic, `lc0_service.dart` and `stockfish_service.dart`, are at
+  **0%**: only exercised by `integration_test/` on a real device.
+- Detected stack: Riverpod (`flutter_riverpod` 2.6.1, `Notifier`/
+  `ConsumerWidget`, no mixing with raw `setState` outside purely local
+  visual state), feature-first architecture with a `data/repositories`
+  layer separate from the UI (repository pattern + Drift/SQLite),
+  consistent organization across all modules. Flutter 3.41.9 (via `fvm`) •
+  Dart 3.11.5 • minSdk 24 / targetSdk 36 / compileSdk 36.
+- `flutter analyze --no-fatal-infos`: **no issues found**.
+- `flutter test`: **50/50 tests passing**.
+- The project **was not under version control** (no `.git` directory) and
+  **had no CI/CD pipeline** (see AUD-001/AUD-002).
 
-A qualidade geral do código é alta para os padrões deste checklist: não há
-`print()`, não há `catch` vazio ou que só engole a exceção, os usos de
-`context.mounted`/`mounted` após `await` estão corretos em todos os pontos
-verificados, não há segredos/chaves hardcoded, o app não solicita permissão
-de rede no `AndroidManifest.xml` (condizente com a promessa de app 100%
-offline) e o histórico de decisões em `ADR.md` documenta com honestidade
-bugs de concorrência já encontrados e corrigidos (race no `dispose()` dos
-motores FFI, colisão de `stdin`/`stdout` entre lc0 e Stockfish). Os achados
-abaixo são, portanto, majoritariamente de processo (versionamento, CI,
-cobertura) e de dívida técnica pontual, não de corretude do domínio de
-xadrez em si.
+Overall code quality is high by this checklist's standards: no `print()`,
+no empty `catch` or one that merely swallows the exception, `context.mounted`/
+`mounted` usage after `await` is correct at every point checked, no
+hardcoded secrets/keys, the app requests no network permission in
+`AndroidManifest.xml` (consistent with the promise of a 100% offline app),
+and the decision history in `ADR.md` honestly documents concurrency bugs
+already found and fixed (a race in the FFI engines' `dispose()`, a
+`stdin`/`stdout` collision between lc0 and Stockfish). The findings below
+are, therefore, mostly process-related (versioning, CI, coverage) and
+targeted technical debt, not correctness issues in the chess domain itself.
 
-## Top 10 prioridades (ordem de ação recomendada)
+## Top 10 priorities (recommended order of action)
 
-1. **AUD-001**: Inicializar o repositório git antes de qualquer outra ação (pré-requisito para os itens seguintes).
-2. **AUD-006**: Substituir a assinatura de debug no build de release antes de qualquer distribuição real do APK.
-3. **AUD-002**: Adicionar um pipeline mínimo de CI (`flutter analyze`, `dart format --set-exit-if-changed lib test integration_test`, `flutter test --coverage`).
-4. **AUD-003**: Cobrir `Lc0Service`/`StockfishService` com testes que exercitem diretamente o handshake, o timeout e a rotina de `dispose()` (não só via `GameController` com fakes).
-5. **AUD-009**: Unificar a regra de cálculo de `PlayerGameOutcome`, hoje duplicada em `app_database.dart` e `drift_stats_repository.dart`.
-6. **AUD-004**: Escrever testes de widget para `NewGameVsAiScreen` (tela de entrada do modo IA, 2% de cobertura).
-7. **AUD-007**: Decidir explicitamente sobre `minifyEnabled`/`shrinkResources` e, se ativados, adicionar `proguard-rules.pro` cobrindo Drift/FFI antes de testar em release.
-8. **AUD-010**: Remover ou mover `SpikeScreen` para fora de `lib/` (dívida da Fase 0, sem rota que a alcance).
-9. **AUD-011**: Decidir o destino de `clockEnabled`/`whiteTimeMs`/`blackTimeMs`: implementar a contagem de relógio ou remover o campo até a feature ser priorizada.
-10. **AUD-014**: Avaliar regras de lint adicionais (ex.: `very_good_analysis` ou regras manuais de `analysis_options.yaml`) além do `flutter_lints` padrão.
+1. **AUD-001**: Initialize the git repository before any other action (prerequisite for the following items).
+2. **AUD-006**: Replace the debug signature in the release build before any real APK distribution.
+3. **AUD-002**: Add a minimal CI pipeline (`flutter analyze`, `dart format --set-exit-if-changed lib test integration_test`, `flutter test --coverage`).
+4. **AUD-003**: Cover `Lc0Service`/`StockfishService` with tests that directly exercise the handshake, the timeout, and the `dispose()` routine (not only via `GameController` with fakes).
+5. **AUD-009**: Unify the `PlayerGameOutcome` calculation rule, currently duplicated in `app_database.dart` and `drift_stats_repository.dart`.
+6. **AUD-004**: Write widget tests for `NewGameVsAiScreen` (entry screen for AI mode, 2% coverage).
+7. **AUD-007**: Explicitly decide on `minifyEnabled`/`shrinkResources` and, if enabled, add a `proguard-rules.pro` covering Drift/FFI before testing in release.
+8. **AUD-010**: Remove or move `SpikeScreen` out of `lib/` (Phase 0 debt, no route reaches it).
+9. **AUD-011**: Decide the fate of `clockEnabled`/`whiteTimeMs`/`blackTimeMs`: implement the clock countdown or remove the field until the feature is prioritized.
+10. **AUD-014**: Evaluate additional lint rules (e.g., `very_good_analysis` or manual `analysis_options.yaml` rules) beyond the `flutter_lints` default.
 
-## Achados detalhados
+## Detailed findings
 
-### CI/CD, versionamento e tooling (seção 6.15)
+### CI/CD, version control, and tooling (section 6.15)
 
-#### [AUD-001] 🟠 Controle de versão ausente
-- **Categoria:** 6.15, CI/CD e tooling
-- **Arquivo:** raiz do projeto (`/home/lucas/maia_android`)
-- **Evidência:** `ls -la /home/lucas/maia_android/.git` retorna "Arquivo ou
-  diretório inexistente"; o ambiente da sessão também reporta
-  `Is a git repository: false`. Ao mesmo tempo, `ADR.md` (ADR-001, addendum)
-  descreve arquivos gerados que "ficam commitados neste repositório" e o
-  `.gitignore` tem regras específicas para não versionar artefatos de build
-  nativos, ou seja, o projeto foi desenhado presumindo controle de versão,
-  mas não está sob um.
-- **Problema:** sem git não há histórico, não há como revisar diffs, reverter
-  uma mudança que quebre o build nativo (que já se mostrou frágil, ver os
-  três addenda do ADR-001) nem abrir um pull request para o processo de lote
-  descrito na seção 2 deste próprio processo de auditoria. Qualquer CI
-  também depende de um repositório para existir.
-- **Sugestão:** `git init`, primeiro commit abrangendo o estado atual
-  (excluindo `build/`, `.dart_tool/` etc., já cobertos pelo `.gitignore`
-  existente), e adoção de um fluxo de branch antes da próxima mudança.
-- **Esforço estimado:** P
+#### [AUD-001] 🟠 No version control
+- **Category:** 6.15, CI/CD and tooling
+- **File:** project root (`/home/lucas/maia_android`)
+- **Evidence:** `ls -la /home/lucas/maia_android/.git` returns "No such file
+  or directory"; the session environment also reports `Is a git
+  repository: false`. At the same time, `ADR.md` (ADR-001, addendum)
+  describes generated files that "are committed in this repository", and
+  `.gitignore` has specific rules to avoid versioning native build
+  artifacts — that is, the project was designed assuming version control,
+  but was not under one.
+- **Problem:** without git there is no history, no way to review diffs,
+  revert a change that breaks the native build (which has already proven
+  fragile, see the three ADR-001 addenda), or open a pull request for the
+  batch process described in section 2 of this very audit process. Any CI
+  also needs a repository to exist.
+- **Suggestion:** `git init`, an initial commit covering the current state
+  (excluding `build/`, `.dart_tool/`, etc., already covered by the existing
+  `.gitignore`), and adopting a branch workflow before the next change.
+- **Estimated effort:** S
 
-#### [AUD-002] 🟠 Nenhum pipeline de CI/CD configurado
-- **Categoria:** 6.15, CI/CD e tooling
-- **Arquivo:** N/A. Ausência confirmada em `.github/workflows`,
-  `.gitlab-ci.yml`, `codemagic.yaml` e `bitrise.yml` na raiz do projeto. Os
-  três `.gitlab-ci.yml` encontrados por `find` pertencem ao Eigen,
-  dependência de terceiros vendorizada dentro de
-  `native/leela_chess_zero/android/.cxx/.../eigen-src/`, não ao projeto.
-- **Evidência:** `find /home/lucas/maia_android -maxdepth 2 -iname "*.yml" -o -iname "*.yaml"` só retorna `analysis_options.yaml` e `pubspec.yaml`.
-- **Problema:** o próprio `ADR.md` documenta pelo menos dois bugs de
-  concorrência sérios (race de `dispose()` entre motores FFI; colisão de
-  `stdin`/`stdout` entre lc0 e Stockfish) que só foram pegos em testes de
-  integração manuais em emulador. Sem CI rodando `flutter analyze`,
-  `dart format --set-exit-if-changed` e a suíte de testes a cada mudança,
-  regressões desse tipo podem voltar silenciosamente.
-- **Sugestão:** workflow mínimo (GitHub Actions ou equivalente) com os três
-  gates de Fase 1 deste processo de auditoria. Os `integration_test/`
-  dependem de emulador Android e podem ficar de fora do gate obrigatório
-  inicialmente, mas os testes unitários/widget (50 hoje, todos passando) não
-  têm essa restrição.
-- **Esforço estimado:** P
+#### [AUD-002] 🟠 No CI/CD pipeline configured
+- **Category:** 6.15, CI/CD and tooling
+- **File:** N/A. Absence confirmed in `.github/workflows`,
+  `.gitlab-ci.yml`, `codemagic.yaml`, and `bitrise.yml` at the project
+  root. The three `.gitlab-ci.yml` files found by `find` belong to Eigen, a
+  vendored third-party dependency inside
+  `native/leela_chess_zero/android/.cxx/.../eigen-src/`, not the project.
+- **Evidence:** `find /home/lucas/maia_android -maxdepth 2 -iname "*.yml" -o -iname "*.yaml"` only returns `analysis_options.yaml` and `pubspec.yaml`.
+- **Problem:** `ADR.md` itself documents at least two serious concurrency
+  bugs (a `dispose()` race between FFI engines; a `stdin`/`stdout`
+  collision between lc0 and Stockfish) that were only caught through manual
+  integration testing on an emulator. Without CI running `flutter
+  analyze`, `dart format --set-exit-if-changed`, and the test suite on
+  every change, regressions of this kind can silently return.
+- **Suggestion:** a minimal workflow (GitHub Actions or equivalent) with
+  this audit process's three Phase 1 gates. `integration_test/` depends on
+  an Android emulator and can be left out of the mandatory gate initially,
+  but the unit/widget tests (50 today, all passing) have no such
+  restriction.
+- **Estimated effort:** S
 
-### Testes (seção 6.10)
+### Tests (section 6.10)
 
-#### [AUD-003] 🟠 0% de cobertura nos serviços de motor FFI
-- **Categoria:** 6.10, Testes
-- **Arquivo:** `lib/engine_ffi/lc0_engine/lc0_service.dart` (0/138 linhas),
-  `lib/engine_ffi/stockfish_engine/stockfish_service.dart` (0/132 linhas)
-- **Evidência:** cálculo direto sobre `coverage/lcov.info` gerado por
-  `flutter test --coverage`:
+#### [AUD-003] 🟠 0% coverage in the FFI engine services
+- **Category:** 6.10, Tests
+- **File:** `lib/engine_ffi/lc0_engine/lc0_service.dart` (0/138 lines),
+  `lib/engine_ffi/stockfish_engine/stockfish_service.dart` (0/132 lines)
+- **Evidence:** direct calculation over the `coverage/lcov.info` generated
+  by `flutter test --coverage`:
   ```
   lib/engine_ffi/lc0_engine/lc0_service.dart          0/138 (0%)
   lib/engine_ffi/stockfish_engine/stockfish_service.dart  0/132 (0%)
   ```
-  `test/game_controller_test.dart` testa `GameController` usando fakes
-  injetados via `lc0EngineFactoryProvider`/`stockfishEngineFactoryProvider`
-  (ver `game_controller.dart:23-28`), por desenho (ADR-008), para não
-  depender de FFI em testes unitários. Isso, no entanto, significa que a
-  implementação real de `Lc0Service`/`StockfishService` (handshake
-  `isready`/`readyok`, timeout de busca com `stop`, e a rotina de
-  `_terminateEngine` que evita o `Bad state: Multiple instances are not
-  supported` documentado em ADR-001) só é exercitada pelos
-  `integration_test/*_android_test.dart`, que exigem emulador/dispositivo
-  físico e não rodam em `flutter test`.
-- **Problema:** exatamente a lógica que já causou dois bugs de produção
-  documentados no próprio `ADR.md` está sem rede de segurança automatizada
-  fora de execução manual em dispositivo. Uma regressão nessa área só seria
-  percebida jogando manualmente contra a IA.
-- **Sugestão:** extrair a lógica de espera de estado (`_waitReadyOk`,
-  `_terminateEngine`, tratamento de timeout com `stop`) para que possa ser
-  testada com um `Lc0`/`Stockfish` fake que simule as transições de estado
-  (`Lc0State`/`StockfishState`) via `ValueNotifier`, sem precisar do FFI
-  real. Os pacotes já expõem essas classes como injetáveis.
-- **Esforço estimado:** M
+  `test/game_controller_test.dart` tests `GameController` using fakes
+  injected via `lc0EngineFactoryProvider`/`stockfishEngineFactoryProvider`
+  (see `game_controller.dart:23-28`), by design (ADR-008), so as not to
+  depend on FFI in unit tests. This, however, means the real
+  `Lc0Service`/`StockfishService` implementation (the `isready`/`readyok`
+  handshake, search timeout with `stop`, and the `_terminateEngine` routine
+  that avoids the `Bad state: Multiple instances are not supported`
+  documented in ADR-001) is only exercised by the
+  `integration_test/*_android_test.dart` files, which require an
+  emulator/physical device and do not run under `flutter test`.
+- **Problem:** exactly the logic that has already caused two documented
+  production bugs in `ADR.md` itself has no automated safety net outside
+  manual execution on a device. A regression in this area would only be
+  noticed by manually playing against the AI.
+- **Suggestion:** extract the state-waiting logic (`_waitReadyOk`,
+  `_terminateEngine`, timeout handling with `stop`) so it can be tested
+  with a fake `Lc0`/`Stockfish` that simulates state transitions
+  (`Lc0State`/`StockfishState`) via `ValueNotifier`, without needing real
+  FFI. The packages already expose these classes as injectable.
+- **Estimated effort:** M
 
-#### [AUD-004] 🟡 Tela de novo jogo contra IA praticamente sem testes
-- **Categoria:** 6.10, Testes
-- **Arquivo:** `lib/features/difficulty/presentation/new_game_vs_ai_screen.dart`
-- **Evidência:** `coverage/lcov.info` reporta 1/45 linhas (2%) cobertas para
-  este arquivo; não há nenhum teste em `test/` que importe
-  `NewGameVsAiScreen`.
-- **Problema:** é o ponto de entrada principal do modo "livre contra a IA"
-  (seleção de lado e nível, `new_game_vs_ai_screen.dart:24-49`), incluindo o
-  caminho de erro quando `startVsAi` falha (linhas 33-41). Nenhum desses
-  caminhos tem cobertura de widget test.
-- **Sugestão:** um teste de widget cobrindo seleção de lado/nível e o
-  SnackBar de erro quando `controller.startVsAi` retorna `false`, no mesmo
-  molde de `test/game_screen_responsive_test.dart`.
-- **Esforço estimado:** P
+#### [AUD-004] 🟡 New game vs. AI screen nearly untested
+- **Category:** 6.10, Tests
+- **File:** `lib/features/difficulty/presentation/new_game_vs_ai_screen.dart`
+- **Evidence:** `coverage/lcov.info` reports 1/45 lines (2%) covered for
+  this file; there is no test in `test/` that imports `NewGameVsAiScreen`.
+- **Problem:** this is the main entry point for "free mode against the AI"
+  (side/level selection, `new_game_vs_ai_screen.dart:24-49`), including the
+  error path when `startVsAi` fails (lines 33-41). None of these paths has
+  widget test coverage.
+- **Suggestion:** a widget test covering side/level selection and the
+  error SnackBar when `controller.startVsAi` returns `false`, following the
+  same pattern as `test/game_screen_responsive_test.dart`.
+- **Estimated effort:** S
 
-#### [AUD-005] 🟡 Diálogos de promoção e dica sem nenhum teste de widget
-- **Categoria:** 6.10, Testes
-- **Arquivo:** `lib/features/game/presentation/promotion_dialog.dart` (0/11),
+#### [AUD-005] 🟡 Promotion and hint dialogs with no widget test at all
+- **Category:** 6.10, Tests
+- **File:** `lib/features/game/presentation/promotion_dialog.dart` (0/11),
   `lib/features/hints/presentation/hint_dialog.dart` (0/41)
-- **Evidência:** `coverage/lcov.info` reporta 0% para os dois arquivos.
-- **Problema:** `promotion_dialog.dart` é acionado em todo lance de
-  promoção (fluxo com testes de regra de xadrez, mas sem teste de UI do
-  próprio diálogo); `hint_dialog.dart` cobre os três estados do
-  `FutureBuilder` (carregando, erro, sucesso com os dois lances lado a
-  lado) sem nenhum teste que force o caminho de erro (`snapshot.hasError`,
-  `hint_dialog.dart:36-56`).
-- **Sugestão:** testes de widget isolados, com um `Future` controlado
-  manualmente (`Completer`) para forçar cada um dos três estados do
-  `FutureBuilder`.
-- **Esforço estimado:** P
+- **Evidence:** `coverage/lcov.info` reports 0% for both files.
+- **Problem:** `promotion_dialog.dart` fires on every promotion move
+  (covered by chess-rule tests, but with no UI test for the dialog
+  itself); `hint_dialog.dart` covers the three `FutureBuilder` states
+  (loading, error, success with both moves side by side) with no test
+  forcing the error path (`snapshot.hasError`, `hint_dialog.dart:36-56`).
+- **Suggestion:** isolated widget tests, with a manually controlled
+  `Future` (`Completer`) to force each of the three `FutureBuilder` states.
+- **Estimated effort:** S
 
-### Específico Android: Gradle/Manifest/build (seção 6.12)
+### Android-specific: Gradle/Manifest/build (section 6.12)
 
-#### [AUD-006] 🟠 Build de release assinado com a chave de debug
-- **Categoria:** 6.12, Específico Android
-- **Arquivo:** `android/app/build.gradle.kts:40-45`
-- **Evidência:**
+#### [AUD-006] 🟠 Release build signed with the debug key
+- **Category:** 6.12, Android-specific
+- **File:** `android/app/build.gradle.kts:40-45`
+- **Evidence:**
   ```kotlin
   buildTypes {
       release {
@@ -204,64 +199,63 @@ xadrez em si.
       }
   }
   ```
-- **Problema:** todo `flutter build apk --release` gerado hoje está assinado
-  com a chave de debug (compartilhada entre todo ambiente de desenvolvimento
-  Flutter/Android Studio, não rotacionável de forma segura). Isso impede
-  publicação em qualquer canal que exija assinatura de release própria e,
-  mais grave, um APK assim distribuído por engano teria a chave de
-  assinatura previsível/compartilhada.
-- **Sugestão:** gerar um keystore de release dedicado, configurar via
-  `key.properties` (não commitado) lido no `build.gradle.kts`, conforme o
-  próprio TODO já indica. Item já sinalizado pelo time como pendente da Fase
-  7 ("empacotamento final"); este achado apenas formaliza a prioridade.
-- **Esforço estimado:** P
+- **Problem:** every `flutter build apk --release` generated today is
+  signed with the debug key (shared across every Flutter/Android Studio
+  development environment, not safely rotatable). This blocks publishing
+  to any channel that requires a proper release signature and, more
+  seriously, an APK distributed this way by mistake would have a
+  predictable/shared signing key.
+- **Suggestion:** generate a dedicated release keystore, configure it via
+  `key.properties` (not committed) read from `build.gradle.kts`, as the
+  existing TODO already indicates. Already flagged by the team as pending
+  for Phase 7 ("final packaging"); this finding merely formalizes the
+  priority.
+- **Estimated effort:** S
 
-#### [AUD-007] 🟡 Sem minificação/shrink de recursos nem regras ProGuard/R8 no release
-- **Categoria:** 6.12, Específico Android
-- **Arquivo:** `android/app/build.gradle.kts:40-46`; nenhum arquivo
-  `proguard-rules.pro` encontrado em `android/app/`.
-- **Evidência:** bloco `release {}` só define `signingConfig` (ver
-  AUD-006); `minifyEnabled`/`shrinkResources` não aparecem em nenhum lugar
-  do arquivo, portanto assumem o padrão `false` do Android Gradle Plugin.
-  `find android -iname "proguard*"` não retornou nenhum arquivo.
-- **Problema:** o APK de release fica maior e sem ofuscação de código Dart
-  nativo/Kotlin. Não é urgente para um app open source distribuído por
-  sideload (não há segredo comercial a proteger por ofuscação), mas é a
-  configuração padrão recomendada e, se for ativada no futuro sem regras de
-  ProGuard/R8 para Drift (reflexão via `sqlite3`) e para os plugins FFI
-  (`leela_chess_zero`, `stockfish`), o app corre risco real de "funciona em
-  debug, quebra em release", o sintoma clássico do item 6.12 deste
-  checklist.
-- **Sugestão:** decisão explícita registrada em ADR: manter desligado (e
-  documentar o porquê) ou ativar com um `proguard-rules.pro` testado contra
-  um build de release real em dispositivo, cobrindo os pontos de FFI e
-  Drift.
-- **Esforço estimado:** P (documentar decisão) / M (se optar por ativar e validar)
+#### [AUD-007] 🟡 No resource minification/shrinking or ProGuard/R8 rules in release
+- **Category:** 6.12, Android-specific
+- **File:** `android/app/build.gradle.kts:40-46`; no `proguard-rules.pro`
+  file found under `android/app/`.
+- **Evidence:** the `release {}` block only sets `signingConfig` (see
+  AUD-006); `minifyEnabled`/`shrinkResources` do not appear anywhere in the
+  file, so they default to `false` in the Android Gradle Plugin. `find
+  android -iname "proguard*"` returned no files.
+- **Problem:** the release APK comes out larger and without native
+  Dart/Kotlin code obfuscation. Not urgent for an open source app
+  distributed by sideload (there is no trade secret obfuscation would
+  protect), but it is the recommended default configuration, and if
+  enabled in the future without ProGuard/R8 rules for Drift (reflection via
+  `sqlite3`) and the FFI plugins (`leela_chess_zero`, `stockfish`), the app
+  runs a real risk of "works in debug, breaks in release", the classic
+  symptom of checklist item 6.12.
+- **Suggestion:** an explicit decision recorded in an ADR: keep it off (and
+  document why) or enable it with a `proguard-rules.pro` tested against a
+  real release build on a device, covering the FFI and Drift points.
+- **Estimated effort:** S (document decision) / M (if enabling and validating)
 
-#### [AUD-008] 🟢 `android:allowBackup` não definido explicitamente
-- **Categoria:** 6.11/6.12, Segurança / Android
-- **Arquivo:** `android/app/src/main/AndroidManifest.xml:2-4`
-- **Evidência:** a tag `<application>` não declara `android:allowBackup`,
-  portanto herda o padrão `true` do Android: o banco `maia_chess.sqlite`
-  (partidas, progresso de campanha, configurações) entra no backup
-  automático do Android para a conta Google do usuário.
-- **Problema:** os dados armazenados não são sensíveis (partidas de xadrez
-  locais, sem conta nem dado pessoal), então o risco real é baixo; ainda
-  assim, é uma configuração de segurança que hoje é herdada por omissão, não
-  por decisão.
-- **Sugestão:** decisão explícita entre `android:allowBackup="true"` (mantendo o
-  comportamento atual, mas documentado) e `"false"`, conforme a
-  preferência do time para a experiência de restauração de aparelho.
-- **Esforço estimado:** P
+#### [AUD-008] 🟢 `android:allowBackup` not explicitly set
+- **Category:** 6.11/6.12, Security / Android
+- **File:** `android/app/src/main/AndroidManifest.xml:2-4`
+- **Evidence:** the `<application>` tag does not declare
+  `android:allowBackup`, so it inherits Android's `true` default: the
+  `maia_chess.sqlite` database (games, campaign progress, settings) is
+  included in the user's automatic Android backup to their Google account.
+- **Problem:** the stored data is not sensitive (local chess games, no
+  account or personal data), so the actual risk is low; still, this is a
+  security setting currently inherited by omission, not by decision.
+- **Suggestion:** an explicit decision between `android:allowBackup="true"`
+  (keeping current behavior, but documented) and `"false"`, according to
+  the team's preference for the device-restore experience.
+- **Estimated effort:** S
 
-### Qualidade de código, smells e dívida técnica (seção 6.9)
+### Code quality, smells, and technical debt (section 6.9)
 
-#### [AUD-009] 🟡 Regra de negócio duplicada: cálculo de resultado do jogador
-- **Categoria:** 6.9 / 6.1, Smells / lógica duplicada
-- **Arquivo:** `lib/data/local/app_database.dart:224-240` (`_evaluatedSummary`) e `lib/data/repositories/drift_stats_repository.dart:72-91` (`_summary` + `playerOutcome`)
-- **Evidência:** as duas funções implementam, de forma independente, a
-  mesma regra ("vitória se o lado do jogador bate com o resultado, empate se
-  `draw`, senão derrota"):
+#### [AUD-009] 🟡 Duplicated business rule: player outcome calculation
+- **Category:** 6.9 / 6.1, Smells / duplicated logic
+- **File:** `lib/data/local/app_database.dart:224-240` (`_evaluatedSummary`) and `lib/data/repositories/drift_stats_repository.dart:72-91` (`_summary` + `playerOutcome`)
+- **Evidence:** the two functions independently implement the same rule
+  ("win if the player's side matches the result, draw if `draw`, otherwise
+  loss"):
   ```dart
   // app_database.dart:227-232
   final outcome = result == StoredGameResult.draw
@@ -281,104 +275,103 @@ xadrez em si.
     return playerWon ? PlayerGameOutcome.win : PlayerGameOutcome.loss;
   }
   ```
-- **Problema:** hoje as duas cópias estão de fato idênticas em
-  comportamento, mas nada impede que uma seja alterada (ex: uma nova
-  variante de `StoredGameResult`) sem a outra acompanhar, exatamente o
-  cenário descrito no item 6.1 do checklist ("fórmulas duplicadas em dois
-  lugares com pequenas divergências"). `rebuildDerivedState` (chamada em
-  toda finalização/exclusão de partida) e `DriftStatsRepository.watch()`
-  (usada pela tela de estatísticas) passam a poder divergir silenciosamente.
-- **Sugestão:** mover `playerOutcome` para `player_stats.dart` (onde já
-  vivem `PlayerGameOutcome`/`EvaluatedGameSummary`) e usá-la nos dois
-  pontos de leitura do banco.
-- **Esforço estimado:** P
+- **Problem:** today the two copies are in fact behaviorally identical, but
+  nothing prevents one from being changed (e.g., a new `StoredGameResult`
+  variant) without the other following along, exactly the scenario
+  described in checklist item 6.1 ("duplicated formulas in two places with
+  small divergences"). `rebuildDerivedState` (called on every game
+  completion/deletion) and `DriftStatsRepository.watch()` (used by the
+  stats screen) could silently diverge.
+- **Suggestion:** move `playerOutcome` to `player_stats.dart` (where
+  `PlayerGameOutcome`/`EvaluatedGameSummary` already live) and use it at
+  both database read points.
+- **Estimated effort:** S
 
-#### [AUD-010] 🟡 `SpikeScreen` é código morto
-- **Categoria:** 6.9, Smells / código morto
-- **Arquivo:** `lib/features/spike/spike_screen.dart` (178 linhas)
-- **Evidência:** `grep -rn "SpikeScreen" lib/ test/ integration_test/` só
-  retorna a própria declaração da classe; nenhuma rota em `main.dart` ou em
-  qualquer outro widget a referencia.
-- **Problema:** a tela de diagnóstico da Fase 0 (validação inicial de que
-  lc0/Stockfish respondiam via FFI) cumpriu seu papel, mas ficou no
-  binário: acrescenta ~180 linhas e duas instâncias de `Lc0Service`/
-  `StockfishService` ao APK sem uso, além de confundir quem navega a
-  árvore de `features/` procurando telas ativas.
-- **Sugestão:** mover para `integration_test/` (como um harness manual, se
-  ainda for útil para depuração) ou remover; se for mantida como
-  ferramenta de diagnóstico deliberada, adicionar uma rota oculta/debug
-  explícita e um comentário no `README.md` justificando a permanência.
-- **Esforço estimado:** P
+#### [AUD-010] 🟡 `SpikeScreen` is dead code
+- **Category:** 6.9, Smells / dead code
+- **File:** `lib/features/spike/spike_screen.dart` (178 lines)
+- **Evidence:** `grep -rn "SpikeScreen" lib/ test/ integration_test/` only
+  returns the class's own declaration; no route in `main.dart` or any other
+  widget references it.
+- **Problem:** the Phase 0 diagnostic screen (initial validation that
+  lc0/Stockfish responded via FFI) served its purpose but stayed in the
+  binary: it adds ~180 lines and two unused `Lc0Service`/`StockfishService`
+  instances to the APK, besides confusing anyone browsing the `features/`
+  tree looking for active screens.
+- **Suggestion:** move it to `integration_test/` (as a manual harness, if
+  still useful for debugging) or remove it; if deliberately kept as a
+  diagnostic tool, add an explicit hidden/debug route and a comment in
+  `README.md` justifying its presence.
+- **Estimated effort:** S
 
-#### [AUD-011] 🟢 Relógio de xadrez modelado em 4 camadas sem nenhuma lógica de contagem
-- **Categoria:** 6.9 / 6.8, Smells / organização
-- **Arquivo:** `lib/features/game/application/game_state.dart:39-42,123-126`;
+#### [AUD-011] 🟢 Chess clock modeled across 4 layers with no countdown logic at all
+- **Category:** 6.9 / 6.8, Smells / organization
+- **File:** `lib/features/game/application/game_state.dart:39-42,123-126`;
   `lib/data/repositories/game_repository.dart:54-57,74-77`;
   `lib/data/local/app_database.dart:35-38`;
   `lib/data/repositories/drift_game_repository.dart:158-161,233-236`
-- **Evidência:** `clockEnabled`/`initialTimeMs`/`whiteTimeMs`/`blackTimeMs`
-  existem em `GameState`, `StoredGame`, na tabela `Games` do Drift e em
-  todo o caminho de persistência (busca confirmada com
-  `grep -rn "clockEnabled\|whiteTimeMs\|blackTimeMs" lib/`), mas nenhum
-  `Timer`/contagem regressiva os decrementa e nenhuma tela exibe um
-  relógio: `_StatusBar` em `game_screen.dart` não referencia nenhum desses
-  campos.
-- **Problema:** não é um bug (o valor fica parado, sem afetar a partida),
-  mas é superfície morta em quatro camadas simultaneamente, com custo de
-  manutenção para quem lê o schema achando que a feature existe.
-- **Sugestão:** se relógio for uma feature planejada para as Fases 6-7
-  (README menciona "personalização" em aberto), registrar isso em
-  `ADR.md`/`docs/especificacao.md` explicitamente para não parecer
-  esquecido; caso contrário, remover os campos até a feature ser
-  priorizada.
-- **Esforço estimado:** P (documentar) / M (remover ou implementar)
+- **Evidence:** `clockEnabled`/`initialTimeMs`/`whiteTimeMs`/`blackTimeMs`
+  exist in `GameState`, `StoredGame`, the Drift `Games` table, and the
+  entire persistence path (confirmed search with `grep -rn
+  "clockEnabled\|whiteTimeMs\|blackTimeMs" lib/`), but no `Timer`/countdown
+  decrements them and no screen displays a clock: `_StatusBar` in
+  `game_screen.dart` does not reference any of these fields.
+- **Problem:** not a bug (the value just sits idle, without affecting the
+  game), but it is dead surface across four layers simultaneously, with a
+  maintenance cost for anyone reading the schema and assuming the feature
+  exists.
+- **Suggestion:** if the clock is a feature planned for Phases 6-7 (the
+  README mentions "personalization" as pending), record this explicitly in
+  `ADR.md`/`docs/especificacao.md` so it doesn't look forgotten; otherwise,
+  remove the fields until the feature is prioritized.
+- **Estimated effort:** S (document) / M (remove or implement)
 
-### Arquitetura e organização de pastas (seção 6.8)
+### Architecture and folder organization (section 6.8)
 
-#### [AUD-012] 🟢 `core/theming` e `core/di` vazios
-- **Categoria:** 6.8, Arquitetura e organização
-- **Arquivo:** `lib/core/theming/`, `lib/core/di/`
-- **Evidência:** `find lib/core/theming lib/core/di -type f` não retorna
-  nenhum arquivo; o tema é definido inline em `main.dart:27-37`
-  (`ThemeData`/`darkTheme`) e a injeção de dependência é feita via
-  providers Riverpod espalhados em `data/providers.dart` e
-  `game_controller.dart`, não em `core/di`.
-- **Problema:** as pastas foram criadas pelo scaffolding inicial (README
-  as lista na seção "Estrutura") mas nunca receberam conteúdo. Não chega a
-  ser um bug, mas indica que a estrutura documentada no README diverge
-  levemente da real.
-- **Sugestão:** mover o `ThemeData` de `main.dart` para
-  `core/theming/app_theme.dart` (consistente com o resto da organização
-  feature-first) ou remover as pastas vazias e ajustar o README.
-- **Esforço estimado:** P
+#### [AUD-012] 🟢 Empty `core/theming` and `core/di`
+- **Category:** 6.8, Architecture and organization
+- **File:** `lib/core/theming/`, `lib/core/di/`
+- **Evidence:** `find lib/core/theming lib/core/di -type f` returns no
+  files; the theme is defined inline in `main.dart:27-37`
+  (`ThemeData`/`darkTheme`), and dependency injection is done via Riverpod
+  providers spread across `data/providers.dart` and `game_controller.dart`,
+  not in `core/di`.
+- **Problem:** these folders were created by the initial scaffolding (the
+  README lists them in the "Structure" section) but never received any
+  content. Not a bug per se, but it indicates the documented README
+  structure slightly diverges from the real one.
+- **Suggestion:** move `ThemeData` from `main.dart` into
+  `core/theming/app_theme.dart` (consistent with the rest of the
+  feature-first organization) or remove the empty folders and update the
+  README.
+- **Estimated effort:** S
 
-### Dependências (seção 6.13)
+### Dependencies (section 6.13)
 
-#### [AUD-013] 🟢 Duas dependências diretas com versão major mais nova já resolvível
-- **Categoria:** 6.13, Dependências
-- **Arquivo:** `pubspec.yaml:11,19`
-- **Evidência:** `flutter pub outdated`:
+#### [AUD-013] 🟢 Two direct dependencies with a newer major version already resolvable
+- **Category:** 6.13, Dependencies
+- **File:** `pubspec.yaml:11,19`
+- **Evidence:** `flutter pub outdated`:
   ```
   flutter_riverpod   *2.6.1    *2.6.1      *3.3.2      3.4.2
   share_plus         *12.0.2   *12.0.2     13.3.0      13.3.0
   ```
-- **Problema:** ambas têm uma versão major nova já resolvível com as
-  demais dependências do projeto (coluna "Resolvable"), não apenas
-  transitiva. Não há indício de vulnerabilidade conhecida nas versões
-  atuais, mas o projeto está a uma major inteira de distância em duas
-  dependências centrais (state management e compartilhamento de PGN).
-- **Sugestão:** avaliar o changelog de `riverpod` 3.x (mudanças de API não
-  triviais entre major versions) e de `share_plus` 13.x num momento
-  dedicado, fora do fluxo de outras mudanças, com a suíte de testes como
-  rede de segurança.
-- **Esforço estimado:** M
+- **Problem:** both have an entire new major version already resolvable
+  alongside the project's other dependencies (the "Resolvable" column), not
+  just transitively. There is no indication of a known vulnerability in the
+  current versions, but the project is a full major version behind on two
+  central dependencies (state management and PGN sharing).
+- **Suggestion:** evaluate `riverpod` 3.x's changelog (non-trivial API
+  changes between major versions) and `share_plus` 13.x at a dedicated
+  moment, separate from other changes, with the test suite as a safety net.
+- **Estimated effort:** M
 
-### Lint e análise estática (seção 6.9 / Fase 1)
+### Lint and static analysis (section 6.9 / Phase 1)
 
-#### [AUD-014] 🟢 `analysis_options.yaml` usa somente o conjunto padrão do `flutter_lints`
-- **Categoria:** 6.9, Qualidade de código
-- **Arquivo:** `analysis_options.yaml:10,30-33`
-- **Evidência:**
+#### [AUD-014] 🟢 `analysis_options.yaml` uses only the `flutter_lints` default set
+- **Category:** 6.9, Code quality
+- **File:** `analysis_options.yaml:10,30-33`
+- **Evidence:**
   ```yaml
   include: package:flutter_lints/flutter.yaml
   ...
@@ -387,27 +380,27 @@ xadrez em si.
       # avoid_print: false  # Uncomment to disable the `avoid_print` rule
       # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
   ```
-  Nenhuma regra é adicionada além do conjunto padrão; `flutter analyze
-  --no-fatal-infos` já roda limpo hoje ("No issues found!"), o que sugere
-  que o código passaria também num conjunto mais rígido.
-- **Problema:** o padrão `flutter_lints` é propositalmente permissivo. Um
-  conjunto mais rígido (`very_good_analysis`, ou regras manuais como
+  No rule is added beyond the default set; `flutter analyze
+  --no-fatal-infos` already runs clean today ("No issues found!"), which
+  suggests the code would also pass a stricter set.
+- **Problem:** the `flutter_lints` default is deliberately permissive. A
+  stricter set (`very_good_analysis`, or manual rules like
   `public_member_api_docs`, `prefer_final_locals`, `avoid_dynamic_calls`)
-  pegaria regressões de estilo antes de chegarem à revisão humana,
-  especialmente relevante dado o volume de código gerado autonomamente que
-  o `ADR.md` descreve.
-- **Sugestão:** experimentar `very_good_analysis` num branch e avaliar o
-  volume de ajustes necessário antes de adotar.
-- **Esforço estimado:** P
+  would catch style regressions before they reach human review, especially
+  relevant given the volume of autonomously generated code that `ADR.md`
+  describes.
+- **Suggestion:** try `very_good_analysis` on a branch and evaluate the
+  volume of required adjustments before adopting it.
+- **Estimated effort:** S
 
-### Informativo (fora do escopo de `lib/`)
+### Informational (outside `lib/`'s scope)
 
-#### [AUD-015] ℹ️ `dart format --set-exit-if-changed .` falha por causa do pacote vendorizado
-- **Categoria:** Fase 1, Análise estática automatizada
-- **Arquivo:** `native/leela_chess_zero/example/lib/main.dart`,
+#### [AUD-015] ℹ️ `dart format --set-exit-if-changed .` fails because of the vendored package
+- **Category:** Phase 1, automated static analysis
+- **File:** `native/leela_chess_zero/example/lib/main.dart`,
   `native/leela_chess_zero/lib/lc0.dart`,
   `native/leela_chess_zero/lib/src/lc0_state.dart`
-- **Evidência:**
+- **Evidence:**
   ```
   $ dart format --output=none --set-exit-if-changed .
   Changed native/leela_chess_zero/example/lib/main.dart
@@ -415,23 +408,23 @@ xadrez em si.
   Changed native/leela_chess_zero/lib/src/lc0_state.dart
   Formatted 49 files (3 changed) in 0.29 seconds.
   ```
-  Os três arquivos pertencem ao pacote de terceiros vendorizado (ADR-001),
-  já excluído do `flutter analyze` via `analyzer.exclude: [native/**]` em
-  `analysis_options.yaml:14-17`, mas `dart format .` não respeita esse
-  `exclude` por rodar fora do analyzer.
-- **Problema:** não é um problema do código do app; é puramente uma
-  consequência de rodar o comando genérico da Fase 1 deste processo sobre
-  todo o diretório. Se um gate de CI (AUD-002) adotar
-  `dart format --set-exit-if-changed .` ao pé da letra, vai falhar sempre
-  por causa do vendorizado, mascarando regressões reais no código do app.
-- **Sugestão:** no CI, restringir o comando a `dart format
-  --set-exit-if-changed lib test integration_test`, espelhando o mesmo
-  `exclude` de `native/**` já usado pelo analyzer.
-- **Esforço estimado:** P
+  The three files belong to the vendored third-party package (ADR-001),
+  already excluded from `flutter analyze` via `analyzer.exclude:
+  [native/**]` in `analysis_options.yaml:14-17`, but `dart format .` does
+  not respect that `exclude` since it runs outside the analyzer.
+- **Problem:** not a problem with the app's own code; it is purely a
+  consequence of running this process's generic Phase 1 command over the
+  entire directory. If a CI gate (AUD-002) adopts `dart format
+  --set-exit-if-changed .` literally, it will always fail because of the
+  vendored code, masking real regressions in the app's own code.
+- **Suggestion:** in CI, restrict the command to `dart format
+  --set-exit-if-changed lib test integration_test`, mirroring the same
+  `native/**` exclude already used by the analyzer.
+- **Estimated effort:** S
 
-## Apêndices
+## Appendices
 
-### Comandos executados (Fase 0/1)
+### Commands run (Phase 0/1)
 
 ```
 $ flutter --version
@@ -445,19 +438,19 @@ $ flutter test --coverage
 00:03 +50: All tests passed!
 
 $ flutter pub outdated
-(ver AUD-013 para as linhas relevantes)
+(see AUD-013 for the relevant lines)
 ```
 
-### Cobertura por arquivo (extraída de `coverage/lcov.info`)
+### Coverage per file (extracted from `coverage/lcov.info`)
 
-| Arquivo | Cobertura |
+| File | Coverage |
 |---|---|
 | `lc0_service.dart` | 0% (0/138) |
 | `stockfish_service.dart` | 0% (0/132) |
 | `promotion_dialog.dart` | 0% (0/11) |
 | `hint_dialog.dart` | 0% (0/41) |
 | `new_game_vs_ai_screen.dart` | 2% (1/45) |
-| `app_database.g.dart` (gerado) | 29% (545/1894) |
+| `app_database.g.dart` (generated) | 29% (545/1894) |
 | `providers.dart` | 33% (8/24) |
 | `main.dart` | 51% (42/83) |
 | `app_database.dart` | 57% (81/143) |
@@ -478,15 +471,16 @@ $ flutter pub outdated
 | `game_state.dart` | 99% (80/81) |
 | `piece_assets.dart`, `game_repository.dart`, `progress_repository.dart`, `settings_repository.dart`, `chess_piece_widget.dart`, `hint_result.dart` | 100% |
 
-### Ressalva metodológica
+### Methodological caveat
 
-Esta auditoria foi feita por leitura estática e execução de ferramentas de
-análise; não envolveu instalar o app num dispositivo físico nem medir
-desempenho real (uso de CPU/memória do lc0/Stockfish em hardware real), que
-o próprio `ADR.md` já sinaliza como pendência da Fase 7 ("Em aberto", ao
-final do ADR-001). Os itens de performance do checklist (seção 6.4) não
-geraram achados porque a leitura do código não revelou os padrões
-buscados (`FutureBuilder` recriando `Future` a cada build, listas grandes
-sem `.builder`, ausência de `const` em pontos quentes). O tabuleiro usa
-`GridView.builder` com 64 itens fixos e `RepaintBoundary` já está em
-`ChessPieceWidget` (`chess_piece_widget.dart:21`).
+This audit was carried out through static reading and running analysis
+tools; it did not involve installing the app on a physical device or
+measuring real-world performance (lc0/Stockfish CPU/memory usage on real
+hardware), which `ADR.md` itself already flags as a Phase 7 open item
+("Open question", at the end of ADR-001). The checklist's performance
+items (section 6.4) produced no findings because reading the code did not
+reveal the patterns being searched for (`FutureBuilder` recreating its
+`Future` on every build, large lists without `.builder`, missing `const`
+in hot paths). The board uses `GridView.builder` with 64 fixed items, and
+`RepaintBoundary` is already present in `ChessPieceWidget`
+(`chess_piece_widget.dart:21`).
