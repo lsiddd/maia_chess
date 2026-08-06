@@ -2,6 +2,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theming/app_page_route.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../game/presentation/chess_board_widget.dart';
@@ -57,7 +58,7 @@ class HistoryScreen extends ConsumerWidget {
                   title: Text(_title(game)),
                   subtitle: Text(_subtitle(game)),
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) => ReplayScreen(gameId: game.id),
                     ),
                   ),

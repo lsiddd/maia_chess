@@ -2,6 +2,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theming/app_page_route.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/progress_repository.dart';
 import '../../game/application/game_controller.dart';
@@ -71,7 +72,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
       }
       await Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => const GameScreen()));
+      ).push(AppPageRoute(builder: (_) => const GameScreen()));
     } finally {
       if (mounted) setState(() => _startingRating = null);
     }
