@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theming/app_page_route.dart';
 import 'core/theming/app_theme.dart';
 import 'core/widgets/error_state_card.dart';
+import 'core/widgets/max_width_body.dart';
 import 'data/providers.dart';
 import 'data/repositories/game_repository.dart';
 import 'data/repositories/settings_repository.dart';
@@ -51,77 +52,79 @@ class HomeScreen extends ConsumerWidget {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Xadrez Maia')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        children: [
-          _HomeHeader(colors: colors),
-          const SizedBox(height: AppSpacing.xl),
-          if (activeGame.valueOrNull != null) ...[
+      body: MaxWidthBody(
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          children: [
+            _HomeHeader(colors: colors),
+            const SizedBox(height: AppSpacing.xl),
+            if (activeGame.valueOrNull != null) ...[
+              FilledButton.icon(
+                onPressed: () => _resume(context, ref),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Continuar partida salva'),
+              ),
+              const SizedBox(height: AppSpacing.m),
+            ],
             FilledButton.icon(
-              onPressed: () => _resume(context, ref),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Continuar partida salva'),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(AppPageRoute(builder: (_) => const CampaignScreen())),
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('Campanha Maia'),
             ),
             const SizedBox(height: AppSpacing.m),
-          ],
-          FilledButton.icon(
-            onPressed: () => Navigator.of(
-              context,
-            ).push(AppPageRoute(builder: (_) => const CampaignScreen())),
-            icon: const Icon(Icons.flag_outlined),
-            label: const Text('Campanha Maia'),
-          ),
-          const SizedBox(height: AppSpacing.m),
-          FilledButton.tonalIcon(
-            onPressed: () => _openNewAiGame(context, ref),
-            icon: const Icon(Icons.psychology_outlined),
-            label: const Text('Modo livre contra a IA'),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Mais opções',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant),
-          ),
-          const SizedBox(height: AppSpacing.s),
-          Card(
-            margin: EdgeInsets.zero,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.sports_esports_outlined),
-                  title: const Text('Jogar (2 jogadores locais)'),
-                  onTap: () => _startLocalGame(context, ref),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.insights_outlined),
-                  title: const Text('Meu desempenho'),
-                  onTap: () => Navigator.of(
-                    context,
-                  ).push(AppPageRoute(builder: (_) => const StatsScreen())),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.history),
-                  title: const Text('Partidas salvas e PGN'),
-                  onTap: () => Navigator.of(
-                    context,
-                  ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
-                ),
-              ],
+            FilledButton.tonalIcon(
+              onPressed: () => _openNewAiGame(context, ref),
+              icon: const Icon(Icons.psychology_outlined),
+              label: const Text('Modo livre contra a IA'),
             ),
-          ),
-          if (activeGame.hasError) ...[
-            const SizedBox(height: AppSpacing.m),
-            ErrorStateCard(
-              message: 'Falha ao verificar autosave: ${activeGame.error}',
-              onRetry: () => ref.invalidate(activeGameProvider),
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'Mais opções',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant),
             ),
+            const SizedBox(height: AppSpacing.s),
+            Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.sports_esports_outlined),
+                    title: const Text('Jogar (2 jogadores locais)'),
+                    onTap: () => _startLocalGame(context, ref),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.insights_outlined),
+                    title: const Text('Meu desempenho'),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).push(AppPageRoute(builder: (_) => const StatsScreen())),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.history),
+                    title: const Text('Partidas salvas e PGN'),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
+                  ),
+                ],
+              ),
+            ),
+            if (activeGame.hasError) ...[
+              const SizedBox(height: AppSpacing.m),
+              ErrorStateCard(
+                message: 'Falha ao verificar autosave: ${activeGame.error}',
+                onRetry: () => ref.invalidate(activeGameProvider),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

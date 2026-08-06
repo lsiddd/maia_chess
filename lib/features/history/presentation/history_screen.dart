@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_page_route.dart';
 import '../../../core/widgets/error_state_card.dart';
+import '../../../core/widgets/max_width_body.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../game/presentation/chess_board_widget.dart';
@@ -27,69 +28,71 @@ class HistoryScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: library.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: ErrorStateCard(
-              message: 'Não foi possível abrir a biblioteca: $error',
-              onRetry: () => ref.invalidate(gameLibraryProvider),
+      body: MaxWidthBody(
+        child: library.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ErrorStateCard(
+                message: 'Não foi possível abrir a biblioteca: $error',
+                onRetry: () => ref.invalidate(gameLibraryProvider),
+              ),
             ),
           ),
-        ),
-        data: (games) {
-          if (games.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Nenhuma partida salva.\n'
-                  'As partidas em andamento são salvas automaticamente.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: games.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final game = games[index];
-              return Card(
-                child: ListTile(
-                  leading: Icon(
-                    game.status == StoredGameStatus.ongoing
-                        ? Icons.save_outlined
-                        : Icons.sports_esports_outlined,
-                  ),
-                  title: Text(_title(game)),
-                  subtitle: Text(_subtitle(game)),
-                  onTap: () => Navigator.of(context).push(
-                    AppPageRoute(
-                      builder: (_) => ReplayScreen(gameId: game.id),
-                    ),
-                  ),
-                  trailing: PopupMenuButton<_HistoryAction>(
-                    onSelected: (action) =>
-                        _handleAction(context, ref, game, action),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: _HistoryAction.export,
-                        child: Text('Exportar PGN'),
-                      ),
-                      PopupMenuItem(
-                        value: _HistoryAction.delete,
-                        child: Text('Excluir'),
-                      ),
-                    ],
+          data: (games) {
+            if (games.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Nenhuma partida salva.\n'
+                    'As partidas em andamento são salvas automaticamente.',
+                    textAlign: TextAlign.center,
                   ),
                 ),
               );
-            },
-          );
-        },
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.all(12),
+              itemCount: games.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final game = games[index];
+                return Card(
+                  child: ListTile(
+                    leading: Icon(
+                      game.status == StoredGameStatus.ongoing
+                          ? Icons.save_outlined
+                          : Icons.sports_esports_outlined,
+                    ),
+                    title: Text(_title(game)),
+                    subtitle: Text(_subtitle(game)),
+                    onTap: () => Navigator.of(context).push(
+                      AppPageRoute(
+                        builder: (_) => ReplayScreen(gameId: game.id),
+                      ),
+                    ),
+                    trailing: PopupMenuButton<_HistoryAction>(
+                      onSelected: (action) =>
+                          _handleAction(context, ref, game, action),
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: _HistoryAction.export,
+                          child: Text('Exportar PGN'),
+                        ),
+                        PopupMenuItem(
+                          value: _HistoryAction.delete,
+                          child: Text('Excluir'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -279,58 +282,62 @@ class _ReplayViewState extends State<_ReplayView> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: StaticChessBoardWidget(
-                  position: position,
-                  orientation: orientation,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  tooltip: 'Início',
-                  onPressed: _ply == 0 ? null : () => setState(() => _ply = 0),
-                  icon: const Icon(Icons.first_page),
-                ),
-                IconButton(
-                  tooltip: 'Anterior',
-                  onPressed: _ply == 0 ? null : () => setState(() => _ply--),
-                  icon: const Icon(Icons.chevron_left),
-                ),
-                Text('Lance $_ply de ${game.moves.length}'),
-                IconButton(
-                  tooltip: 'Próximo',
-                  onPressed: _ply == game.moves.length
-                      ? null
-                      : () => setState(() => _ply++),
-                  icon: const Icon(Icons.chevron_right),
-                ),
-                IconButton(
-                  tooltip: 'Final',
-                  onPressed: _ply == game.moves.length
-                      ? null
-                      : () => setState(() => _ply = game.moves.length),
-                  icon: const Icon(Icons.last_page),
-                ),
-              ],
-            ),
-            if (_ply > 0)
+        child: MaxWidthBody(
+          child: ListView(
+            padding: const EdgeInsets.all(12),
+            children: [
               Center(
-                child: Text(
-                  '${_ply.isOdd ? '${(_ply + 1) ~/ 2}.' : '${_ply ~/ 2}...'} '
-                  '${game.moves[_ply - 1].san}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: StaticChessBoardWidget(
+                    position: position,
+                    orientation: orientation,
+                  ),
                 ),
               ),
-          ],
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: 'Início',
+                    onPressed: _ply == 0
+                        ? null
+                        : () => setState(() => _ply = 0),
+                    icon: const Icon(Icons.first_page),
+                  ),
+                  IconButton(
+                    tooltip: 'Anterior',
+                    onPressed: _ply == 0 ? null : () => setState(() => _ply--),
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  Text('Lance $_ply de ${game.moves.length}'),
+                  IconButton(
+                    tooltip: 'Próximo',
+                    onPressed: _ply == game.moves.length
+                        ? null
+                        : () => setState(() => _ply++),
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                  IconButton(
+                    tooltip: 'Final',
+                    onPressed: _ply == game.moves.length
+                        ? null
+                        : () => setState(() => _ply = game.moves.length),
+                    icon: const Icon(Icons.last_page),
+                  ),
+                ],
+              ),
+              if (_ply > 0)
+                Center(
+                  child: Text(
+                    '${_ply.isOdd ? '${(_ply + 1) ~/ 2}.' : '${_ply ~/ 2}...'} '
+                    '${game.moves[_ply - 1].san}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

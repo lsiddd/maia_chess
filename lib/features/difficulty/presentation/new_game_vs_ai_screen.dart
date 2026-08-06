@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/difficulty_levels.dart';
 import '../../../core/theming/app_page_route.dart';
 import '../../../core/theming/app_theme.dart';
+import '../../../core/widgets/max_width_body.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 
@@ -58,91 +59,99 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Jogar contra a IA Maia')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        children: [
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.l),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _SectionLabel(
-                    icon: Icons.swap_horiz,
-                    label: 'Seu lado',
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  SegmentedButton<Side>(
-                    segments: const [
-                      ButtonSegment(value: Side.white, label: Text('Brancas')),
-                      ButtonSegment(value: Side.black, label: Text('Pretas')),
-                    ],
-                    selected: {_humanSide},
-                    onSelectionChanged: (selection) =>
-                        setState(() => _humanSide = selection.first),
-                  ),
-                ],
+      body: MaxWidthBody(
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          children: [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.l),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionLabel(
+                      icon: Icons.swap_horiz,
+                      label: 'Seu lado',
+                    ),
+                    const SizedBox(height: AppSpacing.m),
+                    SegmentedButton<Side>(
+                      segments: const [
+                        ButtonSegment(
+                          value: Side.white,
+                          label: Text('Brancas'),
+                        ),
+                        ButtonSegment(value: Side.black, label: Text('Pretas')),
+                      ],
+                      selected: {_humanSide},
+                      onSelectionChanged: (selection) =>
+                          setState(() => _humanSide = selection.first),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.l),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.l),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _SectionLabel(
-                    icon: Icons.psychology_outlined,
-                    label: 'Nível (estilo Maia)',
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  Wrap(
-                    spacing: AppSpacing.s,
-                    runSpacing: AppSpacing.s,
-                    children: DifficultyLevel.all.map((level) {
-                      final selected = level.rating == _levelRating;
-                      return ChoiceChip(
-                        label: Text('${level.rating}'),
-                        selected: selected,
-                        onSelected: (_) =>
-                            setState(() => _levelRating = level.rating),
-                      );
-                    }).toList(),
-                  ),
-                ],
+            const SizedBox(height: AppSpacing.l),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.l),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionLabel(
+                      icon: Icons.psychology_outlined,
+                      label: 'Nível (estilo Maia)',
+                    ),
+                    const SizedBox(height: AppSpacing.m),
+                    Wrap(
+                      spacing: AppSpacing.s,
+                      runSpacing: AppSpacing.s,
+                      children: DifficultyLevel.all.map((level) {
+                        final selected = level.rating == _levelRating;
+                        return ChoiceChip(
+                          label: Text('${level.rating}'),
+                          selected: selected,
+                          onSelected: (_) =>
+                              setState(() => _levelRating = level.rating),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          FilledButton(
-            onPressed: _starting ? null : _start,
-            child: AnimatedSwitcher(
-              duration: AppMotion.fast,
-              transitionBuilder: (child, animation) =>
-                  FadeTransition(opacity: animation, child: child),
-              child: _starting
-                  ? const SizedBox(
-                      key: ValueKey('starting-spinner'),
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Começar partida', key: ValueKey('starting-label')),
+            const SizedBox(height: AppSpacing.xl),
+            FilledButton(
+              onPressed: _starting ? null : _start,
+              child: AnimatedSwitcher(
+                duration: AppMotion.fast,
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                child: _starting
+                    ? const SizedBox(
+                        key: ValueKey('starting-spinner'),
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text(
+                        'Começar partida',
+                        key: ValueKey('starting-label'),
+                      ),
+              ),
             ),
-          ),
-          if (_starting) ...[
-            const SizedBox(height: AppSpacing.m),
-            Text(
-              'Carregando o peso do Maia $_levelRating... '
-              'pode levar alguns segundos na primeira vez.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (_starting) ...[
+              const SizedBox(height: AppSpacing.m),
+              Text(
+                'Carregando o peso do Maia $_levelRating... '
+                'pode levar alguns segundos na primeira vez.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
