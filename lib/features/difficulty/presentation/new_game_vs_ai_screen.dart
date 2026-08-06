@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,9 +42,11 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
         ).showSnackBar(SnackBar(content: Text(error)));
         return;
       }
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const GameScreen()));
+      unawaited(
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const GameScreen())),
+      );
     } finally {
       if (mounted) setState(() => _starting = false);
     }

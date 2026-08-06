@@ -31,5 +31,18 @@ linter:
     # avoid_print: false  # Uncomment to disable the `avoid_print` rule
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
 
+    # Regras adicionadas além do padrão flutter_lints (ver
+    # AUDITORIA_TECNICA.md, AUD-014). Escolhidas por atacarem diretamente
+    # os riscos deste checklist (Futures não aguardados, subscriptions/sinks
+    # não fechados, chamadas dynamic silenciosas) em vez de regras
+    # puramente estilísticas.
+    - unawaited_futures
+    - discarded_futures
+    - cancel_subscriptions
+    - close_sinks
+    - avoid_dynamic_calls
+    - prefer_final_locals
+    - prefer_final_in_for_each
+
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

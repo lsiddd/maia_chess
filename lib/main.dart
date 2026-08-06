@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -129,9 +131,11 @@ class HomeScreen extends ConsumerWidget {
       );
       return;
     }
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const GameScreen()));
+    unawaited(
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const GameScreen())),
+    );
   }
 
   Future<void> _openNewAiGame(BuildContext context, WidgetRef ref) async {
