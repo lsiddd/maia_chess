@@ -42,11 +42,17 @@ racional completo:
 
 ```
 lib/
-├── core/            # theming, DI/providers globais, constantes
+├── core/            # theming, constantes
 ├── engine_ffi/       # serviços lc0 (Maia) e Stockfish via FFI
 ├── features/         # game, difficulty, hints, history, stats, settings, pgn
-└── data/             # Drift database, repositórios
+└── data/             # Drift database, repositórios, providers Riverpod
 
 native/                # dependências nativas vendorizadas (ver ADR-001)
 assets/maia_weights/   # pesos .pb.gz do Maia (1100-1900), a partir da Fase 2
 ```
+
+Não há uma pasta de DI dedicada: os providers Riverpod ficam ao lado de
+quem os expõe (`data/providers.dart` para repositórios, e cada
+controller/serviço expõe os seus próprios, ex.:
+`GameController`/`lc0EngineFactoryProvider`), padrão idiomático do
+Riverpod.

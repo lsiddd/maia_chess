@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/theming/app_theme.dart';
 import 'data/providers.dart';
 import 'data/repositories/game_repository.dart';
 import 'data/repositories/settings_repository.dart';
@@ -24,17 +25,8 @@ class MaiaChessApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Xadrez Maia',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.brown),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.brown,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       themeMode: switch (storedTheme) {
         StoredThemeMode.light => ThemeMode.light,
         StoredThemeMode.dark => ThemeMode.dark,
