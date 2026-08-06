@@ -1,5 +1,7 @@
 import 'package:dartchess/dartchess.dart';
 
+import '../../features/stats/domain/player_stats.dart';
+
 enum StoredGameStatus { ongoing, completed }
 
 enum StoredGameResult { ongoing, whiteWin, blackWin, draw, unknown }
@@ -137,4 +139,15 @@ abstract interface class GameRepository {
   Future<void> importGame(StoredGame game);
 
   Future<void> deleteGame(String id);
+}
+
+/// Resultado de uma partida do ponto de vista de [playerSide], único lugar
+/// onde essa regra é calculada (antes duplicada entre `AppDatabase` e
+/// `DriftStatsRepository`, ver AUDITORIA_TECNICA.md, AUD-009).
+PlayerGameOutcome playerOutcome(StoredGameResult result, Side playerSide) {
+  if (result == StoredGameResult.draw) return PlayerGameOutcome.draw;
+  final playerWon =
+      (playerSide == Side.white && result == StoredGameResult.whiteWin) ||
+      (playerSide == Side.black && result == StoredGameResult.blackWin);
+  return playerWon ? PlayerGameOutcome.win : PlayerGameOutcome.loss;
 }
