@@ -81,11 +81,3 @@ class DriftStatsRepository implements StatsRepository {
     );
   }
 }
-
-PlayerGameOutcome playerOutcome(StoredGameResult result, Side playerSide) {
-  if (result == StoredGameResult.draw) return PlayerGameOutcome.draw;
-  final playerWon =
-      (playerSide == Side.white && result == StoredGameResult.whiteWin) ||
-      (playerSide == Side.black && result == StoredGameResult.blackWin);
-  return playerWon ? PlayerGameOutcome.win : PlayerGameOutcome.loss;
-}

@@ -1,0 +1,46 @@
+name: CI
+
+# Gate mínimo antes de merge (ver AUDITORIA_TECNICA.md, AUD-002): análise
+# estática, formatação e testes unitários/widget. `integration_test/`
+# depende de emulador/dispositivo Android e fica fora deste gate por ora
+# (ver AUD-002 e AUD-015 no relatório de auditoria).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze:
+    name: Analyze, format e testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: "stable"
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: flutter analyze
+        run: flutter analyze --no-fatal-infos
+
+      # Restrito a lib/test/integration_test: native/ é um pacote de
+      # terceiros vendorizado (ver ADR-001) e não passa por este gate,
+      # assim como já é excluído do analyzer em analysis_options.yaml.
+      - name: dart format (somente código do app)
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - name: flutter test
+        run: flutter test --coverage
+
+      - name: Publicar cobertura como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info

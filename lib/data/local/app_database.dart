@@ -224,17 +224,11 @@ class AppDatabase extends _$AppDatabase {
   EvaluatedGameSummary _evaluatedSummary(GameRow row) {
     final side = Side.values.byName(row.playerSide!);
     final result = StoredGameResult.values.byName(row.result);
-    final outcome = result == StoredGameResult.draw
-        ? PlayerGameOutcome.draw
-        : (side == Side.white && result == StoredGameResult.whiteWin) ||
-              (side == Side.black && result == StoredGameResult.blackWin)
-        ? PlayerGameOutcome.win
-        : PlayerGameOutcome.loss;
     return EvaluatedGameSummary(
       gameId: row.id,
       completedAtUtc: (row.endedAtUtc ?? row.lastModifiedAtUtc).toUtc(),
       levelRating: row.levelRating!,
-      outcome: outcome,
+      outcome: playerOutcome(result, side),
       campaignMode: row.campaignMode,
     );
   }
