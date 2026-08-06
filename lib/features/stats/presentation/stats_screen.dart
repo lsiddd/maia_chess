@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/difficulty_levels.dart';
 import '../../../core/widgets/error_state_card.dart';
+import '../../../core/widgets/max_width_body.dart';
 import '../../../data/providers.dart';
 import '../domain/player_stats.dart';
 
@@ -16,18 +17,20 @@ class StatsScreen extends ConsumerWidget {
     final stats = ref.watch(playerStatsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Meu desempenho')),
-      body: stats.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: ErrorStateCard(
-              message: 'Não foi possível calcular as estatísticas: $error',
-              onRetry: () => ref.invalidate(playerStatsProvider),
+      body: MaxWidthBody(
+        child: stats.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ErrorStateCard(
+                message: 'Não foi possível calcular as estatísticas: $error',
+                onRetry: () => ref.invalidate(playerStatsProvider),
+              ),
             ),
           ),
+          data: (snapshot) => _StatsBody(stats: snapshot),
         ),
-        data: (snapshot) => _StatsBody(stats: snapshot),
       ),
     );
   }

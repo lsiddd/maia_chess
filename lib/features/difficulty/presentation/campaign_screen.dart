@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theming/app_page_route.dart';
 import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/error_state_card.dart';
+import '../../../core/widgets/max_width_body.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/progress_repository.dart';
 import '../../game/application/game_controller.dart';
@@ -85,48 +86,50 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
     final progress = ref.watch(difficultyProgressProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Campanha Maia')),
-      body: progress.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: ErrorStateCard(
-              message: 'Não foi possível abrir a campanha: $error',
-              onRetry: () => ref.invalidate(difficultyProgressProvider),
+      body: MaxWidthBody(
+        child: progress.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ErrorStateCard(
+                message: 'Não foi possível abrir a campanha: $error',
+                onRetry: () => ref.invalidate(difficultyProgressProvider),
+              ),
             ),
           ),
-        ),
-        data: (levels) => CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              sliver: SliverToBoxAdapter(
-                child: _CampaignHeader(
-                  humanSide: _humanSide,
-                  onSideChanged: _startingRating == null
-                      ? (side) => setState(() => _humanSide = side)
-                      : null,
+          data: (levels) => CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                sliver: SliverToBoxAdapter(
+                  child: _CampaignHeader(
+                    humanSide: _humanSide,
+                    onSideChanged: _startingRating == null
+                        ? (side) => setState(() => _humanSide = side)
+                        : null,
+                  ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              sliver: SliverList.separated(
-                itemCount: levels.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final item = levels[index];
-                  return _CampaignLevelCard(
-                    progress: item,
-                    finalLevel: index == levels.length - 1,
-                    busy: _startingRating != null,
-                    starting: _startingRating == item.rating,
-                    onPlay: () => _startLevel(item),
-                  );
-                },
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                sliver: SliverList.separated(
+                  itemCount: levels.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final item = levels[index];
+                    return _CampaignLevelCard(
+                      progress: item,
+                      finalLevel: index == levels.length - 1,
+                      busy: _startingRating != null,
+                      starting: _startingRating == item.rating,
+                      onPlay: () => _startLevel(item),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -334,9 +337,7 @@ class _CampaignLevelCard extends StatelessWidget {
                                 minHeight: 7,
                                 value: value,
                                 color: accent,
-                                backgroundColor: accent.withValues(
-                                  alpha: 0.12,
-                                ),
+                                backgroundColor: accent.withValues(alpha: 0.12),
                               ),
                         ),
                       ),

@@ -46,10 +46,7 @@ class ErrorStateCard extends StatelessWidget {
               const SizedBox(height: 4),
               Align(
                 alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: onRetry,
-                  child: Text(retryLabel),
-                ),
+                child: TextButton(onPressed: onRetry, child: Text(retryLabel)),
               ),
             ],
           ],
