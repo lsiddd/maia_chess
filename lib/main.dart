@@ -259,6 +259,7 @@ class _HomeHeader extends StatelessWidget {
                 Text(
                   'Xadrez Maia',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontFamily: AppTypography.accentFontFamily,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

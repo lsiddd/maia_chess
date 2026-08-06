@@ -198,6 +198,15 @@ class _ResponsiveGameLayout extends StatelessWidget {
   }
 }
 
+/// Cores do indicador circular de "vez de quem joga": preto/branco fixos,
+/// como as peças do tabuleiro, não seguem o tema claro/escuro do app.
+abstract final class _TurnDotColors {
+  static const whiteFill = Colors.white;
+  static const whiteBorder = Color(0xFF424242);
+  static const blackFill = Color(0xFF202124);
+  static const blackBorder = Colors.white70;
+}
+
 class _StatusBar extends ConsumerWidget {
   const _StatusBar({required this.state});
 
@@ -243,12 +252,12 @@ class _StatusBar extends ConsumerWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: whiteToMove
-                          ? Colors.white
-                          : const Color(0xFF202124),
+                          ? _TurnDotColors.whiteFill
+                          : _TurnDotColors.blackFill,
                       border: Border.all(
                         color: whiteToMove
-                            ? const Color(0xFF424242)
-                            : Colors.white70,
+                            ? _TurnDotColors.whiteBorder
+                            : _TurnDotColors.blackBorder,
                         width: 1.5,
                       ),
                       boxShadow: const [

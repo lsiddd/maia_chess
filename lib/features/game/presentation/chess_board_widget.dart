@@ -286,6 +286,15 @@ Square _squareAt(int displayRow, int displayCol, Side orientation) {
   return Square.fromCoords(File(file), Rank(rank));
 }
 
+/// Paleta do tabuleiro em si, fixa independente do tema claro/escuro do
+/// app: é a convenção visual do domínio de xadrez (mesmas cores usadas por
+/// chess.com/lichess), não uma escolha de marca do app.
+abstract final class _BoardColors {
+  static const lightSquare = Color(0xFFEEEED2);
+  static const darkSquare = Color(0xFF769656);
+  static const selectionTint = Color(0xA6FFD54F);
+}
+
 class _SquareVisual extends StatelessWidget {
   const _SquareVisual({
     super.key,
@@ -305,10 +314,10 @@ class _SquareVisual extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseColor = isDark
-        ? const Color(0xFF769656)
-        : const Color(0xFFEEEED2);
+        ? _BoardColors.darkSquare
+        : _BoardColors.lightSquare;
     final squareColor = isSelected
-        ? Color.alphaBlend(const Color(0xA6FFD54F), baseColor)
+        ? Color.alphaBlend(_BoardColors.selectionTint, baseColor)
         : baseColor;
 
     return SizedBox.expand(

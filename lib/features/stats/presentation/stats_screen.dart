@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/difficulty_levels.dart';
+import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/error_state_card.dart';
 import '../../../core/widgets/max_width_body.dart';
 import '../../../data/providers.dart';
@@ -81,7 +82,7 @@ class _StatsBody extends StatelessWidget {
             child: Text(
               'Placar por nível',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontFamily: 'serif',
+                fontFamily: AppTypography.accentFontFamily,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -144,7 +145,7 @@ class _RatingHero extends StatelessWidget {
               Text(
                 '${stats.estimatedRating.round()}',
                 style: theme.textTheme.displayLarge?.copyWith(
-                  fontFamily: 'serif',
+                  fontFamily: AppTypography.accentFontFamily,
                   fontWeight: FontWeight.w800,
                   height: 1,
                 ),
@@ -235,7 +236,7 @@ class _MetricCard extends StatelessWidget {
                   TextSpan(
                     text: value,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontFamily: 'serif',
+                      fontFamily: AppTypography.accentFontFamily,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -278,7 +279,7 @@ class _LevelScoreCard extends StatelessWidget {
               child: Text(
                 '$rating',
                 style: theme.textTheme.titleMedium?.copyWith(
-                  fontFamily: 'serif',
+                  fontFamily: AppTypography.accentFontFamily,
                   fontWeight: FontWeight.w800,
                 ),
               ),

@@ -175,7 +175,7 @@ class _CampaignHeader extends StatelessWidget {
                       'A escalada dos nove Maias',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
-                            fontFamily: 'serif',
+                            fontFamily: AppTypography.accentFontFamily,
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -298,7 +298,7 @@ class _CampaignLevelCard extends StatelessWidget {
                           child: Text(
                             'Maia ${progress.rating}',
                             style: theme.textTheme.titleLarge?.copyWith(
-                              fontFamily: 'serif',
+                              fontFamily: AppTypography.accentFontFamily,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
