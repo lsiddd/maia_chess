@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:dartchess/dartchess.dart';
@@ -65,7 +66,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget> {
                 details.localPosition,
                 cellSize,
               );
-              controller.onSquareTapped(square, onPromotion: askPromotion);
+              unawaited(
+                controller.onSquareTapped(square, onPromotion: askPromotion),
+              );
             },
             onPanStart: (details) {
               if (state.isGameOver ||
@@ -98,7 +101,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget> {
               });
               if (from == null || pos == null) return;
               final to = _squareAtLocalPosition(pos, cellSize);
-              controller.attemptDragMove(from, to, onPromotion: askPromotion);
+              unawaited(
+                controller.attemptDragMove(from, to, onPromotion: askPromotion),
+              );
             },
             onPanCancel: () => setState(() {
               _draggingFrom = null;
