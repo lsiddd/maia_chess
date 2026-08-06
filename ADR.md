@@ -1,68 +1,70 @@
-# Registro de Decisões de Arquitetura (ADR)
+# Architecture Decision Record (ADR)
 
-Este documento registra desvios em relação à especificação técnica original
-(`docs/especificacao.md`, seção 2 e seção 9) e outras decisões relevantes
-tomadas durante a implementação autônoma do projeto.
+This document records deviations from the original technical specification
+(`docs/especificacao.md`, sections 2 and 9) and other relevant decisions
+made during the autonomous implementation of the project.
 
 ---
 
-## ADR-001 — Reutilização de pacotes pub.dev para lc0 e Stockfish em vez de build NDK próprio
+## ADR-001 — Reuse of pub.dev packages for lc0 and Stockfish instead of a custom NDK build
 
-**Status:** aceito
-**Contexto:** a especificação original (seção 12) identifica compilar o lc0 para
-Android via NDK e validar a execução via FFI como o maior risco técnico do
-projeto, recomendando um spike isolado antes de prosseguir.
+**Status:** accepted
+**Context:** the original specification (section 12) identifies compiling
+lc0 for Android via NDK and validating execution via FFI as the project's
+biggest technical risk, recommending an isolated spike before proceeding.
 
-**Decisão:** em vez de compilar o lc0 e o Stockfish do zero (checkout do
-código-fonte, configuração de toolchain NDK, meson/CMake, backends de
-inferência, etc.), o projeto reutiliza dois pacotes Flutter de código aberto
-já publicados no pub.dev, ambos sob licença GPL-3.0 (compatível com a
-distribuição open source deste projeto):
+**Decision:** instead of building lc0 and Stockfish from scratch (checking
+out the source code, configuring the NDK toolchain, meson/CMake, inference
+backends, etc.), the project reuses two open source Flutter packages already
+published on pub.dev, both under the GPL-3.0 license (compatible with this
+project's open source distribution):
 
 - [`leela_chess_zero`](https://pub.dev/packages/leela_chess_zero) (v1.0.0) —
-  compila o lc0 a partir do código-fonte vendorizado via CMake/NDK durante o
-  próprio build do Gradle, expõe `lc0_init`, `lc0_main`, `lc0_stdin_write`,
-  `lc0_stdout_read` via Dart FFI (`DynamicLibrary.open('liblc0.so')`), roda o
-  laço UCI do lc0 em um Isolate dedicado, com stdin/stdout redirecionados via
-  pipes Unix. Já inclui o peso Maia-1900 como asset (`assets/weights/maia-1900.pb.gz`)
-  e aceita pesos customizados via `setoption name WeightsFile value <caminho>`.
-  Backend de inferência: BLAS (via implementação CBLAS própria sobre Eigen
-  header-only), já que o Android não possui uma libblas de sistema.
-- [`stockfish`](https://pub.dev/packages/stockfish) (v1.8.1) — mesmo padrão
-  arquitetural (FFI in-process, sem subprocess, Isolate dedicado), aplicado ao
-  motor Stockfish.
+  compiles lc0 from vendored source via CMake/NDK during the Gradle build
+  itself, exposes `lc0_init`, `lc0_main`, `lc0_stdin_write`,
+  `lc0_stdout_read` via Dart FFI (`DynamicLibrary.open('liblc0.so')`), runs
+  lc0's UCI loop in a dedicated Isolate, with stdin/stdout redirected via
+  Unix pipes. Already includes the Maia-1900 weight as an asset
+  (`assets/weights/maia-1900.pb.gz`) and accepts custom weights via
+  `setoption name WeightsFile value <path>`. Inference backend: BLAS (via a
+  custom CBLAS implementation on top of header-only Eigen), since Android
+  has no system libblas.
+- [`stockfish`](https://pub.dev/packages/stockfish) (v1.8.1) — same
+  architectural pattern (in-process FFI, no subprocess, dedicated Isolate),
+  applied to the Stockfish engine.
 
-**Justificativa:**
-1. Ambos os pacotes já implementam exatamente o contrato exigido pela seção
-   4.1/4.2 do documento técnico: execução **in-process** via FFI, sem
-   subprocess (respeitando a restrição W^X do Android desde a API 29).
-2. Evita redescobrir, por tentativa e erro, um processo de cross-compilação
-   C++ inteiro (proto headers do lc0, Eigen, abseil, backends CPU) que duas
-   equipes de código aberto já resolveram e mantêm publicamente.
-3. Reduz drasticamente a superfície de risco técnico da Fase 0, permitindo
-   que o tempo de desenvolvimento seja investido no restante do app.
+**Rationale:**
+1. Both packages already implement exactly the contract required by
+   sections 4.1/4.2 of the technical document: **in-process** execution via
+   FFI, no subprocess (respecting Android's W^X restriction since API 29).
+2. Avoids rediscovering, by trial and error, an entire C++ cross-compilation
+   process (lc0 proto headers, Eigen, abseil, CPU backends) that two open
+   source teams have already solved and maintain publicly.
+3. Drastically reduces Phase 0's technical risk surface, allowing
+   development time to be invested in the rest of the app.
 
-**Consequência:** o projeto depende da manutenção contínua desses pacotes de
-terceiros. Caso se tornem obsoletos ou incompatíveis com versões futuras do
-Flutter/AGP/NDK, a alternativa é vendorizar uma cópia própria (fork) dentro de
-`android/` do próprio app, ou retornar ao plano original de build manual.
-Os fontes de ambos os pacotes já estão vendorizados dentro de cada pacote
-(sem submódulos git), o que facilita esse fork se necessário.
+**Consequence:** the project depends on the continued maintenance of these
+third-party packages. Should they become obsolete or incompatible with
+future Flutter/AGP/NDK versions, the alternative is to vendor a private
+copy (fork) inside the app's own `android/`, or fall back to the original
+manual-build plan. The sources of both packages are already vendored inside
+each package (no git submodules), which makes such a fork easier if
+necessary.
 
-**Addendum (Fase 0, execução do spike):** o pacote `leela_chess_zero` 1.0.0
-publicado no pub.dev **não builda out-of-the-box**. O build Android falha
-com `fatal error: 'proto/net.pb.h' file not found`. Causa: o
-`architecture.md` do próprio pacote documenta que os headers `.pb.h`
-pré-gerados do sistema de mensagens do lc0 (`net.proto`, `onnx.proto`,
-`hlo.proto`) deveriam estar commitados em `ios/lc0/build/proto/`, mas essa
-pasta não veio no tarball publicado — quase certamente porque `build/` está
-no `.gitignore` do autor e `dart pub publish` empacota respeitando
-`.gitignore` por padrão.
+**Addendum (Phase 0, spike execution):** the `leela_chess_zero` 1.0.0
+package published on pub.dev **does not build out-of-the-box**. The Android
+build fails with `fatal error: 'proto/net.pb.h' file not found`. Cause: the
+package's own `architecture.md` documents that the pre-generated `.pb.h`
+headers for lc0's messaging system (`net.proto`, `onnx.proto`, `hlo.proto`)
+should be committed under `ios/lc0/build/proto/`, but that folder was not
+included in the published tarball — almost certainly because `build/` is in
+the author's `.gitignore` and `dart pub publish` packages content respecting
+`.gitignore` by default.
 
-Correção aplicada: o pacote foi vendorizado em `native/leela_chess_zero/`
-(cópia integral do pacote 1.0.0) e os headers faltantes foram regenerados
-localmente a partir dos `.proto` fonte (que **estão** presentes no pacote),
-usando o script já existente do próprio lc0:
+Fix applied: the package was vendored into `native/leela_chess_zero/` (a
+full copy of package 1.0.0) and the missing headers were regenerated
+locally from the source `.proto` files (which **are** present in the
+package), using lc0's own existing script:
 
 ```bash
 cd native/leela_chess_zero/ios/lc0
@@ -71,494 +73,498 @@ uv run --no-project python3 scripts/compile_proto.py --proto_path=proto --cpp_ou
 uv run --no-project python3 scripts/compile_proto.py --proto_path=proto --cpp_out=build proto/hlo.proto
 mkdir -p build/proto && mv build/*.pb.h build/proto/
 ```
-(`--no-project` evita que o `uv` tente sincronizar/buildar o projeto meson
-completo do lc0, que tem um `pyproject.toml` próprio e não builda no desktop
-com as modificações mobile-specific da fonte vendorizada — só precisamos do
-script Python standalone, sem dependências de terceiros.)
+(`--no-project` prevents `uv` from trying to sync/build lc0's full meson
+project, which has its own `pyproject.toml` and doesn't build on desktop
+with the mobile-specific modifications of the vendored source — we only
+need the standalone Python script, with no third-party dependencies.)
 
-**Addendum (Fase 2, bug de corrida no dispose):** ao trocar de nível numa
-partida contra a IA sem sair do app (ex: jogar contra o Maia 1900 e, na
-sequência, iniciar uma nova partida contra o Maia 1100), o app lançava
-`Bad state: Multiple instances are not supported, yet.`. Causa: tanto
-`Lc0.dispose()` quanto `Stockfish.dispose()` (pacotes subjacentes) só
-mandam `"quit"` pelo stdin — a limpeza de fato (que zera o singleton
-estático `_instance` do pacote) só acontece depois, quando o isolate do
-motor termina de processar o `"quit"` e sai, de forma assíncrona. O
-`Lc0Service.dispose()`/`StockfishService.dispose()` originais não esperavam
-por isso: retornavam assim que enviavam `"quit"`, então um `init()` logo
-em seguida tentava construir uma nova instância enquanto a antiga ainda
-não tinha liberado o singleton do pacote. Corrigido fazendo `dispose()`
-escutar `state` até virar `disposed`/`error` (com timeout de 5s de
-segurança) antes de retornar. Validado corrigindo exatamente o cenário que
-reproduzia o bug (troca de nível 1900 → 1100 na mesma sessão).
+**Addendum (Phase 2, dispose race condition):** when switching levels in a
+game against the AI without leaving the app (e.g., playing against Maia
+1900 and then, right after, starting a new game against Maia 1100), the app
+threw `Bad state: Multiple instances are not supported, yet.`. Cause: both
+`Lc0.dispose()` and `Stockfish.dispose()` (the underlying packages) only
+send `"quit"` over stdin — the actual cleanup (which clears the package's
+static `_instance` singleton) only happens afterward, asynchronously, once
+the engine's isolate finishes processing `"quit"` and exits. The original
+`Lc0Service.dispose()`/`StockfishService.dispose()` did not wait for this:
+they returned as soon as `"quit"` was sent, so a subsequent `init()` tried
+to build a new instance while the old one had not yet released the
+package's singleton. Fixed by making `dispose()` listen to `state` until it
+becomes `disposed`/`error` (with a 5s safety timeout) before returning.
+Validated by fixing exactly the scenario that reproduced the bug (switching
+from level 1900 → 1100 within the same session).
 
-**Addendum (Fase 3, `Lc0State.ready`/`StockfishState.ready` não significam
-"pronto para jogar"):** implementando o botão de dica, `getBestMove` do lc0
-e do Stockfish começaram a estourar timeout de forma aparentemente
-aleatória, mesmo com os dois motores já em estado `ready`. O logcat expôs a
-causa: entre o motor imprimir `Search algorithm: classic` e `Loading
-weights file from: ...` (lc0), passaram **23,6 segundos** — e o parsing do
-peso em si, uma vez iniciado, levou só ~21ms. Ou seja, `Lc0State.ready` (e,
-por construção idêntica do pacote `stockfish`, `StockfishState.ready`) só
-indica que os Isolates nativos subiram (`Isolate.spawn` retornou), **não**
-que o motor terminou de carregar peso/rede e está pronto para processar
-`go`. Um `go` enviado nesse intervalo fica na fila atrás do carregamento
-ainda em andamento, e nosso timeout do lado Dart (que não sabe disso)
-estourava achando que o motor tinha travado.
+**Addendum (Phase 3, `Lc0State.ready`/`StockfishState.ready` do not mean
+"ready to play"):** while implementing the hint button, `getBestMove` for
+lc0 and Stockfish started timing out in an apparently random fashion, even
+with both engines already in the `ready` state. logcat exposed the cause:
+between the engine printing `Search algorithm: classic` and `Loading
+weights file from: ...` (lc0), **23.6 seconds** elapsed — and parsing the
+weight itself, once started, took only ~21ms. In other words,
+`Lc0State.ready` (and, by the `stockfish` package's identical construction,
+`StockfishState.ready`) only indicates that the native Isolates came up
+(`Isolate.spawn` returned), **not** that the engine finished loading the
+weight/network and is ready to process `go`. A `go` sent during that window
+sits in the queue behind the still-in-progress loading, and our Dart-side
+timeout (unaware of this) fired thinking the engine had hung.
 
-Corrigido em `Lc0Service.init`/`StockfishService.init`: depois do estado
-virar `ready`, mandamos o handshake padrão UCI `isready` e só consideramos
-o motor de fato pronto (`isReady`) quando chega `readyok` — que só responde
-depois que o motor processa tudo que veio antes na fila de stdin,
-garantindo que o carregamento já terminou. Timeout desse handshake: 60s.
+Fixed in `Lc0Service.init`/`StockfishService.init`: after the state becomes
+`ready`, we send the standard UCI `isready` handshake and only consider the
+engine actually ready (`isReady`) once `readyok` arrives — which only
+responds after the engine has processed everything queued before it on
+stdin, guaranteeing loading has finished. This handshake's timeout: 60s.
 
-**Em aberto:** não está confirmado se os ~24-38s de carregamento são
-específicos deste ambiente de desenvolvimento ou algo a esperar também em
-hardware real. Indício forte de que é específico deste ambiente: o host
-onde este projeto está sendo desenvolvido roda a própria sessão do agente
-dentro de uma VM (QEMU), e o emulador Android é *outra* camada de QEMU por
-cima disso — virtualização aninhada, conhecida por penalizar pesadamente
-operações de CPU intensas (`ps aux` mostrou o processo do emulador e uma
-segunda VM concorrendo por CPU junto com daemons do Gradle/Kotlin,
-`uptime` com load average >5 numa consulta feita durante um desses
-timeouts). Carregar/verificar pesos de rede neural via BLAS é exatamente o
-tipo de carga que sofre mais nesse cenário. Por isso o timeout do
-handshake foi para 120s (era 60s) só para viabilizar validar a Fase 3
-neste sandbox — **não deve ser lido como estimativa de tempo real em
-dispositivo físico**. Vale medir num aparelho de verdade antes da Fase 7;
-se mesmo lá for lento, considerar pré-carregar o peso do próximo nível
-mais provável em background, ou tornar o timeout configurável.
+**Open question:** it is not confirmed whether the ~24-38s loading times are
+specific to this development environment or something to expect on real
+hardware too. Strong evidence points to it being environment-specific: the
+host where this project is being developed runs the agent session itself
+inside a VM (QEMU), and the Android emulator is *another* layer of QEMU on
+top of that — nested virtualization, known to heavily penalize CPU-intensive
+operations (`ps aux` showed the emulator process and a second VM competing
+for CPU alongside Gradle/Kotlin daemons, `uptime` showing a load average >5
+during one of these timeouts). Loading/verifying neural network weights via
+BLAS is exactly the kind of workload that suffers most in this scenario.
+That is why the handshake timeout was raised to 120s (from 60s), purely to
+make it possible to validate Phase 3 in this sandbox — **this should not be
+read as an estimate of real time on physical hardware**. Worth measuring on
+an actual device before Phase 7; if it is still slow there, consider
+preloading the next likely level's weight in the background, or making the
+timeout configurable.
 
-`pubspec.yaml` aponta para essa cópia local via `path:` em vez da versão
-hospedada:
+`pubspec.yaml` points to this local copy via a `path:` reference instead of
+the hosted version:
 ```yaml
 leela_chess_zero:
   path: native/leela_chess_zero
 ```
 
-**Consequência adicional:** os 3 arquivos `.pb.h` gerados (poucos KB cada)
-ficam commitados dentro de `native/leela_chess_zero/ios/lc0/build/proto/`
-neste repositório. Caso o mantenedor do pacote publique uma versão corrigida
-no pub.dev, reavaliar a volta para a dependência hospedada.
+**Additional consequence:** the 3 generated `.pb.h` files (a few KB each)
+are committed inside `native/leela_chess_zero/ios/lc0/build/proto/` in this
+repository. Should the package maintainer publish a fixed version on
+pub.dev, reevaluate reverting to the hosted dependency.
 
-**Resultado do spike (validado em APK real, emulador x86_64, API 36):**
-`liblc0.so` e `libstockfish.so` compilam e linkam para `arm64-v8a` e
-`x86_64`; instalado o APK de debug, a tela de diagnóstico confirmou
-ponta a ponta: carregar o peso Maia-1900 → enviar FEN inicial → `go nodes 1`
-→ receber `bestmove e2e4` via FFI (lc0), e o mesmo fluxo com Stockfish
-(`go movetime 1000` → `bestmove e2e4`). **O maior risco técnico do projeto
-(seção 12 dos requisitos) está mitigado.**
+**Spike result (validated on a real APK, x86_64 emulator, API 36):**
+`liblc0.so` and `libstockfish.so` compile and link for `arm64-v8a` and
+`x86_64`; with the debug APK installed, the diagnostic screen confirmed
+end-to-end: loading the Maia-1900 weight → sending the initial FEN → `go
+nodes 1` → receiving `bestmove e2e4` via FFI (lc0), and the same flow with
+Stockfish (`go movetime 1000` → `bestmove e2e4`). **The project's biggest
+technical risk (requirements section 12) is mitigated.**
 
-**Observação de robustez (não bloqueante, revisitar na Fase 3):** na primeira
-chamada ao Stockfish nesta sessão de teste, a busca não respondeu dentro de
-9s (timeout) e deixou o singleton do pacote `stockfish` preso (`Bad state:
-Multiple instances are not supported, yet.` em tentativas seguintes, exigindo
-reiniciar o app). Em execuções subsequentes (processo novo), respondeu
-rapidamente. Causa provável: custo de inicialização a frio dos dois arquivos
-NNUE embutidos (`nn-c288c895ea92.nnue` grande + `nn-37f18f62d772.nnue`
-pequeno) somado à carga residual do build nativo pesado que tinha acabado de
-rodar no mesmo host. Recomendações para a Fase 3 (`stockfish_service.dart`):
-(a) enviar `uci`/`isready` e aguardar `uciok`/`readyok` antes do primeiro
-`position`/`go`, hoje ausente tanto no `Lc0Service` quanto no
-`StockfishService`; (b) aumentar a margem de timeout ou torná-la
-configurável; (c) se o timeout ocorrer, expor um caminho de recuperação
-(reiniciar o isolate/engine) em vez de deixar o singleton preso.
+**Robustness observation (non-blocking, revisit in Phase 3):** on the first
+call to Stockfish in this test session, the search did not respond within
+9s (timeout) and left the `stockfish` package's singleton stuck (`Bad
+state: Multiple instances are not supported, yet.` on subsequent attempts,
+requiring an app restart). On later runs (fresh process), it responded
+quickly. Likely cause: the cold-start cost of the two embedded NNUE files
+(a large `nn-c288c895ea92.nnue` plus a small `nn-37f18f62d772.nnue`) added
+to the residual load from the heavy native build that had just run on the
+same host. Recommendations for Phase 3 (`stockfish_service.dart`): (a) send
+`uci`/`isready` and wait for `uciok`/`readyok` before the first
+`position`/`go`, currently missing in both `Lc0Service` and
+`StockfishService`; (b) increase the timeout margin or make it
+configurable; (c) if the timeout occurs, expose a recovery path (restart
+the isolate/engine) instead of leaving the singleton stuck.
 
-**Addendum (Fase 3, causa raiz do bloqueio Stockfish + lc0):** a espera de
-mais de 400 segundos com consumo praticamente nulo de CPU não era custo da
-NNUE nem falta de escalonamento do host. Os bridges FFI dos dois pacotes
-executavam `dup2()` sobre os descritores 0/1 do **mesmo processo** e seus
-loops UCI bloqueavam em `std::getline(std::cin)`. `stdin`, `stdout`,
-`std::cin` e `std::cout` são globais ao processo/runtime C++, não privados
-por Isolate. Como o lc0 continuava vivo durante toda a partida, seu loop
-ficava bloqueado esperando o próximo comando e o Stockfish podia dormir
-indefinidamente disputando o mesmo stream. Esse comportamento explica
-diretamente a ausência de CPU observada.
+**Addendum (Phase 3, root cause of the Stockfish + lc0 hang):** the wait of
+over 400 seconds with essentially zero CPU usage was not the NNUE cost nor
+a host scheduling issue. Both packages' FFI bridges called `dup2()` on file
+descriptors 0/1 of the **same process**, and their UCI loops blocked on
+`std::getline(std::cin)`. `stdin`, `stdout`, `std::cin`, and `std::cout` are
+global to the process/C++ runtime, not private per Isolate. Since lc0
+remained alive for the entire game, its loop stayed blocked waiting for the
+next command, and Stockfish could sleep indefinitely contending for the
+same stream. This behavior directly explains the observed absence of CPU
+usage.
 
-Correção: o bridge vendorizado do lc0 não chama mais `dup2()` nem usa
-`std::cin/std::cout` no protocolo UCI. `engine_loop.cc` lê diretamente do
-pipe privado do lc0 e `StdoutUciResponder` escreve diretamente no pipe de
-saída, com serialização e tratamento de `EINTR`. Isso deixa o Stockfish livre
-para usar o transporte legado do pacote sem contenção entre motores.
+Fix: the vendored lc0 bridge no longer calls `dup2()` or uses
+`std::cin/std::cout` for the UCI protocol. `engine_loop.cc` reads directly
+from lc0's private pipe, and `StdoutUciResponder` writes directly to the
+output pipe, with serialization and `EINTR` handling. This frees Stockfish
+to use the package's legacy transport without contention between engines.
 
-Defesas adicionais no Dart:
+Additional Dart-side defenses:
 
-- handshake do Stockfish limitado a 60s (lc0: 120s);
-- fim/erro do stream conclui os `Future`s com erro, em vez de aguardar apenas
-  o timer;
-- busca atrasada recebe `stop`, tem 2s de tolerância e, se continuar presa, o
-  motor é descartado;
-- a operação completa de dica tem limite de 120s e sempre sai do spinner com
-  resultado ou erro;
-- solicitar dica marca a partida como não avaliada imediatamente, antes dos
-  motores, e o cálculo é iniciado pelo callback do botão (fora do ciclo de
-  build do Riverpod).
+- Stockfish handshake capped at 60s (lc0: 120s);
+- stream end/error completes the `Future`s with an error, instead of
+  waiting only for the timer;
+- a delayed search receives `stop`, gets a 2s grace period and, if still
+  stuck, the engine is discarded;
+- the full hint operation has a 120s limit and always exits the spinner
+  with a result or an error;
+- requesting a hint marks the game as unevaluated immediately, before the
+  engines run, and the computation is kicked off from the button's callback
+  (outside Riverpod's build cycle).
 
-Validação ao vivo (emulador x86_64, API 36): Maia 1100 e Stockfish retornaram
-`e4` para a posição inicial em menos de 10s; em seguida, depois de o Stockfish
-já estar ativo, o lance humano `1.e4` recebeu normalmente `...e5` do mesmo
-lc0. Uma segunda dica na nova posição retornou `Nf3` pelos dois motores. Isso
-confirma tanto a dica quanto a coexistência e o reuso dos dois engines.
-
----
-
-## ADR-002 — Conjunto de ABIs Android: `arm64-v8a` + `x86_64` (em vez de `arm64-v8a` + `armeabi-v7a`)
-
-**Status:** aceito
-**Contexto:** a especificação sugere ABI splits para `arm64-v8a` e
-`armeabi-v7a` (seção 10, seção 7).
-
-**Decisão:** o `build.gradle.kts` do app usa `abiFilters "arm64-v8a", "x86_64"`.
-
-**Justificativa:** o pacote `leela_chess_zero` (motor lc0) só compila, hoje,
-para `arm64-v8a` e `x86_64` upstream (ver `android/build.gradle` do pacote).
-`armeabi-v7a` (ARM 32-bit) está cada vez mais restrito a aparelhos anteriores
-a ~2016, hoje uma fração residual do parque Android. Como o app depende do
-lc0 para sua funcionalidade central (IA estilo humano), não faz sentido
-manter uma ABI para a qual o motor principal não compila. `x86_64` foi
-mantido por viabilizar teste em emulador (usado neste próprio spike) e cobrir
-os poucos dispositivos x86 físicos existentes.
-O pacote `stockfish` compila para as três ABIs (`arm64-v8a`, `armeabi-v7a`,
-`x86_64`); a limitação efetiva vem do lc0.
-
-**Consequência:** dispositivos ARM de 32 bits (raros, antigos) não conseguem
-rodar o app. Reavaliar se o `leela_chess_zero` ganhar suporte a
-`armeabi-v7a` upstream.
+Live validation (x86_64 emulator, API 36): Maia 1100 and Stockfish returned
+`e4` for the starting position in under 10s; then, after Stockfish was
+already active, the human move `1.e4` normally received `...e5` from the
+same lc0. A second hint on the new position returned `Nf3` from both
+engines. This confirms both the hint feature and the coexistence and reuse
+of the two engines.
 
 ---
 
-## ADR-003 — `minSdk` 24 (em vez de 23)
+## ADR-002 — Android ABI set: `arm64-v8a` + `x86_64` (instead of `arm64-v8a` + `armeabi-v7a`)
 
-**Status:** aceito
-**Contexto:** a especificação (seção 2, seção 10) sugere API 23+ "a confirmar
-conforme requisitos de build do NDK/lc0".
+**Status:** accepted
+**Context:** the specification suggests ABI splits for `arm64-v8a` and
+`armeabi-v7a` (section 10, section 7).
 
-**Decisão:** `minSdk = 24` no `android/app/build.gradle.kts`.
+**Decision:** the app's `build.gradle.kts` uses `abiFilters "arm64-v8a", "x86_64"`.
 
-**Justificativa:** o pacote `leela_chess_zero` declara `minSdk 24` como
-requisito explícito. A confirmação pedida pela especificação foi feita: **API
-23 não é suficiente**, API 24 (Android 7.0) é o mínimo real.
+**Rationale:** the `leela_chess_zero` package (lc0 engine) currently only
+compiles, upstream, for `arm64-v8a` and `x86_64` (see the package's
+`android/build.gradle`). `armeabi-v7a` (32-bit ARM) is increasingly limited
+to devices from before ~2016, today a residual fraction of the Android
+install base. Since the app depends on lc0 for its core functionality
+(human-style AI), it makes no sense to keep an ABI the main engine doesn't
+compile for. `x86_64` was kept because it enables emulator testing (used in
+this very spike) and covers the few existing physical x86 devices. The
+`stockfish` package compiles for all three ABIs (`arm64-v8a`,
+`armeabi-v7a`, `x86_64`); the effective limitation comes from lc0.
 
----
-
-## ADR-004 — Biblioteca de regras de xadrez: `dartchess` (em vez de `chess`)
-
-**Status:** aceito
-**Contexto:** a especificação (seção 4.3, seção 13) cita o pacote `chess` do
-pub.dev como exemplo, mas deixa a escolha final em aberto.
-
-**Decisão:** usar [`dartchess`](https://pub.dev/packages/dartchess)
-(mantido pela organização Lichess), não o pacote `chess`.
-
-**Justificativa:** `dartchess` é ativamente mantido por uma organização com
-histórico sólido em engines de xadrez open source (lichess.org), tem API
-imutável (`Position` imutável, `play()` retorna nova posição — favorece uso
-com Riverpod/state management declarativo), suporta geração de lances
-legais, FEN, SAN/PGN, detecção de xeque-mate/afogamento/material
-insuficiente nativamente, e parsing de UCI via `Move.parse()` (necessário
-para interpretar a saída `bestmove` do lc0/Stockfish).
+**Consequence:** 32-bit ARM devices (rare, old) cannot run the app.
+Reevaluate if `leela_chess_zero` gains upstream `armeabi-v7a` support.
 
 ---
 
-## ADR-005 — Gerenciamento de estado: Riverpod (conforme recomendado)
+## ADR-003 — `minSdk` 24 (instead of 23)
 
-**Status:** aceito, sem desvio.
-Mantida a recomendação original da seção 2/9: Riverpod (`flutter_riverpod`).
+**Status:** accepted
+**Context:** the specification (section 2, section 10) suggests API 23+
+"to be confirmed against NDK/lc0 build requirements".
 
----
+**Decision:** `minSdk = 24` in `android/app/build.gradle.kts`.
 
-## ADR-006 — JDK para build: OpenJDK 17 via `flutter config --jdk-dir`
-
-**Status:** aceito
-**Contexto:** o ambiente de desenvolvimento tinha OpenJDK 26 como JDK padrão
-do sistema, incompatível com a versão do Gradle usada pelo template Flutter
-(faixa compatível: JDK 17 ≤ x < 25).
-
-**Decisão:** configurado `flutter config --jdk-dir=/usr/lib/jvm/java-17-openjdk`
-(JDK 17 disponível no sistema via `archlinux-java`), em vez de alterar a
-versão do Gradle Wrapper.
-
-**Justificativa:** minimiza mudanças na configuração padrão gerada pelo
-`flutter create`, evitando arrastar uma versão de Gradle não testada pelo
-time do Flutter para este template.
+**Rationale:** the `leela_chess_zero` package declares `minSdk 24` as an
+explicit requirement. The confirmation requested by the specification was
+carried out: **API 23 is not sufficient**, API 24 (Android 7.0) is the real
+minimum.
 
 ---
 
-## ADR-007 — Licença e origem dos pesos Maia
+## ADR-004 — Chess rules library: `dartchess` (instead of `chess`)
 
-**Status:** aceito
-**Contexto:** a especificação (seção 9) deixa como pendência confirmar
-disponibilidade e licença dos pesos oficiais antes de embuti-los no APK.
+**Status:** accepted
+**Context:** the specification (section 4.3, section 13) cites the `chess`
+pub.dev package as an example, but leaves the final choice open.
 
-**Decisão:** os 9 pesos (`maia-1100.pb.gz` a `maia-1900.pb.gz`) foram
-baixados diretamente da release oficial do repositório
-[`CSSLab/maia-chess`](https://github.com/CSSLab/maia-chess), tag `v1.0`
+**Decision:** use [`dartchess`](https://pub.dev/packages/dartchess)
+(maintained by the Lichess organization), not the `chess` package.
+
+**Rationale:** `dartchess` is actively maintained by an organization with a
+solid track record in open source chess engines (lichess.org), has an
+immutable API (`Position` is immutable, `play()` returns a new position —
+favoring use with declarative state management like Riverpod), supports
+legal move generation, FEN, SAN/PGN, native
+checkmate/stalemate/insufficient-material detection, and UCI parsing via
+`Move.parse()` (needed to interpret lc0/Stockfish's `bestmove` output).
+
+---
+
+## ADR-005 — State management: Riverpod (as recommended)
+
+**Status:** accepted, no deviation.
+The original recommendation from section 2/9 is kept: Riverpod
+(`flutter_riverpod`).
+
+---
+
+## ADR-006 — Build JDK: OpenJDK 17 via `flutter config --jdk-dir`
+
+**Status:** accepted
+**Context:** the development environment had OpenJDK 26 as the system's
+default JDK, incompatible with the Gradle version used by the Flutter
+template (compatible range: JDK 17 ≤ x < 25).
+
+**Decision:** configured `flutter config
+--jdk-dir=/usr/lib/jvm/java-17-openjdk` (JDK 17 available on the system via
+`archlinux-java`), instead of changing the Gradle Wrapper version.
+
+**Rationale:** minimizes changes to the default configuration generated by
+`flutter create`, avoiding pulling in a Gradle version untested by the
+Flutter team for this template.
+
+---
+
+## ADR-007 — Maia Weights License and Origin
+
+**Status:** accepted
+**Context:** the specification (section 9) leaves confirming the
+availability and license of the official weights before embedding them in
+the APK as an open item.
+
+**Decision:** the 9 weights (`maia-1100.pb.gz` through `maia-1900.pb.gz`)
+were downloaded directly from the official release of the
+[`CSSLab/maia-chess`](https://github.com/CSSLab/maia-chess) repository, tag
+`v1.0`
 (`github.com/CSSLab/maia-chess/releases/download/v1.0/maia-<rating>.pb.gz`),
-e ficam em `assets/maia_weights/`.
+and live in `assets/maia_weights/`.
 
-**Sobre a licença:** o repositório `CSSLab/maia-chess` é licenciado como
-GPL-3.0. O README não separa explicitamente a licença do código da licença
-dos pesos treinados, mas trata ambos como parte do mesmo projeto distribuído
-sob essa licença (o próprio README aponta tanto a pasta local
-`maia_weights/` quanto os releases do GitHub como formas equivalentes de
-obter os pesos). Este projeto (`maia_chess`, também open source) redistribui
-os pesos sem modificação, com atribuição de origem registrada aqui e em
-`assets/maia_weights/NOTICE.md`. Se o CSSLab publicar uma licença específica
-e mais restritiva para os pesos no futuro, esta decisão deve ser revisitada.
+**On the license:** the `CSSLab/maia-chess` repository is licensed under
+GPL-3.0. The README does not explicitly separate the code license from the
+trained weights' license, but treats both as part of the same project
+distributed under that license (the README itself points to both the local
+`maia_weights/` folder and the GitHub releases as equivalent ways to obtain
+the weights). This project (`maia_chess`, also open source) redistributes
+the weights unmodified, with the origin attribution recorded here and in
+`assets/maia_weights/NOTICE.md`. Should CSSLab publish a specific, more
+restrictive license for the weights in the future, this decision should be
+revisited.
 
-**Justificativa:** os pesos são o elemento central do produto (a IA "estilo
-humano" não existe sem eles) e estão publicados oficialmente para uso
-externo, com mais de 13 mil downloads registrados só no arquivo de 1100 no
-momento da consulta — uso amplamente esperado pelos mantenedores.
-
----
-
-## ADR-008 — Serialização, snapshot e recuperação das operações de motor
-
-**Status:** aceito
-
-**Contexto:** uma dica envolve duas operações nativas sequenciais sobre a
-mesma posição. Fechar o diálogo não cancela automaticamente o `Future`, e um
-timeout de `Future.timeout` também não interrompe por si só o cálculo nativo.
-Além disso, iniciar outra partida enquanto o Maia respondia poderia deixar
-duas buscas UCI concorrendo no mesmo singleton lc0.
-
-**Decisão:**
-
-- `GameController.getHint()` é *single-flight*: chamadas repetidas enquanto
-  uma dica está em andamento recebem a mesma operação, sem novos comandos
-  UCI;
-- FEN e objeto `Chess` são capturados juntos no início; a conversão UCI →
-  SAN usa exclusivamente esse snapshot;
-- enquanto a dica calcula, toque, arraste, undo e reset pela UI ficam
-  bloqueados. Fechar o diálogo apenas oculta o progresso; a operação única
-  continua e o estado mostra “Calculando dica...”;
-- timeout, erro nativo, saída UCI inválida, mudança de partida ou shutdown
-  invalidam a geração da operação e descartam os motores envolvidos antes
-  da próxima tentativa;
-- respostas atrasadas da IA carregam uma geração e a FEN de origem. Uma
-  resposta só é aplicada se ambas ainda coincidirem com a partida atual;
-- iniciar/reiniciar uma partida durante uma busca descarta o lc0 anterior
-  antes de criar outro, evitando comandos simultâneos;
-- os motores entram no controller por interfaces/factories Riverpod, o que
-  permite testar timeout, erro, descarte e recuperação sem carregar FFI em
-  testes unitários.
-
-**Validação:** a suíte cobre single-flight, bloqueio de movimento, timeout
-com tentativa posterior, erro de inicialização, UCI inválido, troca repetida
-1100 → 1900 → 1100 e resposta atrasada após mudança de partida. Um teste de
-integração no emulador Android x86_64/API 36 executa motores reais na
-sequência 1100 → dica → lance humano/resposta Maia → 1900 → dica e encerra
-os dois singletons explicitamente.
+**Rationale:** the weights are the product's central element (the
+"human-style" AI does not exist without them) and are officially published
+for external use, with over 13,000 recorded downloads for the 1100 file
+alone at the time of checking — usage broadly expected by the maintainers.
 
 ---
 
-## Addendum ao ADR-004 — Regras dependentes do histórico e roque na UI
+## ADR-008 — Serialization, snapshotting, and recovery of engine operations
 
-`dartchess` encerra partidas por mate, afogamento e material insuficiente,
-mas não adjudica repetição nem regra dos 50 lances porque essas regras
-dependem do histórico da partida. `GameState` passou a:
+**Status:** accepted
 
-- identificar repetição pelas quatro primeiras partes da FEN (peças, lado,
-  direitos de roque e en passant legal), declarando empate na terceira
-  ocorrência;
-- declarar empate quando o relógio de meio-lances chega a 100;
-- manter os históricos em listas não modificáveis;
-- traduzir a codificação interna de roque do `dartchess` (rei → torre,
-  necessária para Chess960) para os destinos clássicos g/c usados pela UI.
+**Context:** a hint involves two sequential native operations on the same
+position. Closing the dialog does not automatically cancel the `Future`,
+and a `Future.timeout` also does not by itself interrupt the native
+computation. In addition, starting another game while Maia was responding
+could leave two UCI searches contending on the same lc0 singleton.
 
-Esses casos, somados a en passant e às quatro promoções legais, têm testes de
-regressão dedicados.
+**Decision:**
 
----
+- `GameController.getHint()` is *single-flight*: repeated calls while a
+  hint is in progress receive the same operation, with no new UCI commands;
+- FEN and the `Chess` object are captured together at the start; the UCI →
+  SAN conversion uses exclusively that snapshot;
+- while the hint is computing, tap, drag, undo, and reset via the UI are
+  blocked. Closing the dialog only hides the progress; the single operation
+  continues and the state shows "Computing hint...";
+- timeout, native error, invalid UCI output, game change, or shutdown
+  invalidate the operation's generation and discard the involved engines
+  before the next attempt;
+- delayed AI responses carry a generation and the source FEN. A response is
+  only applied if both still match the current game;
+- starting/restarting a game during a search discards the previous lc0
+  instance before creating another, avoiding concurrent commands;
+- the engines are injected into the controller via Riverpod
+  interfaces/factories, which allows testing timeout, error, disposal, and
+  recovery without loading FFI in unit tests.
 
-## ADR-009 — Persistência relacional, autosave e importação PGN
-
-**Status:** aceito
-
-**Contexto:** a Fase 4 exige que uma partida sobreviva ao encerramento do
-processo, que a finalização/campanha seja idempotente e transacional e que a
-importação PGN nunca deixe registros parciais. Estatísticas agregadas em JSON
-duplicariam dados que podem ser calculados a partir das partidas.
-
-**Decisão:**
-
-- Drift/SQLite é a fonte durável, com tabelas relacionais `games`,
-  `game_moves`, `difficulty_progress`, `rating_history` e `app_settings`;
-- há no máximo um autosave em andamento. A UI pede confirmação antes de
-  substituí-lo, e o repositório faz a troca em uma única transação;
-- o controller grava somente depois de um lance validado pelo `dartchess`.
-  Undo substitui o snapshot e remove os lances desfeitos;
-- a conclusão substitui o snapshot, salva resultado/PGN e reconstrói as
-  projeções de rating/campanha na mesma transação. Uma segunda conclusão do
-  mesmo ID não contabiliza a partida novamente;
-- na retomada, todos os UCIs são reaplicados a partir da FEN inicial. SAN,
-  FEN intermediárias e FEN final precisam coincidir com o banco antes de o
-  estado ser aceito;
-- uma posição retomada só solicita o Maia quando realmente for a vez da IA;
-  o primeiro lance automático já persistido nunca é reaplicado;
-- a importação valida em memória o cabeçalho, a posição inicial, todos os
-  lances da linha principal e das variantes. A contagem dos tokens originais
-  também precisa coincidir com a árvore do parser, evitando aceitar texto que
-  um parser permissivo tenha ignorado;
-- importações são arquivadas como não avaliadas e não alteram campanha ou
-  rating. A gravação ocorre somente depois da validação integral;
-- arquivos são escolhidos pelo Storage Access Framework e exportados pela
-  folha de compartilhamento do Android, sem permissões amplas de
-  armazenamento.
-
-**Validação:** testes com SQLite temporário cobrem criação do schema, versão,
-defaults, chaves estrangeiras/cascade, substituição de snapshot, uma única
-partida ativa, finalização idempotente, exclusão de vitórias não avaliadas,
-configurações e round-trip PGN. No emulador Android x86_64/API 36 foi
-confirmado ao vivo o fluxo e4/e5 → undo → `evaluated=false` → encerramento
-forçado do processo → novo processo → retomada em e4, sem perder o estado.
-Também foram confirmados biblioteca/replay, abertura da folha nativa de
-compartilhamento e importação por DocumentsUI de um PGN com quatro lances.
+**Validation:** the test suite covers single-flight behavior, move
+blocking, timeout with a later retry, initialization error, invalid UCI,
+repeated switching 1100 → 1900 → 1100, and a delayed response after a game
+change. An integration test on an Android x86_64/API 36 emulator runs real
+engines through the sequence 1100 → hint → human move/Maia response → 1900
+→ hint and explicitly shuts down both singletons.
 
 ---
 
-## ADR-010 — Rating estimado, streaks e progressão da campanha
+## Addendum to ADR-004 — History-dependent rules and castling in the UI
 
-**Status:** aceito
+`dartchess` ends games on checkmate, stalemate, and insufficient material,
+but does not adjudicate repetition or the 50-move rule because those rules
+depend on the game's history. `GameState` now:
 
-**Contexto:** a Fase 5 precisa produzir estatísticas determinísticas a partir
-do histórico, excluir partidas com dica/undo e permitir reconstruir todos os
-dados derivados depois da exclusão de uma partida. Também era necessário
-definir precisamente o significado de "rating estimado", "streak" e
-"X vitórias em Y partidas".
+- identifies repetition from the first four parts of the FEN (pieces, side
+  to move, castling rights, and legal en passant), declaring a draw on the
+  third occurrence;
+- declares a draw when the half-move clock reaches 100;
+- keeps histories in unmodifiable lists;
+- translates `dartchess`'s internal castling encoding (king → rook,
+  required for Chess960) into the classic g/c destination squares used by
+  the UI.
 
-**Decisão — partidas elegíveis:** estatísticas e rating consideram somente
-partidas finalizadas contra o Maia que tenham nível, lado do jogador e
-resultado conhecidos e `evaluated=true`. Partidas locais, importadas,
-inacabadas ou marcadas como não avaliadas não entram nos cálculos e também
-não interrompem streaks. A campanha acrescenta o requisito
-`campaignMode=true`.
-
-**Decisão — rating:**
-
-- rating inicial: **1500**;
-- rating do adversário: o nível Maia selecionado (1100–1900);
-- resultado do jogador: vitória = 1, empate = 0,5, derrota = 0;
-- expectativa Elo: `E = 1 / (1 + 10 ^ ((R_maia - R_jogador) / 400))`;
-- atualização: `R_novo = R_atual + 32 * (resultado - E)`;
-- limites defensivos: 600–2400;
-- ordem: instante de término da partida em UTC e, em empate, ID da partida.
-
-Cada partida elegível gera exatamente um ponto em `rating_history`. A linha do
-tempo inteira é reconstruída dentro da mesma transação que conclui ou exclui
-uma partida, evitando acumuladores irreversíveis e mantendo a operação
-idempotente.
-
-**Decisão — streaks:** "streak" significa sequência de **vitórias
-consecutivas** nas partidas elegíveis, em ordem cronológica. Empate ou derrota
-zera a sequência atual. `streakRecorde` é o maior valor já alcançado.
-
-**Decisão — campanha:** cada nível declara `winsRequired=2` e
-`windowSize=3`. O nível seguinte é desbloqueado permanentemente quando, em
-qualquer janela móvel de até três partidas elegíveis de campanha no nível
-atual, o jogador alcança duas vitórias. Uma vez atingida dentro do histórico
-existente, partidas posteriores não revogam o desbloqueio. Como o progresso é
-materializado a partir das partidas retidas, excluir a partida que sustentava
-a conquista pode recalcular e bloquear novamente níveis dependentes. A UI
-avisa sobre esse efeito antes da exclusão.
-
-**Consequência:** `difficulty_progress` e `rating_history` são projeções
-reconstruíveis; `games` continua sendo a fonte de verdade. A migração v2
-acrescenta a contagem de partidas da janela de campanha e refaz essas
-projeções para bancos existentes.
+These cases, together with en passant and the four legal promotions, have
+dedicated regression tests.
 
 ---
 
-## ADR-011: minificação e shrink de recursos desligados no build de release
+## ADR-009 — Relational persistence, autosave, and PGN import
 
-**Status:** aceito
+**Status:** accepted
 
-**Contexto:** a auditoria técnica registrada em `AUDITORIA_TECNICA.md`
-(AUD-007) constatou que `android/app/build.gradle.kts` não define
-`minifyEnabled`/`shrinkResources` no bloco `release`, portanto assumem o
-padrão `false` do Android Gradle Plugin: o APK de release sai maior e sem
-ofuscação de código Dart/Kotlin.
+**Context:** Phase 4 requires that a game survive process termination, that
+completion/campaign updates be idempotent and transactional, and that PGN
+import never leave partial records. Aggregated statistics in JSON would
+duplicate data that can be computed from the games themselves.
 
-**Decisão:** manter desligado por ora, decisão explícita em vez de omissão.
+**Decision:**
 
-**Justificativa:** o projeto é open source, distribuído por sideload
-(ver README), sem segredo comercial que a ofuscação protegeria. Ativar a
-minificação exigiria regras de ProGuard/R8 testadas contra um build de
-release real cobrindo Drift (reflexão via `sqlite3`) e os plugins FFI
-(`leela_chess_zero`, `stockfish`), e o ambiente de build usado no
-desenvolvimento já se mostrou pesado para builds nativos (ver ADR-001,
-observação de robustez sobre virtualização aninhada). Não há ganho
-imediato que justifique esse risco agora.
+- Drift/SQLite is the durable source of truth, with relational tables
+  `games`, `game_moves`, `difficulty_progress`, `rating_history`, and
+  `app_settings`;
+- there is at most one autosave in progress. The UI asks for confirmation
+  before replacing it, and the repository performs the swap in a single
+  transaction;
+- the controller only writes after a move validated by `dartchess`. Undo
+  replaces the snapshot and removes the undone moves;
+- completion replaces the snapshot, saves the result/PGN, and rebuilds the
+  rating/campaign projections in the same transaction. A second completion
+  of the same ID does not count the game again;
+- on resume, all UCIs are reapplied from the initial FEN. SAN, intermediate
+  FENs, and the final FEN must match the database before the state is
+  accepted;
+- a resumed position only requests Maia's move when it is actually the
+  AI's turn; the first automatic move that was already persisted is never
+  replayed;
+- import validates, in memory, the header, the starting position, all
+  moves in the main line and variations. The count of the original tokens
+  must also match the parser's tree, avoiding accepting text that a lenient
+  parser silently ignored;
+- imports are filed as unevaluated and do not affect campaign or rating.
+  The write only happens after full validation;
+- files are picked via the Storage Access Framework and exported through
+  Android's share sheet, with no broad storage permissions.
 
-**Consequência:** o APK fica maior e sem ofuscação enquanto esta decisão
-valer. Revisitar antes de publicar em um canal que cobre por tamanho de
-download, ou se o volume de código Dart/Kotlin crescer o suficiente para
-pesar de forma perceptível.
-
----
-
-## ADR-012: campos de relógio de xadrez são scaffolding para fase futura
-
-**Status:** aceito, pendência registrada
-
-**Contexto:** `GameState`, `StoredGame`, a tabela `games` (Drift) e todo o
-caminho de persistência já carregam `clockEnabled`/`initialTimeMs`/
-`whiteTimeMs`/`blackTimeMs` (ver `AUDITORIA_TECNICA.md`, AUD-011), mas
-nenhum `Timer`/contagem regressiva os decrementa e nenhuma tela exibe um
-relógio.
-
-**Decisão:** manter os campos como estão, sem removê-los agora. Este ADR
-documenta que fazem parte do desenho de uma feature de relógio ainda não
-implementada, provavelmente junto da personalização citada no README como
-pendência das Fases 6-7.
-
-**Justificativa:** os campos já persistem e migram corretamente
-(`schemaVersion` 2 em `AppDatabase`); removê-los agora exigiria uma nova
-migração de banco sem ganho real, e a estrutura de dados já reflete o
-desenho pretendido para quando a feature for priorizada.
-
-**Consequência:** até a feature ser implementada (ou os campos removidos,
-se for descartada), um leitor do schema pode presumir que o relógio já
-funciona. Este ADR existe justamente para deixar isso explícito.
+**Validation:** tests with a temporary SQLite database cover schema
+creation, versioning, defaults, foreign keys/cascade, snapshot replacement,
+a single active game, idempotent completion, deletion of unevaluated wins,
+settings, and PGN round-trip. On the Android x86_64/API 36 emulator, the
+e4/e5 → undo → `evaluated=false` → forced process termination → new process
+→ resume at e4 flow was confirmed live, with no state lost. The
+library/replay, opening the native share sheet, and importing a four-move
+PGN via DocumentsUI were also confirmed.
 
 ---
 
-## ADR-013: assinatura de release condicional via `key.properties`
+## ADR-010 — Estimated rating, streaks, and campaign progression
 
-**Status:** aceito, geração do keystore em aberto
+**Status:** accepted
 
-**Contexto:** `android/app/build.gradle.kts` assinava o build de release com
-a chave de debug incondicionalmente (ver `AUDITORIA_TECNICA.md`, AUD-006),
-prática documentada como temporária pelo próprio `TODO` original do
-arquivo.
+**Context:** Phase 5 needs to produce deterministic statistics from
+history, exclude games where a hint/undo was used, and allow all derived
+data to be rebuilt after a game is deleted. It was also necessary to
+precisely define what "estimated rating", "streak", and "X wins in Y
+games" mean.
 
-**Decisão:** o bloco `release` passa a usar uma `signingConfig` dedicada
-lida de `android/app/key.properties` quando esse arquivo existir; sem ele,
-cai de volta para a chave de debug, preservando `flutter run --release`
-sem setup extra em ambiente de desenvolvimento, mas agora com um aviso
-explícito impresso no configure do Gradle. `key.properties` e o `.jks`
-correspondente nunca são commitados (`.gitignore`).
+**Decision — eligible games:** statistics and rating only consider
+finished games against Maia with a known level, player side, and result,
+and `evaluated=true`. Local, imported, unfinished, or unevaluated games are
+excluded from the calculations and also do not break streaks. The campaign
+adds the requirement `campaignMode=true`.
 
-**Sobre a geração do keystore em si:** este agente não gerou o keystore
-nem as senhas. Criar e guardar a chave privada que assinará
-permanentemente as atualizações do app é uma decisão do responsável pelo
-projeto (onde guardar o backup, como rotacionar credenciais, se o release
-eventualmente for publicado por mais de uma pessoa), não algo que deva ser
-automatizado silenciosamente. O comando está documentado como comentário
-no topo de `build.gradle.kts`:
+**Decision — rating:**
+
+- starting rating: **1500**;
+- opponent rating: the selected Maia level (1100–1900);
+- player result: win = 1, draw = 0.5, loss = 0;
+- Elo expectation: `E = 1 / (1 + 10 ^ ((R_maia - R_player) / 400))`;
+- update: `R_new = R_current + 32 * (result - E)`;
+- defensive bounds: 600–2400;
+- ordering: game end timestamp in UTC and, on ties, game ID.
+
+Each eligible game generates exactly one point in `rating_history`. The
+entire timeline is rebuilt within the same transaction that completes or
+deletes a game, avoiding irreversible accumulators and keeping the
+operation idempotent.
+
+**Decision — streaks:** a "streak" means a sequence of **consecutive wins**
+among eligible games, in chronological order. A draw or a loss resets the
+current streak. `recordStreak` is the highest value ever reached.
+
+**Decision — campaign:** each level declares `winsRequired=2` and
+`windowSize=3`. The next level is permanently unlocked when, within any
+sliding window of up to three eligible campaign games at the current level,
+the player reaches two wins. Once reached within existing history, later
+games do not revoke the unlock. Since progress is materialized from the
+retained games, deleting the game that supported the achievement can
+recompute and re-lock dependent levels. The UI warns about this effect
+before deletion.
+
+**Consequence:** `difficulty_progress` and `rating_history` are
+rebuildable projections; `games` remains the source of truth. Migration v2
+adds the campaign window's game count and rebuilds these projections for
+existing databases.
+
+---
+
+## ADR-011: minification and resource shrinking turned off in the release build
+
+**Status:** accepted
+
+**Context:** the technical audit recorded in `AUDITORIA_TECNICA.md`
+(AUD-007) found that `android/app/build.gradle.kts` does not set
+`minifyEnabled`/`shrinkResources` in the `release` block, so they default
+to `false` in the Android Gradle Plugin: the release APK comes out larger
+and without Dart/Kotlin code obfuscation.
+
+**Decision:** keep it off for now, as an explicit decision rather than an
+omission.
+
+**Rationale:** the project is open source, distributed by sideload (see
+README), with no trade secret that obfuscation would protect. Enabling
+minification would require ProGuard/R8 rules tested against a real release
+build covering Drift (reflection via `sqlite3`) and the FFI plugins
+(`leela_chess_zero`, `stockfish`), and the build environment used in
+development has already proven heavy for native builds (see ADR-001,
+robustness observation about nested virtualization). There is no immediate
+gain that justifies this risk now.
+
+**Consequence:** the APK stays larger and unobfuscated while this decision
+holds. Revisit before publishing to a channel that charges by download
+size, or if the Dart/Kotlin code volume grows enough to matter noticeably.
+
+---
+
+## ADR-012: chess clock fields are scaffolding for a future phase
+
+**Status:** accepted, open item recorded
+
+**Context:** `GameState`, `StoredGame`, the `games` table (Drift), and the
+entire persistence path already carry `clockEnabled`/`initialTimeMs`/
+`whiteTimeMs`/`blackTimeMs` (see `AUDITORIA_TECNICA.md`, AUD-011), but no
+`Timer`/countdown decrements them and no screen displays a clock.
+
+**Decision:** keep the fields as they are, without removing them for now.
+This ADR documents that they are part of the design for a clock feature not
+yet implemented, likely alongside the personalization work the README
+lists as pending for Phases 6-7.
+
+**Rationale:** the fields already persist and migrate correctly
+(`schemaVersion` 2 in `AppDatabase`); removing them now would require a new
+database migration with no real benefit, and the data structure already
+reflects the intended design for when the feature is prioritized.
+
+**Consequence:** until the feature is implemented (or the fields removed,
+if it is dropped), someone reading the schema may assume the clock already
+works. This ADR exists precisely to make that explicit.
+
+---
+
+## ADR-013: conditional release signing via `key.properties`
+
+**Status:** accepted, keystore generation still pending
+
+**Context:** `android/app/build.gradle.kts` unconditionally signed the
+release build with the debug key (see `AUDITORIA_TECNICA.md`, AUD-006), a
+practice documented as temporary by the file's own original `TODO`.
+
+**Decision:** the `release` block now uses a dedicated `signingConfig` read
+from `android/app/key.properties` when that file exists; without it, it
+falls back to the debug key, preserving `flutter run --release` with no
+extra setup in a development environment, but now with an explicit warning
+printed during Gradle configuration. `key.properties` and the matching
+`.jks` are never committed (`.gitignore`).
+
+**On generating the keystore itself:** this agent did not generate the
+keystore or its passwords. Creating and safeguarding the private key that
+will permanently sign the app's updates is a decision for the project
+owner (where to store the backup, how to rotate credentials, whether the
+release will eventually be published by more than one person), not
+something that should be automated silently. The command is documented as
+a comment at the top of `build.gradle.kts`:
 
 ```bash
 keytool -genkeypair -v -keystore android/app/release-keystore.jks \
   -alias maia_chess_release -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-seguido de um `android/app/key.properties` com `storeFile`,
-`storePassword`, `keyAlias` e `keyPassword`.
+followed by an `android/app/key.properties` with `storeFile`,
+`storePassword`, `keyAlias`, and `keyPassword`.
 
-**Consequência:** builds de release continuam assinadas com a chave de
-debug até que alguém com acesso ao ambiente rode o comando acima. A
-validação de que a leitura condicional do `key.properties` funciona (e
-que o Gradle configura corretamente com ou sem o arquivo presente) foi
-feita com `./gradlew help`, sem o arquivo presente: o aviso apareceu como
-esperado e a configuração terminou com sucesso.
+**Consequence:** release builds keep signing with the debug key until
+someone with access to the environment runs the command above. Validation
+that the conditional `key.properties` reading works (and that Gradle
+configures correctly with or without the file present) was done with
+`./gradlew help`, without the file present: the warning appeared as
+expected and configuration finished successfully.
