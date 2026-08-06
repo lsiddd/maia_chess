@@ -44,6 +44,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Assinatura de release (ver AUDITORIA_TECNICA.md, AUD-006, e ADR.md):
+# segredo local, nunca commitado.
+/android/app/key.properties
+/android/app/*.jks
+/android/app/*.keystore
+
 # Dependências nativas vendorizadas (ver ADR-001): ignora artefatos de build
 # locais (CMake/Gradle/exemplo) mas MANTÉM os headers .pb.h regenerados em
 # ios/lc0/build/proto/ (fix do ADR-001, addendum) e os fontes do pacote.

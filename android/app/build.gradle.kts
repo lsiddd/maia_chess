@@ -1,8 +1,30 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Assinatura de release (ver AUDITORIA_TECNICA.md, AUD-006, e ADR.md):
+// android/app/key.properties nunca é commitado (ver .gitignore). Gere um
+// keystore próprio com:
+//
+//   keytool -genkeypair -v -keystore android/app/release-keystore.jks \
+//     -alias maia_chess_release -keyalg RSA -keysize 2048 -validity 10000
+//
+// e crie android/app/key.properties com:
+//
+//   storeFile=release-keystore.jks
+//   storePassword=<senha do keystore>
+//   keyAlias=maia_chess_release
+//   keyPassword=<senha da chave>
+val keystorePropertiesFile = rootProject.file("app/key.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+val keystoreProperties = Properties()
+if (hasReleaseKeystore) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
 android {
@@ -37,11 +59,35 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Usa a chave de release dedicada quando android/app/key.properties
+            // existir (gerado localmente, nunca commitado). Sem esse arquivo,
+            // cai de volta para a chave de debug — como antes, para que
+            // `flutter run --release` continue funcionando sem setup extra em
+            // ambiente de desenvolvimento — mas avisa no configure do Gradle
+            // para isso não passar despercebido numa build para distribuição.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "AVISO: android/app/key.properties nao encontrado; build " +
+                        "de release assinada com a chave de DEBUG. Ver ADR.md " +
+                        "(assinatura de release) antes de distribuir o APK."
+                )
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
