@@ -7,21 +7,6 @@ lc0 engine). A second AI (Stockfish) provides the objectively best move, for
 the hint system. Open source project, distributed as a direct APK (sideload),
 with no runtime network dependency.
 
-Reference documentation:
-- [`docs/requisitos.md`](docs/requisitos.md) — product requirements.
-- [`docs/especificacao.md`](docs/especificacao.md) — technical specification
-  and implementation phases.
-- [`ADR.md`](ADR.md) — architecture decisions and deviations from the
-  original specification, with rationale.
-
-## Status
-
-Phases 0–5 implemented: native lc0/Stockfish engines, games against Maia,
-dual hint, Drift persistence, autosave/resume, library/replay, PGN
-import/export, estimated rating, statistics, and 2-of-3 campaign. Phases 6–7
-(personalization and final packaging) remain in development. See `ADR.md`
-for the decisions and validations already carried out.
-
 ## How to run
 
 Prerequisites: Flutter (managed in this environment via `fvm`), Android SDK +
@@ -37,8 +22,7 @@ flutter test integration_test/phase_4_android_test.dart -d <device>
 
 ## Structure
 
-Feature-first organization — see `docs/especificacao.md` section 3 for the
-full rationale:
+Feature-first organization:
 
 ```
 lib/
@@ -47,8 +31,8 @@ lib/
 ├── features/         # game, difficulty, hints, history, stats, settings, pgn
 └── data/             # Drift database, repositories, Riverpod providers
 
-native/                # vendored native dependencies (see ADR-001)
-assets/maia_weights/   # Maia .pb.gz weights (1100-1900), from Phase 2 on
+native/                # vendored native dependencies
+assets/maia_weights/   # Maia .pb.gz weights (1100-1900)
 ```
 
 There is no dedicated DI folder: Riverpod providers live next to whoever
