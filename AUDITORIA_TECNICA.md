@@ -6,6 +6,33 @@ sem contar código gerado), `test/`, `integration_test/`, `android/`,
 análise estática. Todo achado abaixo cita arquivo e linha; onde a evidência é
 saída de comando, o comando e seu resultado estão reproduzidos.
 
+## Status das correções
+
+Relatório aprovado e corrigido em lotes revisáveis (um commit por
+categoria, `flutter analyze`/`flutter test` verdes em cada um). Histórico
+completo em `git log`.
+
+| ID | Achado | Situação |
+|---|---|---|
+| AUD-001 | Sem controle de versão | Corrigido: `git init` + commit inicial |
+| AUD-002 | Sem pipeline de CI | Corrigido: `.github/workflows/ci.yaml` |
+| AUD-003 | 0% de cobertura em lc0_service/stockfish_service | Parcial: lógica de espera extraída para `uci_wait.dart` e testada (88%); `init()` continua só verificável via `integration_test/` (ver ADR-013 no commit correspondente e correção de escopo abaixo) |
+| AUD-004 | new_game_vs_ai_screen.dart quase sem teste | Corrigido: 2% → 83% |
+| AUD-005 | promotion_dialog/hint_dialog sem teste | Corrigido: 0%/0% → 100%/98% |
+| AUD-006 | Release assinado com chave de debug | Parcial: `build.gradle.kts` pronto para uma chave real via `key.properties`; geração do keystore em si bloqueada pelo classificador de permissões da sessão, documentada em ADR-013 para o responsável pelo projeto rodar |
+| AUD-007 | minify/shrink sem decisão registrada | Corrigido: ADR-011 |
+| AUD-008 | allowBackup implícito | Corrigido: explícito no Manifest |
+| AUD-009 | playerOutcome duplicado | Corrigido: função única em `game_repository.dart` |
+| AUD-010 | SpikeScreen morta | Corrigido: removida |
+| AUD-011 | Campos de relógio sem UI nem lógica | Corrigido (documentado): ADR-012 |
+| AUD-012 | core/theming e core/di vazios | Corrigido: `AppTheme` extraído, `core/di` removida |
+| AUD-013 | Dependências com major mais nova | Não aplicado: `flutter_riverpod` 2.x→3.x e `share_plus` 12→13 são bumps de major com API que quebra; risco de regressão não verificável nos testes deste projeto sem dedicar um lote à parte, como o próprio achado já recomendava |
+| AUD-014 | Lint só no padrão flutter_lints | Corrigido: 7 regras adicionais, diff de 5 ocorrências |
+| AUD-015 | dart format falha no vendorizado | Corrigido: CI restringe a `lib test integration_test` |
+
+Cobertura de teste após os lotes: **53,2%** (2.355/4.425 linhas), ante
+50,4% no relatório original.
+
 ## Resumo executivo
 
 - 🔴 Críticos: 0
