@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_page_route.dart';
+import '../../../core/widgets/error_state_card.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/progress_repository.dart';
 import '../../game/application/game_controller.dart';
@@ -88,7 +89,10 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
         error: (error, stackTrace) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Não foi possível abrir a campanha: $error'),
+            child: ErrorStateCard(
+              message: 'Não foi possível abrir a campanha: $error',
+              onRetry: () => ref.invalidate(difficultyProgressProvider),
+            ),
           ),
         ),
         data: (levels) => CustomScrollView(

@@ -4,6 +4,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/error_state_card.dart';
 import '../../hints/presentation/hint_dialog.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
@@ -206,39 +207,9 @@ class _StatusBar extends ConsumerWidget {
     final colors = Theme.of(context).colorScheme;
 
     if (state.engineError != null) {
-      return Card(
-        margin: EdgeInsets.zero,
-        color: colors.errorContainer,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.error_outline, color: colors.onErrorContainer),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      state.engineError!,
-                      style: TextStyle(color: colors.onErrorContainer),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () =>
-                      ref.read(gameControllerProvider.notifier).reset(),
-                  child: const Text('Tentar de novo'),
-                ),
-              ),
-            ],
-          ),
-        ),
+      return ErrorStateCard(
+        message: state.engineError!,
+        onRetry: () => ref.read(gameControllerProvider.notifier).reset(),
       );
     }
 

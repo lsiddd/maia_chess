@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/difficulty_levels.dart';
+import '../../../core/widgets/error_state_card.dart';
 import '../../../data/providers.dart';
 import '../domain/player_stats.dart';
 
@@ -20,7 +21,10 @@ class StatsScreen extends ConsumerWidget {
         error: (error, stackTrace) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Não foi possível calcular as estatísticas: $error'),
+            child: ErrorStateCard(
+              message: 'Não foi possível calcular as estatísticas: $error',
+              onRetry: () => ref.invalidate(playerStatsProvider),
+            ),
           ),
         ),
         data: (snapshot) => _StatsBody(stats: snapshot),
