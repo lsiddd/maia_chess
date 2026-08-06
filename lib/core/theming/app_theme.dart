@@ -34,6 +34,15 @@ abstract final class AppMotion {
   static const curve = Curves.easeOutCubic;
 }
 
+/// Acento tipográfico usado nos títulos de tela/seção (`headlineSmall`) e
+/// nos números de destaque (rating estimado, nível, placar) em
+/// CampaignScreen/StatsScreen/HomeScreen — nunca em rótulo, corpo de texto
+/// ou botão. Decisão registrada aqui (em vez de repetir o literal em cada
+/// `copyWith`) para não ficar implícita nem divergir entre telas.
+abstract final class AppTypography {
+  static const accentFontFamily = 'serif';
+}
+
 /// Tema visual do app, centralizado aqui (ver AUDITORIA_TECNICA.md,
 /// AUD-012) em vez de inline em `main.dart`, consistente com a
 /// organização feature-first do resto do projeto.
