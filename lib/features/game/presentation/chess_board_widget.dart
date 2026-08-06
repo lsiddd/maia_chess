@@ -5,6 +5,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theming/app_theme.dart';
 import '../application/game_controller.dart';
 import 'chess_piece_widget.dart';
 import 'promotion_dialog.dart';
@@ -311,21 +312,43 @@ class _SquareVisual extends StatelessWidget {
         : baseColor;
 
     return SizedBox.expand(
-      child: ColoredBox(
+      // AnimatedContainer em vez de ColoredBox: a troca de cor ao
+      // selecionar/desselecionar uma casa passa a interpolar suavemente
+      // em vez de trocar de uma vez.
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.curve,
         color: squareColor,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (piece != null)
-              Positioned.fill(
-                child: FractionallySizedBox(
-                  widthFactor: _pieceScale,
-                  heightFactor: _pieceScale,
-                  child: ChessPieceWidget(key: pieceKey, piece: piece!),
+            Positioned.fill(
+              child: FractionallySizedBox(
+                widthFactor: _pieceScale,
+                heightFactor: _pieceScale,
+                // A peça troca (aparece/some) com um fade + scale em vez de
+                // saltar instantaneamente entre "presente"/"ausente"; o
+                // slot fica sempre montado para o AnimatedSwitcher poder
+                // animar a saída, não só a entrada.
+                child: AnimatedSwitcher(
+                  duration: AppMotion.medium,
+                  switchInCurve: AppMotion.curve,
+                  switchOutCurve: AppMotion.curve,
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: piece == null
+                      ? const SizedBox.shrink(key: ValueKey('empty-square'))
+                      : ChessPieceWidget(key: pieceKey, piece: piece!),
                 ),
               ),
-            if (isLegalTarget)
-              Positioned.fill(
+            ),
+            Positioned.fill(
+              child: AnimatedOpacity(
+                duration: AppMotion.fast,
+                curve: AppMotion.curve,
+                opacity: isLegalTarget ? 1 : 0,
                 child: FractionallySizedBox(
                   widthFactor: piece == null ? 0.30 : 0.88,
                   heightFactor: piece == null ? 0.30 : 0.88,
@@ -345,6 +368,7 @@ class _SquareVisual extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
