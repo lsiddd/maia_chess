@@ -1,0 +1,130 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:maia_chess/features/game/presentation/chess_piece_widget.dart';
+import 'package:maia_chess/features/game/presentation/game_screen.dart';
+
+void main() {
+  Future<void> pumpGameAt(
+    WidgetTester tester,
+    Size size, {
+    double textScale = 1,
+  }) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          ),
+          home: const GameScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  tearDown(() {
+    TestWidgetsFlutterBinding.instance.platformDispatcher.clearAllTestValues();
+  });
+
+  testWidgets('paisagem limita o tabuleiro pela altura e usa painel lateral', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(800, 400));
+
+    final boardRect = tester.getRect(find.byKey(const Key('chess-board')));
+    final movesRect = tester.getRect(find.byKey(const Key('move-list-panel')));
+
+    expect(tester.takeException(), isNull);
+    expect(boardRect.width, closeTo(boardRect.height, 0.01));
+    expect(boardRect.height, lessThanOrEqualTo(320));
+    expect(boardRect.right, lessThan(movesRect.left));
+    expect(find.text('Brancas jogam'), findsOneWidget);
+    expect(find.text('Jogadas'), findsOneWidget);
+    expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
+  });
+
+  testWidgets('as 64 casas são uniformes e as peças usam 78% da célula', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(400, 800));
+
+    final boardSize = tester.getSize(find.byKey(const Key('chess-board')));
+    Size? referenceSquare;
+    for (var row = 0; row < 8; row++) {
+      for (var col = 0; col < 8; col++) {
+        final squareSize = tester.getSize(
+          find.byKey(ValueKey('board-square-$row-$col')),
+        );
+        referenceSquare ??= squareSize;
+        expect(squareSize.width, closeTo(referenceSquare.width, 0.01));
+        expect(squareSize.height, closeTo(referenceSquare.height, 0.01));
+        expect(squareSize.width, closeTo(squareSize.height, 0.01));
+      }
+    }
+
+    expect(referenceSquare!.width, closeTo(boardSize.width / 8, 0.01));
+    expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+    final pieceSize = tester.getSize(
+      find.byKey(const ValueKey('board-piece-0-0')),
+    );
+    expect(pieceSize.width, closeTo(referenceSquare.width * 0.78, 0.01));
+    expect(pieceSize.height, closeTo(referenceSquare.height * 0.78, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desfazer comunica estado desabilitado e reiniciar confirma', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(400, 800));
+
+    final undo = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Desfazer'),
+    );
+    expect(undo.onPressed, isNull);
+
+    await tester.tap(find.text('Reiniciar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reiniciar partida?'), findsOneWidget);
+    expect(
+      find.text('O progresso atual desta partida será perdido.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'toques continuam mapeando origem e destino após o redimensionamento',
+    (tester) async {
+      await pumpGameAt(tester, const Size(400, 800));
+
+      await tester.tap(find.byKey(const ValueKey('board-square-6-4')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('board-square-4-4')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('e4'), findsOneWidget);
+      expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
+      expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('tela baixa com fonte ampliada usa rolagem sem overflow', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(320, 480), textScale: 2);
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Scrollable), findsWidgets);
+    expect(find.text('Brancas jogam'), findsOneWidget);
+    expect(find.text('Reiniciar'), findsOneWidget);
+  });
+}
