@@ -521,3 +521,44 @@ desenho pretendido para quando a feature for priorizada.
 **Consequência:** até a feature ser implementada (ou os campos removidos,
 se for descartada), um leitor do schema pode presumir que o relógio já
 funciona. Este ADR existe justamente para deixar isso explícito.
+
+---
+
+## ADR-013: assinatura de release condicional via `key.properties`
+
+**Status:** aceito, geração do keystore em aberto
+
+**Contexto:** `android/app/build.gradle.kts` assinava o build de release com
+a chave de debug incondicionalmente (ver `AUDITORIA_TECNICA.md`, AUD-006),
+prática documentada como temporária pelo próprio `TODO` original do
+arquivo.
+
+**Decisão:** o bloco `release` passa a usar uma `signingConfig` dedicada
+lida de `android/app/key.properties` quando esse arquivo existir; sem ele,
+cai de volta para a chave de debug, preservando `flutter run --release`
+sem setup extra em ambiente de desenvolvimento, mas agora com um aviso
+explícito impresso no configure do Gradle. `key.properties` e o `.jks`
+correspondente nunca são commitados (`.gitignore`).
+
+**Sobre a geração do keystore em si:** este agente não gerou o keystore
+nem as senhas. Criar e guardar a chave privada que assinará
+permanentemente as atualizações do app é uma decisão do responsável pelo
+projeto (onde guardar o backup, como rotacionar credenciais, se o release
+eventualmente for publicado por mais de uma pessoa), não algo que deva ser
+automatizado silenciosamente. O comando está documentado como comentário
+no topo de `build.gradle.kts`:
+
+```bash
+keytool -genkeypair -v -keystore android/app/release-keystore.jks \
+  -alias maia_chess_release -keyalg RSA -keysize 2048 -validity 10000
+```
+
+seguido de um `android/app/key.properties` com `storeFile`,
+`storePassword`, `keyAlias` e `keyPassword`.
+
+**Consequência:** builds de release continuam assinadas com a chave de
+debug até que alguém com acesso ao ambiente rode o comando acima. A
+validação de que a leitura condicional do `key.properties` funciona (e
+que o Gradle configura corretamente com ou sem o arquivo presente) foi
+feita com `./gradlew help`, sem o arquivo presente: o aviso apareceu como
+esperado e a configuração terminou com sucesso.
