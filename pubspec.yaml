@@ -1,0 +1,57 @@
+name: maia_chess
+description: "Xadrez offline contra uma IA de estilo humano (pesos Maia via lc0), com dicas objetivas via Stockfish."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  flutter_svg: ^2.3.0
+  # Regras de xadrez (geração/validação de lances, FEN/SAN). Ver ADR-004.
+  dartchess: ^0.13.1
+  # Fork local vendorizado, não a versão hospedada no pub.dev (ver ADR-001,
+  # addendum: o pacote publicado no pub.dev vem sem os headers .pb.h
+  # pré-gerados do protobuf do lc0, quebrando o build Android; regeneramos
+  # com scripts/compile_proto.py e vendorizamos a cópia corrigida aqui).
+  leela_chess_zero:
+    path: native/leela_chess_zero
+  stockfish: ^1.8.1
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  drift: ^2.34.3
+  share_plus: ^12.0.2
+  file_picker: ^11.0.3
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.34.0
+  build_runner: ^2.15.1
+
+flutter:
+  uses-material-design: true
+
+  # 9 pesos oficiais do Maia (1100-1900, .pb.gz), baixados de
+  # github.com/CSSLab/maia-chess/releases/tag/v1.0. Ver ADR-007 (licença).
+  assets:
+    - assets/chess_pieces/
+    - assets/maia_weights/maia-1100.pb.gz
+    - assets/maia_weights/maia-1200.pb.gz
+    - assets/maia_weights/maia-1300.pb.gz
+    - assets/maia_weights/maia-1400.pb.gz
+    - assets/maia_weights/maia-1500.pb.gz
+    - assets/maia_weights/maia-1600.pb.gz
+    - assets/maia_weights/maia-1700.pb.gz
+    - assets/maia_weights/maia-1800.pb.gz
+    - assets/maia_weights/maia-1900.pb.gz
