@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_page_route.dart';
+import '../../../core/widgets/error_state_card.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../game/presentation/chess_board_widget.dart';
@@ -28,7 +29,15 @@ class HistoryScreen extends ConsumerWidget {
       ),
       body: library.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => _LibraryError(error: error),
+        error: (error, stackTrace) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ErrorStateCard(
+              message: 'Não foi possível abrir a biblioteca: $error',
+              onRetry: () => ref.invalidate(gameLibraryProvider),
+            ),
+          ),
+        ),
         data: (games) {
           if (games.isEmpty) {
             return const Center(
@@ -323,22 +332,6 @@ class _ReplayViewState extends State<_ReplayView> {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _LibraryError extends StatelessWidget {
-  const _LibraryError({required this.error});
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text('Não foi possível abrir a biblioteca: $error'),
       ),
     );
   }
