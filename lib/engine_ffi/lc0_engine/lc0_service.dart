@@ -5,6 +5,8 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:leela_chess_zero/lc0.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../uci_wait.dart';
+
 /// Serviço de alto nível para o motor lc0, usado para imitar o estilo de
 /// jogo humano através dos pesos Maia (ver ADR-001).
 ///
@@ -25,6 +27,8 @@ class Lc0Service implements Lc0Engine {
   static const _readyTimeout = Duration(seconds: 120);
   static const _startupTimeout = Duration(seconds: 20);
   static const _stopGracePeriod = Duration(seconds: 2);
+  static const _terminateStepTimeout = Duration(seconds: 5);
+  static const _searchTimeout = Duration(seconds: 10);
 
   Lc0? _engine;
   String? _loadedWeightsPath;
@@ -59,37 +63,26 @@ class Lc0Service implements Lc0Engine {
     }
 
     _handshakeDone = false;
-    final completer = Completer<void>();
     final engine = Lc0(weightsPath: weightsFilePath);
     _engine = engine;
 
-    void listener() {
-      final state = engine.state.value;
-      if (state == Lc0State.ready) {
-        engine.state.removeListener(listener);
-        if (!completer.isCompleted) completer.complete();
-      } else if (state == Lc0State.error) {
-        engine.state.removeListener(listener);
-        if (!completer.isCompleted) {
-          completer.completeError(StateError('lc0 falhou ao iniciar'));
-        }
-      }
-    }
-
-    engine.state.addListener(listener);
-    // Cobre o caso (improvável, mas possível) de já estar pronto antes do
-    // listener ser registrado.
-    if (engine.state.value == Lc0State.ready) {
-      listener();
-    }
-
+    // Cobre também o caso (improvável, mas possível) de já estar pronto
+    // antes de `awaitListenableValue` registrar o listener: ela mesma
+    // resolve na hora se o predicado já vale.
+    final startup = awaitListenableValue(
+      engine.state,
+      predicate: (state) => state == Lc0State.ready || state == Lc0State.error,
+    );
     try {
-      await completer.future.timeout(
+      final state = await startup.future.timeout(
         _startupTimeout,
         onTimeout: () => throw TimeoutException(
           'lc0 não inicializou em ${_startupTimeout.inSeconds}s',
         ),
       );
+      if (state == Lc0State.error) {
+        throw StateError('lc0 falhou ao iniciar');
+      }
 
       // `Lc0State.ready` só significa que o isolate nativo subiu — o
       // carregamento de fato dos pesos (parsing do .pb.gz) acontece depois,
@@ -108,36 +101,22 @@ class Lc0Service implements Lc0Engine {
       _loadedWeightsPath = weightsFilePath;
       _handshakeDone = true;
     } catch (_) {
-      engine.state.removeListener(listener);
       await _disposeAfterFailure(engine);
       rethrow;
+    } finally {
+      startup.cancel();
     }
   }
 
   Future<void> _waitReadyOk(Lc0 engine) async {
-    final completer = Completer<void>();
-    final sub = engine.stdout.listen(
-      (line) {
-        if (line.trim() == 'readyok' && !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completer.completeError(
-            StateError('lc0 encerrou antes de responder readyok'),
-          );
-        }
-      },
+    final waiter = awaitStdoutLine(
+      stdout: engine.stdout,
+      predicate: (line) => line.trim() == 'readyok',
+      onStreamDone: () => StateError('lc0 encerrou antes de responder readyok'),
     );
     try {
       engine.stdin = 'isready';
-      await completer.future.timeout(
+      await waiter.future.timeout(
         _readyTimeout,
         onTimeout: () => throw TimeoutException(
           'lc0 não respondeu isready/readyok em '
@@ -145,7 +124,7 @@ class Lc0Service implements Lc0Engine {
         ),
       );
     } finally {
-      await sub.cancel();
+      await waiter.cancel();
     }
   }
 
@@ -166,26 +145,10 @@ class Lc0Service implements Lc0Engine {
       throw StateError('lc0 já está calculando outro lance');
     }
     final engine = _engine!;
-    final completer = Completer<String>();
-    final sub = engine.stdout.listen(
-      (line) {
-        if (line.startsWith('bestmove') && !completer.isCompleted) {
-          final parts = line.trim().split(RegExp(r'\s+'));
-          completer.complete(parts.length > 1 ? parts[1] : '');
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completer.completeError(
-            StateError('lc0 encerrou antes de devolver bestmove'),
-          );
-        }
-      },
+    final waiter = awaitStdoutLine(
+      stdout: engine.stdout,
+      predicate: (line) => line.startsWith('bestmove'),
+      onStreamDone: () => StateError('lc0 encerrou antes de devolver bestmove'),
     );
 
     _searchInProgress = true;
@@ -193,9 +156,8 @@ class Lc0Service implements Lc0Engine {
       engine.stdin = 'position fen $fen';
       engine.stdin = 'go nodes $nodes';
       try {
-        final move = await completer.future.timeout(
-          const Duration(seconds: 10),
-        );
+        final line = await waiter.future.timeout(_searchTimeout);
+        final move = parseBestMove(line);
         if (move.isEmpty || move == '(none)') {
           throw StateError('lc0 não devolveu um lance válido');
         }
@@ -205,7 +167,8 @@ class Lc0Service implements Lc0Engine {
         // `bestmove` órfão que seria confundido com a solicitação seguinte.
         try {
           engine.stdin = 'stop';
-          final move = await completer.future.timeout(_stopGracePeriod);
+          final line = await waiter.future.timeout(_stopGracePeriod);
+          final move = parseBestMove(line);
           if (move.isNotEmpty && move != '(none)') return move;
         } on Object {
           // O descarte abaixo é o caminho de recuperação.
@@ -215,7 +178,7 @@ class Lc0Service implements Lc0Engine {
       }
     } finally {
       _searchInProgress = false;
-      await sub.cancel();
+      await waiter.cancel();
     }
   }
 
@@ -259,43 +222,33 @@ class Lc0Service implements Lc0Engine {
     // falha ocorreu durante o curtíssimo bootstrap do isolate, aguarda essa
     // transição antes de tentar a saída limpa.
     if (current == Lc0State.starting) {
-      final startup = Completer<void>();
-      void startupListener() {
-        if (engine.state.value != Lc0State.starting && !startup.isCompleted) {
-          startup.complete();
-        }
-      }
-
-      engine.state.addListener(startupListener);
+      final startup = awaitListenableValue(
+        engine.state,
+        predicate: (state) => state != Lc0State.starting,
+      );
       try {
-        await startup.future.timeout(const Duration(seconds: 5));
+        current = await startup.future.timeout(_terminateStepTimeout);
       } on TimeoutException {
         return;
       } finally {
-        engine.state.removeListener(startupListener);
+        startup.cancel();
       }
-      current = engine.state.value;
     }
     if (current != Lc0State.ready) return;
 
-    final disposed = Completer<void>();
-    void listener() {
-      final state = engine.state.value;
-      if ((state == Lc0State.disposed || state == Lc0State.error) &&
-          !disposed.isCompleted) {
-        disposed.complete();
-      }
-    }
-
-    engine.state.addListener(listener);
+    final terminated = awaitListenableValue(
+      engine.state,
+      predicate: (state) =>
+          state == Lc0State.disposed || state == Lc0State.error,
+    );
     try {
       engine.dispose();
-      await disposed.future.timeout(const Duration(seconds: 5));
+      await terminated.future.timeout(_terminateStepTimeout);
     } on Object {
       // Não há API de kill no pacote; o singleton será liberado quando o
       // loop UCI consumir o `quit`.
     } finally {
-      engine.state.removeListener(listener);
+      terminated.cancel();
     }
   }
 
