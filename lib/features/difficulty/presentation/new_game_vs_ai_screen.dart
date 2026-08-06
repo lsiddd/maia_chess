@@ -119,13 +119,19 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
           const SizedBox(height: AppSpacing.xl),
           FilledButton(
             onPressed: _starting ? null : _start,
-            child: _starting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Começar partida'),
+            child: AnimatedSwitcher(
+              duration: AppMotion.fast,
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: _starting
+                  ? const SizedBox(
+                      key: ValueKey('starting-spinner'),
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Começar partida', key: ValueKey('starting-label')),
+            ),
           ),
           if (_starting) ...[
             const SizedBox(height: AppSpacing.m),

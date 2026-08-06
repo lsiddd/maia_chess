@@ -4,6 +4,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/error_state_card.dart';
 import '../../hints/presentation/hint_dialog.dart';
 import '../application/game_controller.dart';
@@ -269,10 +270,18 @@ class _StatusBar extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                        Text(
-                          activity,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colors.onSurfaceVariant),
+                        AnimatedSwitcher(
+                          duration: AppMotion.fast,
+                          switchInCurve: AppMotion.curve,
+                          switchOutCurve: AppMotion.curve,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(opacity: animation, child: child),
+                          child: Text(
+                            activity,
+                            key: ValueKey(activity),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
+                          ),
                         ),
                       ],
                     ),
@@ -391,7 +400,7 @@ class _GameActions extends StatelessWidget {
           children: actions
               .map(
                 (action) =>
-                    SizedBox(width: buttonWidth, height: 44, child: action),
+                    SizedBox(width: buttonWidth, height: 48, child: action),
               )
               .toList(growable: false),
         );

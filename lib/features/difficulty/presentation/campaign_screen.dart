@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_page_route.dart';
+import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/error_state_card.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/progress_repository.dart';
@@ -319,12 +320,24 @@ class _CampaignLevelCard extends StatelessWidget {
                       const SizedBox(height: 12),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(99),
-                        child: LinearProgressIndicator(
-                          minHeight: 7,
-                          value: (progress.validWins / progress.winsRequired)
-                              .clamp(0, 1),
-                          color: accent,
-                          backgroundColor: accent.withValues(alpha: 0.12),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(
+                            begin: 0,
+                            end: (progress.validWins / progress.winsRequired)
+                                .clamp(0, 1)
+                                .toDouble(),
+                          ),
+                          duration: AppMotion.slow,
+                          curve: AppMotion.curve,
+                          builder: (context, value, _) =>
+                              LinearProgressIndicator(
+                                minHeight: 7,
+                                value: value,
+                                color: accent,
+                                backgroundColor: accent.withValues(
+                                  alpha: 0.12,
+                                ),
+                              ),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -332,14 +345,26 @@ class _CampaignLevelCard extends StatelessWidget {
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonalIcon(
                           onPressed: busy ? null : onPlay,
-                          icon: starting
-                              ? const SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                          icon: AnimatedSwitcher(
+                            duration: AppMotion.fast,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                            child: starting
+                                ? const SizedBox.square(
+                                    key: ValueKey('level-starting-spinner'),
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.play_arrow,
+                                    key: ValueKey('level-starting-icon'),
                                   ),
-                                )
-                              : const Icon(Icons.play_arrow),
+                          ),
                           label: Text(
                             completed ? 'Jogar novamente' : 'Jogar etapa',
                           ),
