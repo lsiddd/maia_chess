@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:stockfish/stockfish.dart';
 
+import '../uci_wait.dart';
+
 /// Serviço de alto nível para o motor Stockfish, usado para a dica de lance
 /// objetivamente melhor (independente do nível de dificuldade escolhido).
 ///
@@ -20,6 +22,7 @@ class StockfishService implements StockfishEngine {
   static const _startupTimeout = Duration(seconds: 20);
   static const _readyTimeout = Duration(seconds: 60);
   static const _stopGracePeriod = Duration(seconds: 2);
+  static const _terminateStepTimeout = Duration(seconds: 5);
 
   Stockfish? _engine;
   bool _handshakeDone = false;
@@ -45,35 +48,24 @@ class StockfishService implements StockfishEngine {
 
     _handshakeDone = false;
     developer.log('Criando engine', name: 'StockfishService');
-    final completer = Completer<void>();
     final engine = Stockfish();
     _engine = engine;
 
-    void listener() {
-      final state = engine.state.value;
-      developer.log('Estado nativo: $state', name: 'StockfishService');
-      if (state == StockfishState.ready) {
-        engine.state.removeListener(listener);
-        if (!completer.isCompleted) completer.complete();
-      } else if (state == StockfishState.error) {
-        engine.state.removeListener(listener);
-        if (!completer.isCompleted) {
-          completer.completeError(StateError('Stockfish falhou ao iniciar'));
-        }
-      }
-    }
-
-    engine.state.addListener(listener);
-    if (engine.state.value == StockfishState.ready) {
-      listener();
-    }
-
+    final startup = awaitListenableValue(
+      engine.state,
+      predicate: (state) =>
+          state == StockfishState.ready || state == StockfishState.error,
+    );
     try {
-      await completer.future.timeout(
+      final state = await startup.future.timeout(
         _startupTimeout,
         onTimeout: () =>
             throw TimeoutException('Stockfish não inicializou a tempo'),
       );
+      developer.log('Estado nativo: $state', name: 'StockfishService');
+      if (state == StockfishState.error) {
+        throw StateError('Stockfish falhou ao iniciar');
+      }
 
       // Ver o comentário equivalente em Lc0Service.init: `ready` só significa
       // que o isolate subiu, não que a NNUE terminou de carregar. Confirmamos
@@ -87,7 +79,6 @@ class StockfishService implements StockfishEngine {
       _handshakeDone = true;
       developer.log('Handshake readyok concluído', name: 'StockfishService');
     } catch (error, stackTrace) {
-      engine.state.removeListener(listener);
       developer.log(
         'Falha na inicialização',
         name: 'StockfishService',
@@ -96,33 +87,21 @@ class StockfishService implements StockfishEngine {
       );
       await _disposeAfterFailure(engine);
       rethrow;
+    } finally {
+      startup.cancel();
     }
   }
 
   Future<void> _waitReadyOk(Stockfish engine) async {
-    final completer = Completer<void>();
-    final sub = engine.stdout.listen(
-      (line) {
-        if (line.trim() == 'readyok' && !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completer.completeError(
-            StateError('Stockfish encerrou antes de responder readyok'),
-          );
-        }
-      },
+    final waiter = awaitStdoutLine(
+      stdout: engine.stdout,
+      predicate: (line) => line.trim() == 'readyok',
+      onStreamDone: () =>
+          StateError('Stockfish encerrou antes de responder readyok'),
     );
     try {
       engine.stdin = 'isready';
-      await completer.future.timeout(
+      await waiter.future.timeout(
         _readyTimeout,
         onTimeout: () => throw TimeoutException(
           'Stockfish não respondeu isready/readyok em '
@@ -130,7 +109,7 @@ class StockfishService implements StockfishEngine {
         ),
       );
     } finally {
-      await sub.cancel();
+      await waiter.cancel();
     }
   }
 
@@ -150,26 +129,11 @@ class StockfishService implements StockfishEngine {
     }
 
     final engine = _engine!;
-    final completer = Completer<String>();
-    final sub = engine.stdout.listen(
-      (line) {
-        if (line.startsWith('bestmove') && !completer.isCompleted) {
-          final parts = line.trim().split(RegExp(r'\s+'));
-          completer.complete(parts.length > 1 ? parts[1] : '');
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-      onDone: () {
-        if (!completer.isCompleted) {
-          completer.completeError(
-            StateError('Stockfish encerrou antes de devolver bestmove'),
-          );
-        }
-      },
+    final waiter = awaitStdoutLine(
+      stdout: engine.stdout,
+      predicate: (line) => line.startsWith('bestmove'),
+      onStreamDone: () =>
+          StateError('Stockfish encerrou antes de devolver bestmove'),
     );
 
     _searchInProgress = true;
@@ -182,9 +146,10 @@ class StockfishService implements StockfishEngine {
       engine.stdin = 'go movetime $movetimeMs';
 
       try {
-        final move = await completer.future.timeout(
+        final line = await waiter.future.timeout(
           Duration(milliseconds: movetimeMs + 8000),
         );
+        final move = parseBestMove(line);
         if (move.isEmpty || move == '(none)') {
           throw StateError('Stockfish não devolveu um lance válido');
         }
@@ -199,7 +164,8 @@ class StockfishService implements StockfishEngine {
         );
         try {
           engine.stdin = 'stop';
-          final move = await completer.future.timeout(_stopGracePeriod);
+          final line = await waiter.future.timeout(_stopGracePeriod);
+          final move = parseBestMove(line);
           if (move.isNotEmpty && move != '(none)') return move;
         } on Object {
           // O descarte abaixo é o caminho de recuperação.
@@ -211,7 +177,7 @@ class StockfishService implements StockfishEngine {
       }
     } finally {
       _searchInProgress = false;
-      await sub.cancel();
+      await waiter.cancel();
     }
   }
 
@@ -250,40 +216,28 @@ class StockfishService implements StockfishEngine {
     // timeout de inicialização não transforme a própria limpeza em outro
     // erro e deixe o singleton preso.
     if (state == StockfishState.starting) {
-      final startup = Completer<void>();
-      void startupListener() {
-        if (engine.state.value != StockfishState.starting &&
-            !startup.isCompleted) {
-          startup.complete();
-        }
-      }
-
-      engine.state.addListener(startupListener);
+      final startup = awaitListenableValue(
+        engine.state,
+        predicate: (value) => value != StockfishState.starting,
+      );
       try {
-        await startup.future.timeout(const Duration(seconds: 5));
+        state = await startup.future.timeout(_terminateStepTimeout);
       } on TimeoutException {
         return;
       } finally {
-        engine.state.removeListener(startupListener);
+        startup.cancel();
       }
-      state = engine.state.value;
     }
     if (state != StockfishState.ready) return;
 
-    final completer = Completer<void>();
-    void listener() {
-      final current = engine.state.value;
-      if (current == StockfishState.disposed ||
-          current == StockfishState.error) {
-        engine.state.removeListener(listener);
-        if (!completer.isCompleted) completer.complete();
-      }
-    }
-
-    engine.state.addListener(listener);
+    final terminated = awaitListenableValue(
+      engine.state,
+      predicate: (value) =>
+          value == StockfishState.disposed || value == StockfishState.error,
+    );
     try {
       engine.dispose();
-      await completer.future.timeout(const Duration(seconds: 5));
+      await terminated.future.timeout(_terminateStepTimeout);
     } on Object catch (error, stackTrace) {
       developer.log(
         'Não foi possível encerrar o engine após a falha',
@@ -292,7 +246,7 @@ class StockfishService implements StockfishEngine {
         stackTrace: stackTrace,
       );
     } finally {
-      engine.state.removeListener(listener);
+      terminated.cancel();
     }
   }
 }
