@@ -21,6 +21,11 @@ class GameScreen extends ConsumerStatefulWidget {
 }
 
 class _GameScreenState extends ConsumerState<GameScreen> {
+  // Inverte a orientação padrão (perspectiva do jogador humano) quando o
+  // jogador pede manualmente — útil sobretudo em partida local, onde o
+  // segundo jogador no mesmo aparelho não tem lado "padrão" nenhum.
+  bool _manualFlip = false;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +58,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final canHint = vsAi && !busy && !state.isAiTurn && !state.isGameOver;
     final canUndo = state.canUndo && !busy && !state.isGameOver;
 
+    final baseOrientation = state.aiSide == null
+        ? Side.white
+        : state.aiSide!.opposite;
+    final orientation = _manualFlip
+        ? baseOrientation.opposite
+        : baseOrientation;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -62,6 +74,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     : 'Contra Maia ${state.levelRating}'
               : 'Partida local',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Inverter tabuleiro',
+            onPressed: () => setState(() => _manualFlip = !_manualFlip),
+            icon: const Icon(Icons.swap_vert),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -70,11 +89,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             builder: (context, constraints) {
               return _ResponsiveGameLayout(
                 constraints: constraints,
-                board: ChessBoardWidget(
-                  orientation: state.aiSide == null
-                      ? Side.white
-                      : state.aiSide!.opposite,
-                ),
+                board: ChessBoardWidget(orientation: orientation),
                 status: _StatusBar(state: state),
                 actions: _GameActions(
                   showHint: vsAi,

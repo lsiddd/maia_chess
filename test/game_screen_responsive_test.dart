@@ -127,4 +127,30 @@ void main() {
     expect(find.text('Brancas jogam'), findsOneWidget);
     expect(find.text('Reiniciar'), findsOneWidget);
   });
+
+  testWidgets('botão de inverter troca a perspectiva do tabuleiro', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(400, 800));
+
+    // Antes de inverter: perspectiva das brancas, então a1 (canto inferior
+    // esquerdo do tabuleiro) fica na última linha/coluna exibida.
+    expect(find.byKey(const ValueKey('board-piece-7-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('board-piece-0-0')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Inverter tabuleiro'));
+    await tester.pumpAndSettle();
+
+    // Depois de inverter, a torre branca de a1 passa a aparecer no topo
+    // esquerdo (linha 0) em vez do canto inferior esquerdo (linha 7): a
+    // perspectiva virou.
+    final flippedCorner = tester.widget<Semantics>(
+      find.descendant(
+        of: find.byKey(const ValueKey('board-piece-0-0')),
+        matching: find.byType(Semantics),
+      ),
+    );
+    expect(flippedCorner.properties.label, contains('branc'));
+    expect(tester.takeException(), isNull);
+  });
 }
