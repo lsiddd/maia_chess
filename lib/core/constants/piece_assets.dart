@@ -1,4 +1,28 @@
 import 'package:dartchess/dartchess.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+/// Todas as 12 peças possíveis (6 papéis × 2 cores).
+final _allPieces = [
+  for (final color in Side.values)
+    for (final role in Role.values) Piece(color: color, role: role),
+];
+
+/// Decodifica e guarda em cache os SVGs das 12 peças.
+///
+/// Sem isto, cada peça só é lida e parseada na primeira vez que aparece na
+/// tela — o que cai justamente no primeiro quadro do tabuleiro e no
+/// primeiro arraste/animação, causando engasgo visível. O [context] precisa
+/// ser o mesmo tipo de contexto em que as peças serão desenhadas: a chave de
+/// cache do `flutter_svg` inclui o `SvgTheme` e o `AssetBundle` resolvidos a
+/// partir dele.
+Future<void> precachePieceSvgs(BuildContext context) {
+  return Future.wait(
+    _allPieces.map(
+      (piece) => SvgAssetLoader(pieceAssetPath(piece)).loadBytes(context),
+    ),
+  );
+}
 
 /// Caminho do SVG empacotado para [piece].
 ///

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/constants/piece_assets.dart';
 import 'core/theming/app_page_route.dart';
 import 'core/theming/app_theme.dart';
 import 'core/widgets/error_state_card.dart';
@@ -43,11 +44,29 @@ class MaiaChessApp extends ConsumerWidget {
 }
 
 /// Tela inicial com os modos livre/campanha e os dados locais do jogador.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _precachedPieces = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Aquece os SVGs das peças enquanto o jogador ainda está no menu: se
+    // isso só acontecesse ao abrir o tabuleiro, a decodificação cairia no
+    // primeiro quadro da partida e no primeiro arraste.
+    if (_precachedPieces) return;
+    _precachedPieces = true;
+    unawaited(precachePieceSvgs(context));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final activeGame = ref.watch(activeGameProvider);
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
