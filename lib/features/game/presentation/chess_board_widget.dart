@@ -3,11 +3,13 @@ import 'dart:math' as math;
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_theme.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
+import '../application/move_feedback.dart';
 import 'chess_piece_widget.dart';
 import 'promotion_dialog.dart';
 
@@ -134,6 +136,12 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
       if (next.uciHistory.length != previousLength + 1) {
         return; // reinício, undo ou restauração: não é "um lance novo".
       }
+      if (next.sanHistory.isNotEmpty) {
+        unawaited(
+          playMoveHaptic(classifyMoveFeedback(next.sanHistory.last)),
+        );
+      }
+
       final move = Move.parse(next.uciHistory.last);
       if (move is! NormalMove) return;
       final movedPiece = next.position.board.pieceAt(move.to);
@@ -225,6 +233,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                   _squareAtLocalPosition(details.localPosition, cellSize);
               final piece = state.position.board.pieceAt(square);
               if (piece == null || piece.color != state.position.turn) return;
+              // Confirma no tato que a peça foi "pega" — sem isso o começo
+              // do arraste só se percebe pelo olho.
+              unawaited(HapticFeedback.selectionClick());
               setState(() {
                 _draggingFrom = square;
                 _dragPosition = details.localPosition;
