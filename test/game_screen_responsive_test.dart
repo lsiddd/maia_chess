@@ -128,6 +128,42 @@ void main() {
     expect(find.text('Reiniciar'), findsOneWidget);
   });
 
+  testWidgets('a lista destaca o lance mais recente e o realce acompanha', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(400, 800));
+
+    Iterable<String> highlightedMoves() => tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byKey(const Key('move-list-panel')),
+            matching: find.byType(Container),
+          ),
+        )
+        .map(
+          (container) =>
+              ((container.child as Text?)?.data ?? '').trim(),
+        )
+        .where((text) => text.isNotEmpty);
+
+    // 1. e4
+    await tester.tap(find.byKey(const ValueKey('board-square-6-4')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('board-square-4-4')));
+    await tester.pumpAndSettle();
+
+    expect(highlightedMoves(), ['e4']);
+
+    // 1... e5: o realce passa para o lance das pretas.
+    await tester.tap(find.byKey(const ValueKey('board-square-1-4')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('board-square-3-4')));
+    await tester.pumpAndSettle();
+
+    expect(highlightedMoves(), ['e5']);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('botão de inverter troca a perspectiva do tabuleiro', (
     tester,
   ) async {
