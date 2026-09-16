@@ -510,6 +510,20 @@ class GameController extends Notifier<GameState> {
     await _maybePlayAiTurn();
   }
 
+  /// Repete uma resposta que falhou na posição atual, preservando a partida.
+  /// O caminho da busca descarta o motor com falha e carrega outro ao tentar
+  /// novamente. O bloqueio síncrono evita buscas duplicadas por toques rápidos.
+  Future<void> retryAiMove() async {
+    if (state.engineError == null ||
+        state.aiThinking ||
+        state.hintThinking ||
+        !state.isAiTurn ||
+        state.isGameOver) {
+      return;
+    }
+    await _maybePlayAiTurn();
+  }
+
   Future<bool> _maybePlayAiTurn() async {
     if (!state.isAiTurn || state.isGameOver) return true;
 
