@@ -222,17 +222,10 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               // desde que o lance foi aplicado) e o jogador não deve sentir
               // o arraste seguinte "não funcionar" nos ~350ms depois de
               // qualquer lance, inclusive o da IA.
-              if (state.isGameOver ||
-                  state.isAiTurn ||
-                  state.aiThinking ||
-                  state.hintThinking) {
-                return;
-              }
               final square =
                   downSquare ??
                   _squareAtLocalPosition(details.localPosition, cellSize);
-              final piece = state.position.board.pieceAt(square);
-              if (piece == null || piece.color != state.position.turn) return;
+              if (!controller.selectForDrag(square)) return;
               // Confirma no tato que a peça foi "pega" — sem isso o começo
               // do arraste só se percebe pelo olho.
               unawaited(HapticFeedback.selectionClick());
