@@ -246,4 +246,46 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'arrastar uma nova peça funciona mesmo com o voo do lance anterior '
+    'ainda em animação',
+    (tester) async {
+      await pumpGame(tester);
+
+      // Primeiro lance por toque: e2-e4. Não usa `pumpAndSettle` depois —
+      // fica com o voo de e2 até e4 ainda em andamento (dura AppMotion.slow,
+      // 350ms) para reproduzir a janela em que o arraste era ignorado.
+      await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('board-square-4-4'))); // e4
+      await tester.pump(); // um quadro: o voo começou, ainda não terminou.
+
+      // Com o voo do primeiro lance ainda rodando, arrasta uma segunda peça
+      // (peão das pretas d7-d5). O arraste deve responder imediatamente: a
+      // peça precisa aparecer seguindo o dedo (overlay de arraste montado).
+      final from = tester.getCenter(
+        find.byKey(const ValueKey('board-square-1-3')), // d7
+      );
+      final to = tester.getCenter(
+        find.byKey(const ValueKey('board-square-3-3')), // d5
+      );
+
+      final gesture = await tester.startGesture(from);
+      await tester.pump();
+      await gesture.moveTo(to);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // Antes da correção, `onPanStart` via o voo de e2-e4 ainda em
+      // andamento e retornava sem nunca iniciar o arraste — d7 permaneceria
+      // parado e nenhum lance seria registrado. Chegar a d5 prova que o
+      // segundo arraste foi reconhecido e completado normalmente.
+      expect(find.byKey(const ValueKey('board-piece-1-3')), findsNothing);
+      expect(find.byKey(const ValueKey('board-piece-3-3')), findsOneWidget);
+      expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

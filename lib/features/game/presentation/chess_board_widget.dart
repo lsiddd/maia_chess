@@ -54,8 +54,10 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   // Anima a peça deslizando da casa de origem até a de destino sempre que
   // um lance é aplicado — do jogador (toque ou arraste) ou da engine —, em
   // vez de a peça só desaparecer de um lugar e aparecer no outro. Um único
-  // `AnimationController` é suficiente porque só existe um lance "em voo"
-  // por vez (novo arraste é bloqueado enquanto um voo está em andamento).
+  // `AnimationController` é suficiente porque só existe um voo por vez: se
+  // um novo lance é aplicado (ou a peça em voo é agarrada de novo) antes do
+  // voo anterior terminar, ele é interrompido/reiniciado na hora — o
+  // jogador pode continuar jogando livremente sem esperar a animação.
   late final AnimationController _slideController;
   late final Animation<double> _slideCurve;
   Square? _slideFromSquare;
@@ -207,11 +209,15 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
             onPanStart: (details) {
               final downSquare = _panDownSquare;
               _panDownSquare = null;
+              // Não bloqueia por um voo de outro lance ainda em animação: o
+              // voo é só visual (a posição em `state` já está atualizada
+              // desde que o lance foi aplicado) e o jogador não deve sentir
+              // o arraste seguinte "não funcionar" nos ~350ms depois de
+              // qualquer lance, inclusive o da IA.
               if (state.isGameOver ||
                   state.isAiTurn ||
                   state.aiThinking ||
-                  state.hintThinking ||
-                  _slideToSquare != null) {
+                  state.hintThinking) {
                 return;
               }
               final square =
@@ -222,6 +228,17 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               setState(() {
                 _draggingFrom = square;
                 _dragPosition = details.localPosition;
+                // Se a peça agarrada é a que ainda está "aterrissando" de um
+                // voo em andamento, encerra o voo na hora: senão o overlay
+                // de voo e o overlay de arraste desenhariam a mesma peça
+                // sobreposta nesta casa até a animação acabar sozinha.
+                if (_slideToSquare == square) {
+                  _slideController.stop();
+                  _slideFromSquare = null;
+                  _slideFromFractional = null;
+                  _slideToSquare = null;
+                  _slidePiece = null;
+                }
               });
             },
             onPanUpdate: (details) {
