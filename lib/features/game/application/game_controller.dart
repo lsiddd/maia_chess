@@ -255,6 +255,22 @@ class GameController extends Notifier<GameState> {
     await _maybePlayAiTurn();
   }
 
+  /// Seleciona a peça ao iniciar um arraste, sem alternar a seleção como
+  /// um toque faria. Retorna falso quando a interação não está disponível.
+  bool selectForDrag(Square square) {
+    if (state.isGameOver ||
+        state.isAiTurn ||
+        state.aiThinking ||
+        state.hintThinking ||
+        !_hasOwnPieceAt(square)) {
+      return false;
+    }
+    if (state.selectedSquare != square) {
+      state = state.copyWith(selectedSquare: square);
+    }
+    return true;
+  }
+
   /// Tenta jogar o lance de [from] para [to] vindo do gesto de arrastar
   /// (drag-and-drop) uma peça — alternativa ao fluxo de toque em
   /// [onSquareTapped]. Ignora silenciosamente se o lance não for legal ou

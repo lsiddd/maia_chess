@@ -290,6 +290,70 @@ void main() {
   );
 
   for (final flipped in [false, true]) {
+    for (final selection in ['nenhuma', 'mesma peça', 'outra peça']) {
+      testWidgets('arraste seleciona e mantém destinos ao voltar à origem: '
+          '$selection, invertido=$flipped', (tester) async {
+        await pumpGame(tester);
+        if (flipped) {
+          await tester.tap(find.byTooltip('Inverter tabuleiro'));
+          await tester.pumpAndSettle();
+        }
+        String keyAt(int row, int col) =>
+            'board-square-${flipped ? 7 - row : row}-'
+            '${flipped ? 7 - col : col}';
+        final originKey = keyAt(6, 4); // e2
+        final targetKey = keyAt(4, 4); // e4
+        final oldTargetKey = keyAt(5, 0); // a3, destino do cavalo b1
+        if (selection != 'nenhuma') {
+          await tester.tap(
+            find.byKey(
+              ValueKey(selection == 'mesma peça' ? originKey : keyAt(7, 1)),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+        final from = tester.getCenter(find.byKey(ValueKey(originKey)));
+        final to = tester.getCenter(find.byKey(ValueKey(targetKey)));
+        final gesture = await tester.startGesture(from);
+        await tester.pump();
+        await gesture.moveTo(to);
+        await tester.pump();
+
+        void expectPawnSelected() {
+          expect(
+            indicatorOpacity(tester, targetKey, 'legal-target-indicator'),
+            1,
+          );
+          expect(
+            indicatorOpacity(tester, oldTargetKey, 'legal-target-indicator'),
+            0,
+          );
+          expect(
+            squareColor(tester, originKey),
+            isNot(squareColor(tester, keyAt(6, 2))),
+          );
+        }
+
+        expectPawnSelected();
+        await gesture.moveTo(from);
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expectPawnSelected();
+        expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
+
+        // Depois de devolver a peça, basta tocar no destino para jogar.
+        await tester.tap(find.byKey(ValueKey(targetKey)));
+        await tester.pumpAndSettle();
+        expect(find.text('e4'), findsOneWidget);
+        expect(
+          indicatorOpacity(tester, targetKey, 'legal-target-indicator'),
+          0,
+        );
+        expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+        expect(tester.takeException(), isNull);
+      });
+    }
     for (final kingSide in [false, true]) {
       testWidgets('soltar fora da borda ${kingSide ? 'h' : 'a'} não joga '
           'com tabuleiro ${flipped ? 'invertido' : 'normal'}', (tester) async {
