@@ -55,7 +55,11 @@ android {
             // arm64-v8a: dispositivos reais modernos. x86_64: emuladores (dev/CI).
             // armeabi-v7a fica de fora porque o motor lc0 (leela_chess_zero) só builda
             // para arm64-v8a/x86_64 upstream. Ver ADR.md.
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // Flutter configura splits por ABI quando essa opção é ligada.
+            // O AGP rejeita combinar splits com filtros em defaultConfig.
+            if (project.findProperty("split-per-abi") != "true") {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
         }
     }
 
