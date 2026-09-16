@@ -462,12 +462,23 @@ class _MoveList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final pairs = <({int number, String white, String black})>[];
+    final lastIndex = sanHistory.length - 1;
+    final pairs =
+        <({
+          int number,
+          String white,
+          String black,
+          bool whiteIsLast,
+          bool blackIsLast,
+        })>[];
     for (var i = 0; i < sanHistory.length; i += 2) {
+      final hasBlack = i + 1 < sanHistory.length;
       pairs.add((
         number: (i ~/ 2) + 1,
         white: sanHistory[i],
-        black: i + 1 < sanHistory.length ? sanHistory[i + 1] : '—',
+        black: hasBlack ? sanHistory[i + 1] : '—',
+        whiteIsLast: i == lastIndex,
+        blackIsLast: hasBlack && i + 1 == lastIndex,
       ));
     }
 
@@ -566,15 +577,15 @@ class _MoveList extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        child: Text(
-                          pair.white,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        child: _MoveCell(
+                          san: pair.white,
+                          isCurrent: pair.whiteIsLast,
                         ),
                       ),
                       Expanded(
-                        child: Text(
-                          pair.black,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        child: _MoveCell(
+                          san: pair.black,
+                          isCurrent: pair.blackIsLast,
                         ),
                       ),
                     ],
@@ -583,6 +594,41 @@ class _MoveList extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Uma jogada na lista. O lance mais recente ganha um realce para o jogador
+/// localizar num relance onde a partida está, em vez de ter que contar as
+/// linhas até o fim.
+class _MoveCell extends StatelessWidget {
+  const _MoveCell({required this.san, required this.isCurrent});
+
+  final String san;
+  final bool isCurrent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final text = Text(
+      san,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: isCurrent ? colors.onPrimaryContainer : null,
+      ),
+    );
+    if (!isCurrent) return text;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: colors.primaryContainer,
+          borderRadius: BorderRadius.circular(AppRadius.small),
+        ),
+        child: text,
       ),
     );
   }
