@@ -12,6 +12,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag vX.Y.Z existente para publicar; vazio gera apenas artefato'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - uses: subosito/flutter-action@v2
         with:
@@ -68,10 +75,13 @@ jobs:
       CMAKE_BUILD_PARALLEL_LEVEL: '2'
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v4
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.4'
@@ -91,8 +101,8 @@ jobs:
       - name: Definir versão
         id: version
         env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
+          REF_NAME: ${{ inputs.release_tag || github.ref_name }}
         run: |
           if [[ "$REF_TYPE" == tag ]]; then
             [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use uma tag vX.Y.Z'; exit 1; }
@@ -107,6 +117,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' }}
         run: python3 scripts/configure_android_signing.py
       - name: Gerar APK release
         env:
@@ -138,12 +149,12 @@ jobs:
   release:
     name: Publicar GitHub Release
     needs: apk
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || inputs.release_tag != ''
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency:
-      group: release-${{ github.ref }}
+      group: release-${{ inputs.release_tag || github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/download-artifact@v7
@@ -154,7 +165,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           cd dist
           sha256sum --check SHA256SUMS
