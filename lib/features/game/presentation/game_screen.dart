@@ -464,13 +464,15 @@ class _MoveList extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final lastIndex = sanHistory.length - 1;
     final pairs =
-        <({
-          int number,
-          String white,
-          String black,
-          bool whiteIsLast,
-          bool blackIsLast,
-        })>[];
+        <
+          ({
+            int number,
+            String white,
+            String black,
+            bool whiteIsLast,
+            bool blackIsLast,
+          })
+        >[];
     for (var i = 0; i < sanHistory.length; i += 2) {
       final hasBlack = i + 1 < sanHistory.length;
       pairs.add((

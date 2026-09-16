@@ -140,10 +140,7 @@ void main() {
             matching: find.byType(Container),
           ),
         )
-        .map(
-          (container) =>
-              ((container.child as Text?)?.data ?? '').trim(),
-        )
+        .map((container) => ((container.child as Text?)?.data ?? '').trim())
         .where((text) => text.isNotEmpty);
 
     // 1. e4

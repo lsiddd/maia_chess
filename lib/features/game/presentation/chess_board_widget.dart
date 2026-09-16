@@ -137,9 +137,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
         return; // reinício, undo ou restauração: não é "um lance novo".
       }
       if (next.sanHistory.isNotEmpty) {
-        unawaited(
-          playMoveHaptic(classifyMoveFeedback(next.sanHistory.last)),
-        );
+        unawaited(playMoveHaptic(classifyMoveFeedback(next.sanHistory.last)));
       }
 
       final move = Move.parse(next.uciHistory.last);
