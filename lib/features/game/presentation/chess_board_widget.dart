@@ -40,8 +40,8 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   Square? _draggingFrom;
   Offset? _dragPosition;
 
-  // Casa tocada em `onPanDown`, antes do gesto ser reconhecido como
-  // arraste — ver o comentário em `onPanDown` mais abaixo.
+  // Casa tocada em `onDragDown`, antes do gesto ser reconhecido como
+  // arraste — ver o comentário em `onDragDown` mais abaixo.
   Square? _panDownSquare;
 
   // Casa de origem do arraste que acabou de ser solto, guardada em unidades
@@ -197,6 +197,117 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               ? _squareAtLocalPosition(dragPosition, cellSize)
               : null;
 
+          void handleDragDown(DragDownDetails details) {
+            _panDownSquare = _squareAtLocalPosition(
+              details.localPosition,
+              cellSize,
+            );
+          }
+
+          void handleDragStart(DragStartDetails details) {
+            final downSquare = _panDownSquare;
+            _panDownSquare = null;
+            // Não bloqueia por um voo de outro lance ainda em animação: o
+            // voo é só visual (a posição em `state` já está atualizada
+            // desde que o lance foi aplicado) e o jogador não deve sentir
+            // o arraste seguinte "não funcionar" nos ~350ms depois de
+            // qualquer lance, inclusive o da IA.
+            final square =
+                downSquare ??
+                _squareAtLocalPosition(details.localPosition, cellSize);
+            if (!controller.selectForDrag(square)) return;
+            // Confirma no tato que a peça foi "pega" — sem isso o começo
+            // do arraste só se percebe pelo olho.
+            unawaited(HapticFeedback.selectionClick());
+            setState(() {
+              _draggingFrom = square;
+              _dragPosition = details.localPosition;
+              // Se a peça agarrada é a que ainda está "aterrissando" de um
+              // voo em andamento, encerra o voo na hora: senão o overlay
+              // de voo e o overlay de arraste desenhariam a mesma peça
+              // sobreposta nesta casa até a animação acabar sozinha.
+              if (_slideToSquare == square) {
+                _slideController.stop();
+                _slideFromSquare = null;
+                _slideFromFractional = null;
+                _slideToSquare = null;
+                _slidePiece = null;
+              }
+            });
+          }
+
+          void handleDragUpdate(DragUpdateDetails details) {
+            if (_draggingFrom == null) return;
+            setState(() => _dragPosition = details.localPosition);
+          }
+
+          void handleDragEnd(DragEndDetails details) {
+            final from = _draggingFrom;
+            final pos = _dragPosition;
+            setState(() {
+              _draggingFrom = null;
+              _dragPosition = null;
+            });
+            if (from == null || pos == null) return;
+            final releaseTopLeft = pos - Offset(cellSize / 2, cellSize / 2);
+            // Soltar fora cancela: limitar as coordenadas à borda poderia
+            // transformar essa soltura em um lance legal não desejado.
+            final boardBounds = Offset.zero & Size.square(cellSize * 8);
+            if (!boardBounds.contains(pos)) {
+              final piece = ref
+                  .read(gameControllerProvider)
+                  .position
+                  .board
+                  .pieceAt(from);
+              if (piece != null) {
+                _startSlide(
+                  fromFractional: releaseTopLeft / cellSize,
+                  to: from,
+                  piece: piece,
+                );
+              }
+              return;
+            }
+            final to = _squareAtLocalPosition(pos, cellSize);
+            _pendingDragReleaseSquare = from;
+            _pendingDragReleaseFractional = releaseTopLeft / cellSize;
+            final beforeLength = state.uciHistory.length;
+            unawaited(
+              controller
+                  .attemptDragMove(from, to, onPromotion: askPromotion)
+                  .then((_) {
+                    // Se o lance foi aceito, `ref.listen` acima já
+                    // consumiu os campos pendentes e iniciou o voo até o
+                    // destino — nada a fazer aqui. Se não (lance ilegal
+                    // ou promoção cancelada), solta a peça de volta para
+                    // a própria casa em vez de ela só reaparecer ali.
+                    if (!mounted || _pendingDragReleaseSquare != from) {
+                      return;
+                    }
+                    final release = _pendingDragReleaseFractional;
+                    _pendingDragReleaseSquare = null;
+                    _pendingDragReleaseFractional = null;
+                    final current = ref.read(gameControllerProvider);
+                    if (current.uciHistory.length > beforeLength) return;
+                    final piece = current.position.board.pieceAt(from);
+                    if (piece == null || release == null) return;
+                    _startSlide(
+                      fromFractional: release,
+                      to: from,
+                      piece: piece,
+                    );
+                  }),
+            );
+          }
+
+          void handleDragCancel() => setState(() {
+            _draggingFrom = null;
+            _dragPosition = null;
+          });
+
+          // Recognizers por eixo usam o mesmo limiar da ListView. Como o
+          // tabuleiro é descendente, ganha a disputa antes da rolagem.
+          // Pan exige mais deslocamento e perdia em movimentos graduais.
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTapUp: (details) {
@@ -208,116 +319,23 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                 controller.onSquareTapped(square, onPromotion: askPromotion),
               );
             },
-            // `onPanStart` só dispara depois que o movimento já superou o
+            // `onDragStart` só dispara depois que o movimento já superou o
             // limiar de reconhecimento do gesto (slop) — em casas pequenas
             // esse limiar pode corresponder a quase uma célula inteira, e
             // por essa altura `details.localPosition` já pode estar sobre a
-            // casa vizinha. `onPanDown` fixa a casa de fato tocada, antes de
+            // casa vizinha. `onDragDown` fixa a casa de fato tocada, antes de
             // qualquer deslocamento, para o arraste sempre pegar a peça
             // correta mesmo que o gesto só seja "aceito" mais adiante.
-            onPanDown: (details) {
-              _panDownSquare = _squareAtLocalPosition(
-                details.localPosition,
-                cellSize,
-              );
-            },
-            onPanStart: (details) {
-              final downSquare = _panDownSquare;
-              _panDownSquare = null;
-              // Não bloqueia por um voo de outro lance ainda em animação: o
-              // voo é só visual (a posição em `state` já está atualizada
-              // desde que o lance foi aplicado) e o jogador não deve sentir
-              // o arraste seguinte "não funcionar" nos ~350ms depois de
-              // qualquer lance, inclusive o da IA.
-              final square =
-                  downSquare ??
-                  _squareAtLocalPosition(details.localPosition, cellSize);
-              if (!controller.selectForDrag(square)) return;
-              // Confirma no tato que a peça foi "pega" — sem isso o começo
-              // do arraste só se percebe pelo olho.
-              unawaited(HapticFeedback.selectionClick());
-              setState(() {
-                _draggingFrom = square;
-                _dragPosition = details.localPosition;
-                // Se a peça agarrada é a que ainda está "aterrissando" de um
-                // voo em andamento, encerra o voo na hora: senão o overlay
-                // de voo e o overlay de arraste desenhariam a mesma peça
-                // sobreposta nesta casa até a animação acabar sozinha.
-                if (_slideToSquare == square) {
-                  _slideController.stop();
-                  _slideFromSquare = null;
-                  _slideFromFractional = null;
-                  _slideToSquare = null;
-                  _slidePiece = null;
-                }
-              });
-            },
-            onPanUpdate: (details) {
-              if (_draggingFrom == null) return;
-              setState(() => _dragPosition = details.localPosition);
-            },
-            onPanEnd: (details) {
-              final from = _draggingFrom;
-              final pos = _dragPosition;
-              setState(() {
-                _draggingFrom = null;
-                _dragPosition = null;
-              });
-              if (from == null || pos == null) return;
-              final releaseTopLeft = pos - Offset(cellSize / 2, cellSize / 2);
-              // Soltar fora cancela: limitar as coordenadas à borda poderia
-              // transformar essa soltura em um lance legal não desejado.
-              final boardBounds = Offset.zero & Size.square(cellSize * 8);
-              if (!boardBounds.contains(pos)) {
-                final piece = ref
-                    .read(gameControllerProvider)
-                    .position
-                    .board
-                    .pieceAt(from);
-                if (piece != null) {
-                  _startSlide(
-                    fromFractional: releaseTopLeft / cellSize,
-                    to: from,
-                    piece: piece,
-                  );
-                }
-                return;
-              }
-              final to = _squareAtLocalPosition(pos, cellSize);
-              _pendingDragReleaseSquare = from;
-              _pendingDragReleaseFractional = releaseTopLeft / cellSize;
-              final beforeLength = state.uciHistory.length;
-              unawaited(
-                controller
-                    .attemptDragMove(from, to, onPromotion: askPromotion)
-                    .then((_) {
-                      // Se o lance foi aceito, `ref.listen` acima já
-                      // consumiu os campos pendentes e iniciou o voo até o
-                      // destino — nada a fazer aqui. Se não (lance ilegal
-                      // ou promoção cancelada), solta a peça de volta para
-                      // a própria casa em vez de ela só reaparecer ali.
-                      if (!mounted || _pendingDragReleaseSquare != from) {
-                        return;
-                      }
-                      final release = _pendingDragReleaseFractional;
-                      _pendingDragReleaseSquare = null;
-                      _pendingDragReleaseFractional = null;
-                      final current = ref.read(gameControllerProvider);
-                      if (current.uciHistory.length > beforeLength) return;
-                      final piece = current.position.board.pieceAt(from);
-                      if (piece == null || release == null) return;
-                      _startSlide(
-                        fromFractional: release,
-                        to: from,
-                        piece: piece,
-                      );
-                    }),
-              );
-            },
-            onPanCancel: () => setState(() {
-              _draggingFrom = null;
-              _dragPosition = null;
-            }),
+            onVerticalDragDown: handleDragDown,
+            onVerticalDragStart: handleDragStart,
+            onVerticalDragUpdate: handleDragUpdate,
+            onVerticalDragEnd: handleDragEnd,
+            onVerticalDragCancel: handleDragCancel,
+            onHorizontalDragDown: handleDragDown,
+            onHorizontalDragStart: handleDragStart,
+            onHorizontalDragUpdate: handleDragUpdate,
+            onHorizontalDragEnd: handleDragEnd,
+            onHorizontalDragCancel: handleDragCancel,
             child: Stack(
               clipBehavior: Clip.none,
               fit: StackFit.expand,

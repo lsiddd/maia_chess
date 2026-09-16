@@ -195,6 +195,26 @@ void main() {
     },
   );
 
+  testWidgets('arraste vertical gradual vence a rolagem da tela', (
+    tester,
+  ) async {
+    await pumpGame(tester);
+    final from = tester.getCenter(
+      find.byKey(const ValueKey('board-square-6-4')),
+    );
+    final to = tester.getCenter(find.byKey(const ValueKey('board-square-4-4')));
+    final gesture = await tester.startGesture(from);
+    for (var step = 1; step <= 40; step++) {
+      await gesture.moveTo(Offset.lerp(from, to, step / 40)!);
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.byKey(const Key('board-drag-piece')), findsOneWidget);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
+    expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
+  });
+
   testWidgets('arrastar uma peça até um destino legal joga o lance', (
     tester,
   ) async {
