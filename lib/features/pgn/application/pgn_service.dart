@@ -320,7 +320,7 @@ class PgnFileService {
           'O Android não forneceu acesso ao arquivo selecionado.',
         );
       }
-      return io.File(path).readAsString();
+      return await io.File(path).readAsString();
     } on FormatException {
       throw const PgnFormatException('O arquivo PGN não está em UTF-8.');
     }
