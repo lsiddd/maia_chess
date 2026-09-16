@@ -288,4 +288,66 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final flipped in [false, true]) {
+    for (final kingSide in [false, true]) {
+      testWidgets('soltar fora da borda ${kingSide ? 'h' : 'a'} não joga '
+          'com tabuleiro ${flipped ? 'invertido' : 'normal'}', (tester) async {
+        await pumpGame(tester);
+        if (flipped) {
+          await tester.tap(find.byTooltip('Inverter tabuleiro'));
+          await tester.pumpAndSettle();
+        }
+
+        final fromRow = flipped ? 0 : 7;
+        final fromCol = flipped ? (kingSide ? 1 : 6) : (kingSide ? 6 : 1);
+        final toRow = flipped ? 2 : 5;
+        final toCol = flipped ? (kingSide ? 0 : 7) : (kingSide ? 7 : 0);
+        final from = tester.getCenter(
+          find.byKey(ValueKey('board-square-$fromRow-$fromCol')),
+        );
+        final legalTo = tester.getCenter(
+          find.byKey(ValueKey('board-square-$toRow-$toCol')),
+        );
+        final board = tester.getRect(find.byKey(const Key('chess-board')));
+        // A borda direita exata já está fora; à esquerda, testa um ponto
+        // externo. Ambos antes eram convertidos em um destino legal.
+        final outside = Offset(
+          toCol == 0 ? board.left - 8 : board.right,
+          legalTo.dy,
+        );
+
+        final gesture = await tester.startGesture(from);
+        await gesture.moveTo(legalTo);
+        await tester.pump();
+        await gesture.moveTo(outside);
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('board-piece-$fromRow-$fromCol')),
+          findsOneWidget,
+        );
+        expect(find.byKey(ValueKey('board-piece-$toRow-$toCol')), findsNothing);
+        expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+        expect(tester.takeException(), isNull);
+
+        // O cancelamento não impede que a mesma peça seja movida depois.
+        final nextGesture = await tester.startGesture(from);
+        await tester.pump();
+        await nextGesture.moveTo(legalTo);
+        await tester.pump();
+        await nextGesture.up();
+        await tester.pumpAndSettle();
+        expect(find.text(kingSide ? 'Nh3' : 'Na3'), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('board-piece-$toRow-$toCol')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 }

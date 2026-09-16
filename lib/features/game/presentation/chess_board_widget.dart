@@ -264,8 +264,26 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                 _dragPosition = null;
               });
               if (from == null || pos == null) return;
-              final to = _squareAtLocalPosition(pos, cellSize);
               final releaseTopLeft = pos - Offset(cellSize / 2, cellSize / 2);
+              // Soltar fora cancela: limitar as coordenadas à borda poderia
+              // transformar essa soltura em um lance legal não desejado.
+              final boardBounds = Offset.zero & Size.square(cellSize * 8);
+              if (!boardBounds.contains(pos)) {
+                final piece = ref
+                    .read(gameControllerProvider)
+                    .position
+                    .board
+                    .pieceAt(from);
+                if (piece != null) {
+                  _startSlide(
+                    fromFractional: releaseTopLeft / cellSize,
+                    to: from,
+                    piece: piece,
+                  );
+                }
+                return;
+              }
+              final to = _squareAtLocalPosition(pos, cellSize);
               _pendingDragReleaseSquare = from;
               _pendingDragReleaseFractional = releaseTopLeft / cellSize;
               final beforeLength = state.uciHistory.length;
