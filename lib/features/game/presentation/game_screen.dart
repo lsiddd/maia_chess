@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/error_state_card.dart';
@@ -12,11 +13,31 @@ import '../application/game_state.dart';
 import 'chess_board_widget.dart';
 
 /// Tela de uma partida local ou contra a IA Maia.
-class GameScreen extends ConsumerWidget {
+class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GameScreen> createState() => _GameScreenState();
+}
+
+class _GameScreenState extends ConsumerState<GameScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Mantém a tela acesa durante a partida — sem isso, o bloqueio de tela
+    // do aparelho pode interromper a espera pelo lance da IA ou a leitura
+    // do tabuleiro em qualquer momento.
+    unawaited(WakelockPlus.enable());
+  }
+
+  @override
+  void dispose() {
+    unawaited(WakelockPlus.disable());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(gameControllerProvider);
     final controller = ref.read(gameControllerProvider.notifier);
     final vsAi = state.aiSide != null;
