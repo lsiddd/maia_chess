@@ -10,7 +10,9 @@ names = (
     "ANDROID_KEY_PASSWORD",
 )
 values = {name: os.environ.get(name, "") for name in names}
-if not any(values.values()) and os.environ.get("GITHUB_REF_TYPE") != "tag":
+release = (os.environ.get("GITHUB_REF_TYPE") == "tag" or
+           os.environ.get("REQUIRE_RELEASE_SIGNING") == "true")
+if not any(values.values()) and not release:
     print("::warning::Sem secrets de assinatura: APK de teste, sem publicação de release.")
 else:
     missing = [name for name, value in values.items() if not value]

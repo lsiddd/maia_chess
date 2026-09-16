@@ -72,6 +72,11 @@ Release names are unique: use a new version tag for a new publication; the
 workflow does not overwrite an existing release. ARM64 targets modern Android
 devices (Android 7.0/API 24 or later); this APK does not support 32-bit devices.
 
+If infrastructure fails before publication, fix the workflow on `main`, then
+use **Actions → CI → Run workflow** on `main` with `release_tag` set to the
+existing tag. This uses the corrected workflow while checking out and building
+the exact tagged source. Leaving this input empty builds an artifact only.
+
 The Linux runner installs JDK 17, Android SDK 36, NDK `28.2.13676358` and CMake
 `3.22.1`. Before uploading, it verifies the APK signature, ARM64 libraries for
 Flutter/lc0/Stockfish, all nine Maia weights and ZIP integrity.
