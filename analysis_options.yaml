@@ -15,6 +15,8 @@ analyzer:
     # nosso; o exemplo do leela_chess_zero traz suas próprias dependências
     # de dev (integration_test) que não fazem parte deste projeto.
     - native/**
+    - build/**
+    - android/**
 
 linter:
   # The lint rules applied to this project can be customized in the
