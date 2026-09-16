@@ -275,6 +275,14 @@ void main() {
       await tester.pump();
       await gesture.moveTo(to);
       await tester.pump();
+      final dragLayer = find.byKey(const Key('board-drag-layer'));
+      final layers = tester
+          .widget<Stack>(
+            find.ancestor(of: dragLayer, matching: find.byType(Stack)).first,
+          )
+          .children;
+      expect(find.byKey(const Key('board-slide-layer')), findsOneWidget);
+      expect(layers.last.key, const Key('board-drag-layer'));
       await gesture.up();
       await tester.pumpAndSettle();
 
@@ -290,6 +298,65 @@ void main() {
   );
 
   for (final flipped in [false, true]) {
+    testWidgets(
+      'arraste amplia peça e destaca a casa sob o dedo, invertido=$flipped',
+      (tester) async {
+        await pumpGame(tester);
+        if (flipped) {
+          await tester.tap(find.byTooltip('Inverter tabuleiro'));
+          await tester.pumpAndSettle();
+        }
+        Finder squareAt(int row, int col) => find.byKey(
+          ValueKey(
+            'board-square-${flipped ? 7 - row : row}-${flipped ? 7 - col : col}',
+          ),
+        );
+        final origin = squareAt(6, 4); // e2
+        final target = squareAt(4, 4); // e4
+        final from = tester.getCenter(origin);
+        final staticSize = tester.getSize(
+          find.descendant(of: origin, matching: find.byType(ChessPieceWidget)),
+        );
+        final targetRect = tester.getRect(target);
+        // Fora do centro para detectar qualquer desvio entre imagem e destino.
+        final pointer = targetRect.topLeft + const Offset(6, 6);
+        final gesture = await tester.startGesture(from);
+        await tester.pump();
+        await gesture.moveTo(pointer);
+        await tester.pump();
+        final highlight = find.byKey(const Key('board-drag-target'));
+        final dragged = find.byKey(const Key('board-drag-piece'));
+        expect(tester.getRect(highlight), targetRect);
+        expect(tester.getSize(dragged).width, greaterThan(staticSize.width));
+        expect(tester.getCenter(dragged), pointer);
+
+        final invalid = squareAt(
+          3,
+          4,
+        ); // e5 é ilegal, mas ainda fica sob o dedo.
+        await gesture.moveTo(tester.getCenter(invalid));
+        await tester.pump();
+        expect(tester.getRect(highlight), tester.getRect(invalid));
+        final board = tester.getRect(find.byKey(const Key('chess-board')));
+        await gesture.moveTo(Offset(board.right + 10, pointer.dy));
+        await tester.pump();
+        expect(highlight, findsNothing);
+
+        await gesture.moveTo(pointer);
+        await tester.pump();
+        expect(tester.getRect(highlight), targetRect);
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(highlight, findsNothing);
+        expect(dragged, findsNothing);
+        expect(find.text('e4'), findsOneWidget);
+        expect(
+          find.descendant(of: target, matching: find.byType(ChessPieceWidget)),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
     for (final selection in ['nenhuma', 'mesma peça', 'outra peça']) {
       testWidgets('arraste seleciona e mantém destinos ao voltar à origem: '
           '$selection, invertido=$flipped', (tester) async {

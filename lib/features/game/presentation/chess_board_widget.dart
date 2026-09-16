@@ -187,6 +187,15 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
       child: LayoutBuilder(
         builder: (context, constraints) {
           final cellSize = constraints.maxWidth / 8;
+          final dragPosition = _dragPosition;
+          final hoveredSquare =
+              _draggingFrom != null &&
+                  dragPosition != null &&
+                  (Offset.zero & Size.square(cellSize * 8)).contains(
+                    dragPosition,
+                  )
+              ? _squareAtLocalPosition(dragPosition, cellSize)
+              : null;
 
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -310,6 +319,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               _dragPosition = null;
             }),
             child: Stack(
+              clipBehavior: Clip.none,
               fit: StackFit.expand,
               children: [
                 GridView.builder(
@@ -362,24 +372,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                     );
                   },
                 ),
-                if (_draggingFrom != null && _dragPosition != null)
-                  Positioned(
-                    left: _dragPosition!.dx - cellSize / 2,
-                    top: _dragPosition!.dy - cellSize / 2,
-                    width: cellSize,
-                    height: cellSize,
-                    child: IgnorePointer(
-                      child: FractionallySizedBox(
-                        widthFactor: _pieceScale,
-                        heightFactor: _pieceScale,
-                        child: ChessPieceWidget(
-                          piece: state.position.board.pieceAt(_draggingFrom!)!,
-                        ),
-                      ),
-                    ),
-                  ),
                 if (_slideToSquare != null && _slidePiece != null)
                   AnimatedBuilder(
+                    key: const Key('board-slide-layer'),
                     animation: _slideCurve,
                     builder: (context, _) {
                       final toSquare = _slideToSquare;
@@ -422,6 +417,29 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                       );
                     },
                   ),
+                if (hoveredSquare != null)
+                  Positioned.fromRect(
+                    rect:
+                        _squareTopLeft(
+                          hoveredSquare,
+                          widget.orientation,
+                          cellSize,
+                        ) &
+                        Size.square(cellSize),
+                    child: IgnorePointer(
+                      child: Container(
+                        key: const Key('board-drag-target'),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.black87, width: 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned.fill(
                   child: IgnorePointer(
                     child: DecoratedBox(
@@ -433,6 +451,22 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                     ),
                   ),
                 ),
+                // A peça ampliada fica acima de todas as camadas. O destino
+                // continua sendo a casa sob o dedo, sem compensação visual.
+                if (_draggingFrom != null && dragPosition != null)
+                  Positioned(
+                    key: const Key('board-drag-layer'),
+                    left: dragPosition.dx - cellSize / 2,
+                    top: dragPosition.dy - cellSize / 2,
+                    width: cellSize,
+                    height: cellSize,
+                    child: IgnorePointer(
+                      child: ChessPieceWidget(
+                        key: const Key('board-drag-piece'),
+                        piece: state.position.board.pieceAt(_draggingFrom!)!,
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
