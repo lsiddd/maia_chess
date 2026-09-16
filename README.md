@@ -37,6 +37,45 @@ Commit the formatting changes before pushing. The CI formatting step only
 checks files; it does not apply or commit corrections. Native engine sources
 are excluded from this formatting scope.
 
+## Android APK and GitHub Releases
+
+The CI workflow runs analysis, formatting, Flutter tests, and release-tool tests.
+On pushes to `main` and manual runs, it then builds an ARM64 release APK and
+uploads the `android-release` artifact (APK plus `SHA256SUMS`, retained 14 days).
+Pull requests run the checks without receiving signing secrets or publishing.
+
+Release signing uses these repository Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: base64-encoded keystore, without line breaks.
+- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
+- `ANDROID_KEY_ALIAS`: signing alias.
+- `ANDROID_KEY_PASSWORD`: private-key password.
+
+Keep a secure backup of the keystore and passwords: future updates must use
+the same signing key. Local signing uses the ignored `android/app/key.properties`
+and `android/app/release-keystore.jks`. Never commit these files. An app installed
+with the development key cannot be updated in place by this release key.
+
+To publish, push a new version tag on the commit you want to distribute:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Use `vX.Y.Z` tags. The tag supplies the APK version name; the workflow run number
+supplies its increasing Android version code. After all checks and the signed
+build succeed, CI publishes a GitHub Release with the APK, SHA-256 checksum and
+generated notes. Tags fail if signing secrets are missing. Main/manual builds
+without any signing secrets produce only a development-signed test artifact.
+Release names are unique: use a new version tag for a new publication; the
+workflow does not overwrite an existing release. ARM64 targets modern Android
+devices (Android 7.0/API 24 or later); this APK does not support 32-bit devices.
+
+The Linux runner installs JDK 17, Android SDK 36, NDK `28.2.13676358` and CMake
+`3.22.1`. Before uploading, it verifies the APK signature, ARM64 libraries for
+Flutter/lc0/Stockfish, all nine Maia weights and ZIP integrity.
+
 ## Structure
 
 Feature-first organization:
