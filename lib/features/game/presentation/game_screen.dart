@@ -255,7 +255,7 @@ class _StatusBar extends ConsumerWidget {
     if (state.engineError != null) {
       return ErrorStateCard(
         message: state.engineError!,
-        onRetry: () => ref.read(gameControllerProvider.notifier).reset(),
+        onRetry: () => ref.read(gameControllerProvider.notifier).retryAiMove(),
       );
     }
 
