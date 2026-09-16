@@ -118,7 +118,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' }}
-        run: python3 scripts/configure_android_signing.py
+          SIGNING_REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
+        run: GITHUB_REF_TYPE="$SIGNING_REF_TYPE" python3 scripts/configure_android_signing.py
       - name: Gerar APK release
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
