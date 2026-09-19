@@ -39,7 +39,7 @@ class ChessBoardWidget extends ConsumerStatefulWidget {
 class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   Square? _draggingFrom;
-  Offset? _dragPosition;
+  final _dragPosition = ValueNotifier<Offset?>(null);
 
   // Casa tocada em `onDragDown`, antes do gesto ser reconhecido como
   // arraste — ver o comentário em `onDragDown` mais abaixo.
@@ -120,6 +120,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   void dispose() {
     _dismissPromotion();
     WidgetsBinding.instance.removeObserver(this);
+    _dragPosition.dispose();
     _slideController.dispose();
     super.dispose();
   }
@@ -141,7 +142,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     _gestureCancelled = true;
     _panDownSquare = null;
     _draggingFrom = null;
-    _dragPosition = null;
+    _dragPosition.value = null;
     _pendingDragReleaseSquare = null;
     _pendingDragReleaseFractional = null;
     _clearSlide();
@@ -326,15 +327,6 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
       child: LayoutBuilder(
         builder: (context, constraints) {
           final cellSize = constraints.maxWidth / 8;
-          final dragPosition = _dragPosition;
-          final hoveredSquare =
-              _draggingFrom != null &&
-                  dragPosition != null &&
-                  (Offset.zero & Size.square(cellSize * 8)).contains(
-                    dragPosition,
-                  )
-              ? _squareAtLocalPosition(dragPosition, cellSize)
-              : null;
 
           void handleDragDown(DragDownDetails details) {
             _gestureCancelled = false;
@@ -362,7 +354,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
             unawaited(HapticFeedback.selectionClick());
             setState(() {
               _draggingFrom = square;
-              _dragPosition = details.localPosition;
+              _dragPosition.value = details.localPosition;
               // Se a peça agarrada é a que ainda está "aterrissando" de um
               // voo em andamento, encerra o voo na hora: senão o overlay
               // de voo e o overlay de arraste desenhariam a mesma peça
@@ -375,15 +367,15 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
 
           void handleDragUpdate(DragUpdateDetails details) {
             if (_draggingFrom == null) return;
-            setState(() => _dragPosition = details.localPosition);
+            _dragPosition.value = details.localPosition;
           }
 
           void handleDragEnd(DragEndDetails details) {
             final from = _draggingFrom;
-            final pos = _dragPosition;
+            final pos = _dragPosition.value;
             setState(() {
               _draggingFrom = null;
-              _dragPosition = null;
+              _dragPosition.value = null;
             });
             if (from == null || pos == null) return;
             final releaseTopLeft = pos - Offset(cellSize / 2, cellSize / 2);
@@ -457,7 +449,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
 
           void handleDragCancel() => setState(() {
             _draggingFrom = null;
-            _dragPosition = null;
+            _dragPosition.value = null;
           });
 
           // Recognizers por eixo usam o mesmo limiar da ListView. Como o
@@ -492,11 +484,10 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               onHorizontalDragUpdate: handleDragUpdate,
               onHorizontalDragEnd: handleDragEnd,
               onHorizontalDragCancel: handleDragCancel,
-              child: Stack(
-                clipBehavior: Clip.none,
-                fit: StackFit.expand,
-                children: [
-                  GridView.builder(
+              child: ValueListenableBuilder<Offset?>(
+                valueListenable: _dragPosition,
+                child: RepaintBoundary(
+                  child: GridView.builder(
                     key: const Key('chess-board-grid'),
                     padding: EdgeInsets.zero,
                     physics: const NeverScrollableScrollPhysics(),
@@ -574,149 +565,172 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                       );
                     },
                   ),
-                  for (final flight in [
-                    if (_slideToSquare != null && _slidePiece != null)
-                      (
-                        from: _slideFromSquare,
-                        fractional: _slideFromFractional,
-                        to: _slideToSquare!,
-                        piece: _slidePiece!,
-                        key: 'board-slide-layer',
-                      ),
-                    if (_rookFrom != null &&
-                        _rookTo != null &&
-                        _rookPiece != null)
-                      (
-                        from: _rookFrom,
-                        fractional: null,
-                        to: _rookTo!,
-                        piece: _rookPiece!,
-                        key: 'board-rook-slide-layer',
-                      ),
-                  ])
-                    AnimatedBuilder(
-                      key: Key(flight.key),
-                      animation: _slideCurve,
-                      builder: (context, _) {
-                        final toSquare = flight.to;
-                        final piece = flight.piece;
-                        final fromOffset = flight.fractional != null
-                            ? flight.fractional! * cellSize
-                            : flight.from != null
-                            ? _squareTopLeft(
-                                flight.from!,
+                ),
+                builder: (context, dragPosition, board) {
+                  final hoveredSquare =
+                      _draggingFrom != null &&
+                          dragPosition != null &&
+                          (Offset.zero & Size.square(cellSize * 8)).contains(
+                            dragPosition,
+                          )
+                      ? _squareAtLocalPosition(dragPosition, cellSize)
+                      : null;
+
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    fit: StackFit.expand,
+                    children: [
+                      board!,
+                      for (final flight in [
+                        if (_slideToSquare != null && _slidePiece != null)
+                          (
+                            from: _slideFromSquare,
+                            fractional: _slideFromFractional,
+                            to: _slideToSquare!,
+                            piece: _slidePiece!,
+                            key: 'board-slide-layer',
+                          ),
+                        if (_rookFrom != null &&
+                            _rookTo != null &&
+                            _rookPiece != null)
+                          (
+                            from: _rookFrom,
+                            fractional: null,
+                            to: _rookTo!,
+                            piece: _rookPiece!,
+                            key: 'board-rook-slide-layer',
+                          ),
+                      ])
+                        AnimatedBuilder(
+                          key: Key(flight.key),
+                          animation: _slideCurve,
+                          builder: (context, _) {
+                            final toSquare = flight.to;
+                            final piece = flight.piece;
+                            final fromOffset = flight.fractional != null
+                                ? flight.fractional! * cellSize
+                                : flight.from != null
+                                ? _squareTopLeft(
+                                    flight.from!,
+                                    widget.orientation,
+                                    cellSize,
+                                  )
+                                : null;
+                            if (fromOffset == null) {
+                              return const SizedBox.shrink();
+                            }
+                            final toOffset = _squareTopLeft(
+                              toSquare,
+                              widget.orientation,
+                              cellSize,
+                            );
+                            final offset = Offset.lerp(
+                              fromOffset,
+                              toOffset,
+                              _slideCurve.value,
+                            )!;
+                            return Positioned(
+                              left: offset.dx,
+                              top: offset.dy,
+                              width: cellSize,
+                              height: cellSize,
+                              child: IgnorePointer(
+                                child: FractionallySizedBox(
+                                  widthFactor: _pieceScale,
+                                  heightFactor: _pieceScale,
+                                  child: ExcludeSemantics(
+                                    child: ChessPieceWidget(piece: piece),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      if (_promotionTo != null && _promotionPawn != null)
+                        Positioned.fromRect(
+                          rect:
+                              _squareTopLeft(
+                                _promotionTo!,
                                 widget.orientation,
                                 cellSize,
-                              )
-                            : null;
-                        if (fromOffset == null) return const SizedBox.shrink();
-                        final toOffset = _squareTopLeft(
-                          toSquare,
-                          widget.orientation,
-                          cellSize,
-                        );
-                        final offset = Offset.lerp(
-                          fromOffset,
-                          toOffset,
-                          _slideCurve.value,
-                        )!;
-                        return Positioned(
-                          left: offset.dx,
-                          top: offset.dy,
-                          width: cellSize,
-                          height: cellSize,
+                              ) &
+                              Size.square(cellSize),
                           child: IgnorePointer(
                             child: FractionallySizedBox(
                               widthFactor: _pieceScale,
                               heightFactor: _pieceScale,
                               child: ExcludeSemantics(
-                                child: ChessPieceWidget(piece: piece),
+                                child: ChessPieceWidget(
+                                  key: const Key('board-promotion-piece'),
+                                  piece: _promotionPawn!,
+                                ),
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  if (_promotionTo != null && _promotionPawn != null)
-                    Positioned.fromRect(
-                      rect:
-                          _squareTopLeft(
-                            _promotionTo!,
-                            widget.orientation,
-                            cellSize,
-                          ) &
-                          Size.square(cellSize),
-                      child: IgnorePointer(
-                        child: FractionallySizedBox(
-                          widthFactor: _pieceScale,
-                          heightFactor: _pieceScale,
-                          child: ExcludeSemantics(
-                            child: ChessPieceWidget(
-                              key: const Key('board-promotion-piece'),
-                              piece: _promotionPawn!,
+                        ),
+                      if (hoveredSquare != null)
+                        Positioned.fromRect(
+                          rect:
+                              _squareTopLeft(
+                                hoveredSquare,
+                                widget.orientation,
+                                cellSize,
+                              ) &
+                              Size.square(cellSize),
+                          child: IgnorePointer(
+                            child: Container(
+                              key: const Key('board-drag-target'),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.black87,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  if (hoveredSquare != null)
-                    Positioned.fromRect(
-                      rect:
-                          _squareTopLeft(
-                            hoveredSquare,
-                            widget.orientation,
-                            cellSize,
-                          ) &
-                          Size.square(cellSize),
-                      child: IgnorePointer(
-                        child: Container(
-                          key: const Key('board-drag-target'),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
+                      Positioned.fill(
+                        child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               border: Border.all(
-                                color: Colors.black87,
-                                width: 2,
+                                color: Theme.of(context).colorScheme.outline,
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.outline,
+                      // A peça ampliada fica acima de todas as camadas. O destino
+                      // continua sendo a casa sob o dedo, sem compensação visual.
+                      if (_draggingFrom != null && dragPosition != null)
+                        Positioned(
+                          key: const Key('board-drag-layer'),
+                          left: dragPosition.dx - cellSize / 2,
+                          top: dragPosition.dy - cellSize / 2,
+                          width: cellSize,
+                          height: cellSize,
+                          child: IgnorePointer(
+                            child: ExcludeSemantics(
+                              child: ChessPieceWidget(
+                                key: const Key('board-drag-piece'),
+                                piece: state.position.board.pieceAt(
+                                  _draggingFrom!,
+                                )!,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  // A peça ampliada fica acima de todas as camadas. O destino
-                  // continua sendo a casa sob o dedo, sem compensação visual.
-                  if (_draggingFrom != null && dragPosition != null)
-                    Positioned(
-                      key: const Key('board-drag-layer'),
-                      left: dragPosition.dx - cellSize / 2,
-                      top: dragPosition.dy - cellSize / 2,
-                      width: cellSize,
-                      height: cellSize,
-                      child: IgnorePointer(
-                        child: ExcludeSemantics(
-                          child: ChessPieceWidget(
-                            key: const Key('board-drag-piece'),
-                            piece: state.position.board.pieceAt(
-                              _draggingFrom!,
-                            )!,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
           );

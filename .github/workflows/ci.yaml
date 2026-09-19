@@ -49,7 +49,7 @@ jobs:
       # terceiros vendorizado (ver ADR-001) e não passa por este gate,
       # assim como já é excluído do analyzer em analysis_options.yaml.
       - name: dart format (somente código do app)
-        run: dart format --output=none --set-exit-if-changed lib test integration_test
+        run: dart format --output=none --set-exit-if-changed lib test integration_test test_driver
 
       - name: flutter test
         run: flutter test --coverage
