@@ -9,6 +9,9 @@ Future<void> showHintDialog(
   Future<HintResult> hintFuture, {
   Future<void> Function()? onClosed,
 }) async {
+  // A rota pode fechar antes do primeiro build. Observa erros desde já;
+  // o FutureBuilder continua recebendo o mesmo resultado quando montado.
+  hintFuture.ignore();
   try {
     await showDialog<void>(
       context: context,
