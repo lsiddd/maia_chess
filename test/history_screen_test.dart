@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:maia_chess/data/providers.dart';
+import 'package:maia_chess/features/game/presentation/chess_board_widget.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/features/history/presentation/history_screen.dart';
 
@@ -35,6 +36,22 @@ void main() {
     await tester.tap(find.byTooltip('Próximo'));
     await tester.pump();
     expect(find.text('1. e4'), findsOneWidget);
+    String boardFen() => tester
+        .widget<StaticChessBoardWidget>(find.byType(StaticChessBoardWidget))
+        .position
+        .fen;
+    expect(boardFen(), game.moves.first.fenAfter);
+    await tester.tap(find.byTooltip('Final'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lance 2 de 2'), findsOneWidget);
+    expect(boardFen(), game.currentFen);
+    await tester.tap(find.byTooltip('Anterior'));
+    await tester.pumpAndSettle();
+    expect(boardFen(), game.moves.first.fenAfter);
+    await tester.tap(find.byTooltip('Início'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lance 0 de 2'), findsOneWidget);
+    expect(boardFen(), game.initialFen);
   });
 }
 

@@ -204,6 +204,14 @@ class _ReplayScreenState extends ConsumerState<ReplayScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant ReplayScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.gameId != widget.gameId) {
+      _game = ref.read(gameRepositoryProvider).getGame(widget.gameId);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<StoredGame?>(
       future: _game,
@@ -252,6 +260,14 @@ class _ReplayView extends StatefulWidget {
 
 class _ReplayViewState extends State<_ReplayView> {
   int _ply = 0;
+
+  @override
+  void didUpdateWidget(covariant _ReplayView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _ply = oldWidget.game.id == widget.game.id
+        ? _ply.clamp(0, widget.replayed.positions.length - 1)
+        : 0;
+  }
 
   @override
   Widget build(BuildContext context) {
