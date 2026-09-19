@@ -96,6 +96,33 @@ void main() {
     },
   );
 
+  testWidgets('desfazer limpa seleção, histórico e posição visual juntos', (
+    tester,
+  ) async {
+    final container = await mount(tester);
+    final controller = container.read(gameControllerProvider.notifier);
+    await controller.attemptDragMove(
+      Square.e2,
+      Square.e4,
+      onPromotion: () async => null,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(square(1, 4));
+    await tester.pumpAndSettle();
+    expect(container.read(gameControllerProvider).selectedSquare, Square.e7);
+    await controller.undo();
+    await tester.pumpAndSettle();
+    final state = container.read(gameControllerProvider);
+    expect(state.selectedSquare, isNull);
+    expect(state.position.fen, Chess.initial.fen);
+    expect(state.uciHistory, isEmpty);
+    expect(state.sanHistory, isEmpty);
+    expect(state.positionHistory, isEmpty);
+    expect(find.byKey(const ValueKey('board-piece-6-4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('board-piece-4-4')), findsNothing);
+    expect(slide, findsNothing);
+  });
+
   for (final dragPromotion in [false, true]) {
     for (final action in [
       'choose',
