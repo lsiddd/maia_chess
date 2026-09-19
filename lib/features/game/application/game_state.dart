@@ -215,10 +215,16 @@ class GameState {
       final rank = piece!.color == Side.white ? Rank.first : Rank.eighth;
       final kingSideRook = Square.fromCoords(File.h, rank);
       final queenSideRook = Square.fromCoords(File.a, rank);
-      if (destinations.remove(kingSideRook)) {
+      // Um destino no canto também pode ser um passo normal do rei,
+      // inclusive uma fuga de xeque ou captura. Só converte rei -> torre
+      // quando a casa realmente contém uma torre da mesma cor.
+      final ownRook = Piece(color: piece.color, role: Role.rook);
+      if (position.board.pieceAt(kingSideRook) == ownRook &&
+          destinations.remove(kingSideRook)) {
         destinations.add(Square.fromCoords(File.g, rank));
       }
-      if (destinations.remove(queenSideRook)) {
+      if (position.board.pieceAt(queenSideRook) == ownRook &&
+          destinations.remove(queenSideRook)) {
         destinations.add(Square.fromCoords(File.c, rank));
       }
     }
