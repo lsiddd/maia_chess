@@ -181,6 +181,25 @@ class GameState {
         : GameResult.vitoriaPretas;
   }
 
+  /// Por que a partida terminou, ou `null` se ela ainda está em andamento.
+  ///
+  /// Repetição e regra dos 50 lances vêm antes das condições da biblioteca
+  /// de regras porque são adjudicadas aqui (ver [isDrawByFiftyMoveRule]) e
+  /// podem coincidir com uma posição que também é afogamento.
+  GameTermination? get termination {
+    if (!isGameOver) return null;
+    if (isDrawByThreefoldRepetition) {
+      return GameTermination.threefoldRepetition;
+    }
+    if (isDrawByFiftyMoveRule) return GameTermination.fiftyMoveRule;
+    if (position.isCheckmate) return GameTermination.checkmate;
+    if (position.isStalemate) return GameTermination.stalemate;
+    if (position.isInsufficientMaterial) {
+      return GameTermination.insufficientMaterial;
+    }
+    return GameTermination.unknown;
+  }
+
   /// Casas de destino legais a partir de [square], ou vazio se não houver
   /// peça do lado a mover ali.
   Iterable<Square> legalDestinationsFrom(Square square) {
