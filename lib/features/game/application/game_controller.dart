@@ -52,6 +52,7 @@ class GameController extends Notifier<GameState> {
   Completer<HintResult>? _hintCancellation;
   int _hintGeneration = 0;
   int _gameGeneration = 0;
+  bool _promotionPending = false;
   bool _isDisposed = false;
   Future<void> _persistenceTail = Future.value();
 
@@ -208,7 +209,8 @@ class GameController extends Notifier<GameState> {
     Square square, {
     required Future<Role?> Function() onPromotion,
   }) async {
-    if (state.isGameOver ||
+    if (_promotionPending ||
+        state.isGameOver ||
         state.isAiTurn ||
         state.aiThinking ||
         state.hintThinking) {
@@ -239,13 +241,16 @@ class GameController extends Notifier<GameState> {
       return;
     }
 
-    Role? promotion;
-    if (state.isPromotion(selected, square)) {
-      promotion = await onPromotion();
-      if (promotion == null) {
-        // Jogador cancelou a escolha de promoção: mantém a seleção.
-        return;
-      }
+    final position = state.position;
+    final generation = _gameGeneration;
+    final promotion = state.isPromotion(selected, square)
+        ? await _choosePromotion(onPromotion)
+        : null;
+    if (_isDisposed ||
+        generation != _gameGeneration ||
+        !identical(position, state.position) ||
+        (state.isPromotion(selected, square) && promotion == null)) {
+      return;
     }
 
     await _applyMove(
@@ -258,7 +263,8 @@ class GameController extends Notifier<GameState> {
   /// Seleciona a peça ao iniciar um arraste, sem alternar a seleção como
   /// um toque faria. Retorna falso quando a interação não está disponível.
   bool selectForDrag(Square square) {
-    if (state.isGameOver ||
+    if (_promotionPending ||
+        state.isGameOver ||
         state.isAiTurn ||
         state.aiThinking ||
         state.hintThinking ||
@@ -280,7 +286,8 @@ class GameController extends Notifier<GameState> {
     Square to, {
     required Future<Role?> Function() onPromotion,
   }) async {
-    if (state.isGameOver ||
+    if (_promotionPending ||
+        state.isGameOver ||
         state.isAiTurn ||
         state.aiThinking ||
         state.hintThinking) {
@@ -289,10 +296,16 @@ class GameController extends Notifier<GameState> {
     if (!_hasOwnPieceAt(from)) return;
     if (!state.legalDestinationsFrom(from).contains(to)) return;
 
-    Role? promotion;
-    if (state.isPromotion(from, to)) {
-      promotion = await onPromotion();
-      if (promotion == null) return;
+    final position = state.position;
+    final generation = _gameGeneration;
+    final promotion = state.isPromotion(from, to)
+        ? await _choosePromotion(onPromotion)
+        : null;
+    if (_isDisposed ||
+        generation != _gameGeneration ||
+        !identical(position, state.position) ||
+        (state.isPromotion(from, to) && promotion == null)) {
+      return;
     }
 
     await _applyMove(
@@ -300,6 +313,15 @@ class GameController extends Notifier<GameState> {
       actor: GameMoveActor.player,
     );
     await _maybePlayAiTurn();
+  }
+
+  Future<Role?> _choosePromotion(Future<Role?> Function() choose) async {
+    _promotionPending = true;
+    try {
+      return await choose();
+    } finally {
+      _promotionPending = false;
+    }
   }
 
   /// Aplica um lance já validado externamente (ex: sugestão de um motor

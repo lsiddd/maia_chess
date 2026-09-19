@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:maia_chess/data/providers.dart';
 import 'game_controller_test.dart' show FakeGameRepository;
 
@@ -61,6 +62,124 @@ void main() {
   final slide = find.byKey(const Key('board-slide-layer'));
   final rookSlide = find.byKey(const Key('board-rook-slide-layer'));
   final drag = find.byKey(const Key('board-drag-layer'));
+
+  test(
+    'resposta de promoção atrasada não modifica partida reiniciada',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          gameControllerProvider.overrideWith(
+            () => _PositionController(
+              Chess.fromSetup(Setup.parseFen('7k/P7/8/8/8/8/8/7K w - - 0 1')),
+            ),
+          ),
+          gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(gameControllerProvider.notifier);
+      final choice = Completer<Role?>();
+      final move = controller.attemptDragMove(
+        Square.a7,
+        Square.a8,
+        onPromotion: () => choice.future,
+      );
+      expect(controller.selectForDrag(Square.h1), isFalse);
+      await controller.reset();
+      choice.complete(Role.queen);
+      await move;
+      expect(
+        container.read(gameControllerProvider).position.fen,
+        Chess.initial.fen,
+      );
+      expect(container.read(gameControllerProvider).uciHistory, isEmpty);
+    },
+  );
+
+  for (final dragPromotion in [false, true]) {
+    for (final action in [
+      'choose',
+      'outside',
+      'back',
+      'flip',
+      'reset',
+      'background',
+    ]) {
+      testWidgets(
+        'promoção mantém peão no destino: drag=$dragPromotion, $action',
+        (tester) async {
+          final position = Chess.fromSetup(
+            Setup.parseFen('7k/P7/8/8/8/8/8/7K w - - 0 1'),
+          );
+          final orientation = ValueNotifier(Side.white);
+          addTearDown(orientation.dispose);
+          final container = await mount(
+            tester,
+            position: position,
+            orientation: orientation,
+          );
+          final controller = container.read(gameControllerProvider.notifier);
+          final destination = tester.getCenter(square(0, 0));
+          if (dragPromotion) {
+            final gesture = await tester.startGesture(
+              tester.getCenter(square(1, 0)),
+            );
+            await gesture.moveTo(destination);
+            await tester.pump();
+            await gesture.up();
+          } else {
+            await tester.tap(square(1, 0));
+            await tester.pump();
+            await tester.tap(square(0, 0));
+          }
+          await tester.pumpAndSettle();
+          expect(find.text('Promover peão para'), findsOneWidget);
+          final preview = find.byKey(const Key('board-promotion-piece'));
+          expect(tester.getCenter(preview), destination);
+          expect(find.byKey(const ValueKey('board-piece-1-0')), findsNothing);
+          expect(
+            container.read(gameControllerProvider).position.fen,
+            position.fen,
+          );
+          switch (action) {
+            case 'choose':
+              await tester.tap(find.byTooltip('Dama'));
+            case 'outside':
+              await tester.tapAt(const Offset(5, 5));
+            case 'back':
+              await tester.binding.handlePopRoute();
+            case 'flip':
+              orientation.value = Side.black;
+            case 'reset':
+              await controller.reset();
+            case 'background':
+              tester.binding.handleAppLifecycleStateChanged(
+                AppLifecycleState.inactive,
+              );
+          }
+          await tester.pumpAndSettle();
+          expect(preview, findsNothing);
+          expect(find.text('Promover peão para'), findsNothing);
+          final result = container.read(gameControllerProvider);
+          if (action == 'choose') {
+            expect(result.position.board.pieceAt(Square.a8)?.role, Role.queen);
+            expect(result.uciHistory, ['a7a8q']);
+          } else {
+            expect(result.uciHistory, isEmpty);
+            expect(
+              result.position.fen,
+              action == 'reset' ? Chess.initial.fen : position.fen,
+            );
+          }
+          if (action == 'background')
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
 
   for (final cancel in ['flip', 'background', 'reset', 'move', 'pointer']) {
     testWidgets('arraste cancelado com segurança: $cancel', (tester) async {
