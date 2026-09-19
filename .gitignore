@@ -57,3 +57,6 @@ native/**/.cxx/
 native/**/example/build/
 native/**/example/.dart_tool/
 native/**/*.iml
+
+# Cache de sessões do compilador Kotlin.
+/android/.kotlin/
