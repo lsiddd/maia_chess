@@ -2,6 +2,7 @@ import 'package:dartchess/dartchess.dart';
 
 import '../../../core/constants/piece_assets.dart';
 import '../application/game_state.dart';
+import '../../../data/repositories/game_repository.dart';
 
 String boardSquareLabel(Square square, Piece? piece) =>
     '${square.name}, ${piece == null ? 'vazia' : pieceLabelPt(piece)}';
@@ -28,3 +29,16 @@ String lastMoveAnnouncement(GameState state) {
   }
   return '$description${san.endsWith('#') ? ', xeque-mate' : ''}.';
 }
+
+/// Resultado persistente, também usado no diálogo de encerramento.
+String gameResultDescription(GameState state) => switch (state.termination) {
+  GameTermination.checkmate =>
+    state.result == GameResult.vitoriaBrancas
+        ? 'Xeque-mate! Brancas vencem.'
+        : 'Xeque-mate! Pretas vencem.',
+  GameTermination.stalemate => 'Empate por afogamento.',
+  GameTermination.insufficientMaterial => 'Empate por material insuficiente.',
+  GameTermination.threefoldRepetition => 'Empate por repetição tripla.',
+  GameTermination.fiftyMoveRule => 'Empate pela regra dos 50 lances.',
+  _ => state.isGameOver ? 'Partida encerrada: empate.' : '',
+};
