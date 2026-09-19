@@ -72,6 +72,23 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   Piece? _rookPiece;
   bool _gestureCancelled = false;
   int _interactionGeneration = 0;
+  Square? _promotionFrom;
+  Square? _promotionTo;
+  Piece? _promotionPawn;
+  DialogRoute<Role>? _promotionRoute;
+
+  void _dismissPromotion() {
+    _promotionFrom = null;
+    _promotionTo = null;
+    _promotionPawn = null;
+    final route = _promotionRoute;
+    _promotionRoute = null;
+    if (route != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (route.isActive) route.navigator?.removeRoute(route);
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -101,6 +118,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
 
   @override
   void dispose() {
+    _dismissPromotion();
     WidgetsBinding.instance.removeObserver(this);
     _slideController.dispose();
     super.dispose();
@@ -118,6 +136,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   }
 
   void _cancelInteraction() {
+    _dismissPromotion();
     _interactionGeneration++;
     _gestureCancelled = true;
     _panDownSquare = null;
@@ -260,8 +279,48 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
         ? state.position.board.kingOf(state.position.turn)
         : null;
 
-    Future<Role?> askPromotion() =>
-        showPromotionDialog(context, state.position.turn);
+    Future<Role?> askPromotion(Square from, Square to) async {
+      final generation = _interactionGeneration;
+      final release = _squareTopLeft(to, widget.orientation, 1);
+      setState(() {
+        _clearSlide();
+        _promotionFrom = from;
+        _promotionTo = to;
+        _promotionPawn = state.position.board.pieceAt(from);
+        _pendingDragReleaseSquare = from;
+        _pendingDragReleaseFractional = release;
+      });
+      final choice = await showPromotionDialog(
+        context,
+        state.position.turn,
+        onRoute: (route) => _promotionRoute = route,
+      );
+      if (!mounted || generation != _interactionGeneration) return null;
+      setState(() {
+        _promotionRoute = null;
+        _promotionFrom = null;
+        _promotionTo = null;
+        _promotionPawn = null;
+      });
+      if (choice == null) {
+        _pendingDragReleaseSquare = null;
+        _pendingDragReleaseFractional = null;
+        _startSlide(
+          fromFractional: release,
+          to: from,
+          piece: state.position.board.pieceAt(from)!,
+        );
+      }
+      return choice;
+    }
+
+    Future<void> tapSquare(Square square) {
+      final from = ref.read(gameControllerProvider).selectedSquare;
+      return controller.onSquareTapped(
+        square,
+        onPromotion: () => askPromotion(from!, square),
+      );
+    }
 
     return _FittedSquare(
       child: LayoutBuilder(
@@ -357,7 +416,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                     from,
                     to,
                     onPromotion: () async {
-                      final choice = await askPromotion();
+                      final choice = await askPromotion(from, to);
                       if (!mounted ||
                           generation != _interactionGeneration ||
                           !identical(
@@ -414,9 +473,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                   details.localPosition,
                   cellSize,
                 );
-                unawaited(
-                  controller.onSquareTapped(square, onPromotion: askPromotion),
-                );
+                unawaited(tapSquare(square));
               },
               // `onDragStart` só dispara depois que o movimento já superou o
               // limiar de reconhecimento do gesto (slop) — em casas pequenas
@@ -461,7 +518,10 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           (square.file.value + square.rank.value).isEven;
                       final isSelected = square == selected;
                       final isLegalTarget = legalDestinations.contains(square);
-                      final isBeingDragged = square == _draggingFrom;
+                      final isBeingDragged =
+                          square == _draggingFrom ||
+                          square == _promotionFrom ||
+                          square == _promotionTo;
                       // Enquanto a peça está "voando" para esta casa, a
                       // versão estática dela fica oculta (a peça visível é só
                       // a que está no overlay de voo, abaixo).
@@ -490,12 +550,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           if (square == checkSquare) 'Xeque',
                         ].join(', '),
                         onTap: canInteract
-                            ? () => unawaited(
-                                controller.onSquareTapped(
-                                  square,
-                                  onPromotion: askPromotion,
-                                ),
-                              )
+                            ? () => unawaited(tapSquare(square))
                             : null,
                         child: _SquareVisual(
                           key: ValueKey('board-square-$displayRow-$displayCol'),
@@ -581,6 +636,28 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           ),
                         );
                       },
+                    ),
+                  if (_promotionTo != null && _promotionPawn != null)
+                    Positioned.fromRect(
+                      rect:
+                          _squareTopLeft(
+                            _promotionTo!,
+                            widget.orientation,
+                            cellSize,
+                          ) &
+                          Size.square(cellSize),
+                      child: IgnorePointer(
+                        child: FractionallySizedBox(
+                          widthFactor: _pieceScale,
+                          heightFactor: _pieceScale,
+                          child: ExcludeSemantics(
+                            child: ChessPieceWidget(
+                              key: const Key('board-promotion-piece'),
+                              piece: _promotionPawn!,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   if (hoveredSquare != null)
                     Positioned.fromRect(

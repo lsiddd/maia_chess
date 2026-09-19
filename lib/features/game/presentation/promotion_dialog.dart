@@ -8,8 +8,12 @@ const _promotionChoices = [Role.queen, Role.rook, Role.bishop, Role.knight];
 
 /// Pergunta ao jogador qual peça um peão vira ao promover. Retorna `null`
 /// se o jogador cancelar (ex: toque fora do diálogo).
-Future<Role?> showPromotionDialog(BuildContext context, Side side) {
-  return showDialog<Role>(
+Future<Role?> showPromotionDialog(
+  BuildContext context,
+  Side side, {
+  void Function(DialogRoute<Role>)? onRoute,
+}) {
+  final route = DialogRoute<Role>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Promover peão para'),
@@ -27,4 +31,6 @@ Future<Role?> showPromotionDialog(BuildContext context, Side side) {
       ),
     ),
   );
+  onRoute?.call(route);
+  return Navigator.of(context, rootNavigator: true).push(route);
 }
