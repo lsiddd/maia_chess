@@ -29,6 +29,10 @@ void main() {
       fen: '7k/8/6K1/8/8/8/8/R7 w - - 100 80',
       label: 'Empate pela regra dos 50 lances.',
     ),
+    (
+      fen: '7k/6Q1/5K2/8/8/8/8/8 b - - 100 80',
+      label: 'Xeque-mate! Brancas vencem.',
+    ),
   ]) {
     testWidgets('resultado persistente: ${example.label}', (tester) async {
       await tester.pumpWidget(
