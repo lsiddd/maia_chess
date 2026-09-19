@@ -11,6 +11,22 @@ import 'package:maia_chess/features/hints/domain/hint_result.dart';
 import 'package:maia_chess/features/hints/presentation/hint_dialog.dart';
 
 void main() {
+  testWidgets('dica fechada antes do primeiro build observa erro tardio', (
+    tester,
+  ) async {
+    final calculation = Completer<HintResult>();
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: Text('origem'))),
+    );
+    final context = tester.element(find.text('origem'));
+    final dialog = showHintDialog(context, calculation.future);
+    Navigator.of(context).pop();
+    calculation.completeError(StateError('cancelado antes do build'));
+    await tester.pumpAndSettle();
+    await dialog;
+    expect(tester.takeException(), isNull);
+  });
+
   for (final close in ['button', 'outside', 'back']) {
     testWidgets('fechar dica cancela cálculo: $close', (tester) async {
       final calculation = Completer<HintResult>();
