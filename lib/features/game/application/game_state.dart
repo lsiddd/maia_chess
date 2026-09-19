@@ -171,6 +171,11 @@ class GameState {
 
   GameResult get result {
     if (!isGameOver) return GameResult.emAndamento;
+    if (position.isCheckmate) {
+      return position.turn == Side.white
+          ? GameResult.vitoriaPretas
+          : GameResult.vitoriaBrancas;
+    }
     if (isDrawByFiftyMoveRule || isDrawByThreefoldRepetition) {
       return GameResult.empate;
     }
@@ -183,16 +188,15 @@ class GameState {
 
   /// Por que a partida terminou, ou `null` se ela ainda está em andamento.
   ///
-  /// Repetição e regra dos 50 lances vêm antes das condições da biblioteca
-  /// de regras porque são adjudicadas aqui (ver [isDrawByFiftyMoveRule]) e
-  /// podem coincidir com uma posição que também é afogamento.
+  /// Xeque-mate prevalece sobre os contadores de empate. Repetição e a
+  /// regra dos 50 lances são adjudicadas aqui, além das regras da biblioteca.
   GameTermination? get termination {
     if (!isGameOver) return null;
+    if (position.isCheckmate) return GameTermination.checkmate;
     if (isDrawByThreefoldRepetition) {
       return GameTermination.threefoldRepetition;
     }
     if (isDrawByFiftyMoveRule) return GameTermination.fiftyMoveRule;
-    if (position.isCheckmate) return GameTermination.checkmate;
     if (position.isStalemate) return GameTermination.stalemate;
     if (position.isInsufficientMaterial) {
       return GameTermination.insufficientMaterial;
