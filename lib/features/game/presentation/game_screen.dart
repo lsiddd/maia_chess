@@ -11,6 +11,7 @@ import '../../hints/presentation/hint_dialog.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
 import 'chess_board_widget.dart';
+import 'board_accessibility.dart';
 
 /// Tela de uma partida local ou contra a IA Maia.
 class GameScreen extends ConsumerStatefulWidget {
@@ -270,7 +271,10 @@ class _StatusBar extends ConsumerWidget {
     return Semantics(
       key: const Key('turn-status'),
       liveRegion: true,
-      label: '$turnLabel${state.position.isCheck ? ', xeque' : ''}',
+      label: [
+        lastMoveAnnouncement(state),
+        '$turnLabel${state.position.isCheck ? ', xeque' : ''}',
+      ].where((part) => part.isNotEmpty).join(' '),
       child: Card(
         margin: EdgeInsets.zero,
         elevation: 0,

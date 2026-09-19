@@ -810,20 +810,8 @@ class GameController extends Notifier<GameState> {
     GameResult.empate => StoredGameResult.draw,
   };
 
-  GameTermination _termination(GameState game) {
-    if (game.isDrawByThreefoldRepetition) {
-      return GameTermination.threefoldRepetition;
-    }
-    if (game.isDrawByFiftyMoveRule) {
-      return GameTermination.fiftyMoveRule;
-    }
-    if (game.position.isCheckmate) return GameTermination.checkmate;
-    if (game.position.isStalemate) return GameTermination.stalemate;
-    if (game.position.isInsufficientMaterial) {
-      return GameTermination.insufficientMaterial;
-    }
-    return GameTermination.unknown;
-  }
+  GameTermination _termination(GameState game) =>
+      game.termination ?? GameTermination.unknown;
 
   /// Aguarda gravações pendentes; usado por testes e pelo encerramento
   /// controlado de fluxos que precisam de durabilidade determinística.

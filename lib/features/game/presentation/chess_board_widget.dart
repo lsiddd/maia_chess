@@ -12,6 +12,7 @@ import '../application/game_state.dart';
 import '../application/move_feedback.dart';
 import 'chess_piece_widget.dart';
 import 'promotion_dialog.dart';
+import 'board_accessibility.dart';
 
 /// Tabuleiro interativo: lances por toque (seleciona origem, toca destino)
 /// ou por arrastar a peça até a casa de destino.
@@ -36,7 +37,7 @@ class ChessBoardWidget extends ConsumerStatefulWidget {
 }
 
 class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   Square? _draggingFrom;
   Offset? _dragPosition;
 
@@ -66,10 +67,16 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   Offset? _slideFromFractional;
   Square? _slideToSquare;
   Piece? _slidePiece;
+  Square? _rookFrom;
+  Square? _rookTo;
+  Piece? _rookPiece;
+  bool _gestureCancelled = false;
+  int _interactionGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _slideController = AnimationController(
       vsync: this,
       duration: AppMotion.slow,
@@ -85,14 +92,51 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
         _slideFromFractional = null;
         _slideToSquare = null;
         _slidePiece = null;
+        _rookFrom = null;
+        _rookTo = null;
+        _rookPiece = null;
       });
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _slideController.dispose();
     super.dispose();
+  }
+
+  void _clearSlide() {
+    _slideController.stop();
+    _slideFromSquare = null;
+    _slideFromFractional = null;
+    _slideToSquare = null;
+    _slidePiece = null;
+    _rookFrom = null;
+    _rookTo = null;
+    _rookPiece = null;
+  }
+
+  void _cancelInteraction() {
+    _interactionGeneration++;
+    _gestureCancelled = true;
+    _panDownSquare = null;
+    _draggingFrom = null;
+    _dragPosition = null;
+    _pendingDragReleaseSquare = null;
+    _pendingDragReleaseFractional = null;
+    _clearSlide();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChessBoardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orientation != widget.orientation) _cancelInteraction();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) setState(_cancelInteraction);
   }
 
   Square _squareAtLocalPosition(Offset local, double cellSize) {
@@ -110,8 +154,15 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     Offset? fromFractional,
     required Square to,
     required Piece piece,
+    Square? rookFrom,
+    Square? rookTo,
+    Piece? rookPiece,
   }) {
     setState(() {
+      _clearSlide();
+      _rookFrom = rookFrom;
+      _rookTo = rookTo;
+      _rookPiece = rookPiece;
       _slideFromSquare = fromSquare;
       _slideFromFractional = fromFractional;
       _slideToSquare = to;
@@ -133,7 +184,17 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     // durante a fase de build em si.
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
       final previousLength = previous?.uciHistory.length ?? 0;
-      if (next.uciHistory.length != previousLength + 1) {
+      if (previous?.gameId != next.gameId) {
+        setState(_cancelInteraction);
+        return;
+      }
+      if (identical(previous?.position, next.position)) return;
+      final isNewMove =
+          next.uciHistory.length == previousLength + 1 &&
+          next.positionHistory.isNotEmpty &&
+          identical(next.positionHistory.last, previous?.position);
+      if (!isNewMove) {
+        setState(_cancelInteraction);
         return; // reinício, undo ou restauração: não é "um lance novo".
       }
       if (next.sanHistory.isNotEmpty) {
@@ -142,24 +203,43 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
 
       final move = Move.parse(next.uciHistory.last);
       if (move is! NormalMove) return;
-      final movedPiece = next.position.board.pieceAt(move.to);
+      final oldPosition = previous!.position;
+      final isCastle =
+          oldPosition.board.pieceAt(move.from)?.role == Role.king &&
+          (next.sanHistory.last.startsWith('O-O'));
+      final side = move.to > move.from ? CastlingSide.king : CastlingSide.queen;
+      final destination = isCastle
+          ? kingCastlesTo(oldPosition.turn, side)
+          : move.to;
+      final rookFrom = isCastle
+          ? oldPosition.castles.rookOf(oldPosition.turn, side)
+          : null;
+      final rookTo = isCastle ? rookCastlesTo(oldPosition.turn, side) : null;
+      final movedPiece = next.position.board.pieceAt(destination);
       if (movedPiece == null) return;
 
       final dragRelease = _pendingDragReleaseSquare == move.from
           ? _pendingDragReleaseFractional
           : null;
-      _pendingDragReleaseSquare = null;
-      _pendingDragReleaseFractional = null;
+      _cancelInteraction();
 
       _startSlide(
         fromSquare: dragRelease == null ? move.from : null,
         fromFractional: dragRelease,
-        to: move.to,
+        to: destination,
         piece: movedPiece,
+        rookFrom: rookFrom,
+        rookTo: rookTo,
+        rookPiece: rookTo == null ? null : next.position.board.pieceAt(rookTo),
       );
     });
 
     final selected = state.selectedSquare;
+    final canInteract =
+        !state.isGameOver &&
+        !state.isAiTurn &&
+        !state.aiThinking &&
+        !state.hintThinking;
     final legalDestinations = selected != null
         ? state.legalDestinationsFrom(selected).toSet()
         : const <Square>{};
@@ -198,6 +278,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               : null;
 
           void handleDragDown(DragDownDetails details) {
+            _gestureCancelled = false;
             _panDownSquare = _squareAtLocalPosition(
               details.localPosition,
               cellSize,
@@ -205,6 +286,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
           }
 
           void handleDragStart(DragStartDetails details) {
+            if (_gestureCancelled) return;
             final downSquare = _panDownSquare;
             _panDownSquare = null;
             // Não bloqueia por um voo de outro lance ainda em animação: o
@@ -226,12 +308,8 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
               // voo em andamento, encerra o voo na hora: senão o overlay
               // de voo e o overlay de arraste desenhariam a mesma peça
               // sobreposta nesta casa até a animação acabar sozinha.
-              if (_slideToSquare == square) {
-                _slideController.stop();
-                _slideFromSquare = null;
-                _slideFromFractional = null;
-                _slideToSquare = null;
-                _slidePiece = null;
+              if (_slideToSquare == square || _rookTo == square) {
+                _clearSlide();
               }
             });
           }
@@ -271,24 +349,42 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
             final to = _squareAtLocalPosition(pos, cellSize);
             _pendingDragReleaseSquare = from;
             _pendingDragReleaseFractional = releaseTopLeft / cellSize;
-            final beforeLength = state.uciHistory.length;
+            final generation = _interactionGeneration;
+            final beforePosition = state.position;
             unawaited(
               controller
-                  .attemptDragMove(from, to, onPromotion: askPromotion)
+                  .attemptDragMove(
+                    from,
+                    to,
+                    onPromotion: () async {
+                      final choice = await askPromotion();
+                      if (!mounted ||
+                          generation != _interactionGeneration ||
+                          !identical(
+                            ref.read(gameControllerProvider).position,
+                            beforePosition,
+                          )) {
+                        return null;
+                      }
+                      return choice;
+                    },
+                  )
                   .then((_) {
                     // Se o lance foi aceito, `ref.listen` acima já
                     // consumiu os campos pendentes e iniciou o voo até o
                     // destino — nada a fazer aqui. Se não (lance ilegal
                     // ou promoção cancelada), solta a peça de volta para
                     // a própria casa em vez de ela só reaparecer ali.
-                    if (!mounted || _pendingDragReleaseSquare != from) {
+                    if (!mounted ||
+                        generation != _interactionGeneration ||
+                        _pendingDragReleaseSquare != from) {
                       return;
                     }
                     final release = _pendingDragReleaseFractional;
                     _pendingDragReleaseSquare = null;
                     _pendingDragReleaseFractional = null;
                     final current = ref.read(gameControllerProvider);
-                    if (current.uciHistory.length > beforeLength) return;
+                    if (!identical(current.position, beforePosition)) return;
                     final piece = current.position.board.pieceAt(from);
                     if (piece == null || release == null) return;
                     _startSlide(
@@ -308,184 +404,243 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
           // Recognizers por eixo usam o mesmo limiar da ListView. Como o
           // tabuleiro é descendente, ganha a disputa antes da rolagem.
           // Pan exige mais deslocamento e perdia em movimentos graduais.
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (details) {
-              final square = _squareAtLocalPosition(
-                details.localPosition,
-                cellSize,
-              );
-              unawaited(
-                controller.onSquareTapped(square, onPromotion: askPromotion),
-              );
-            },
-            // `onDragStart` só dispara depois que o movimento já superou o
-            // limiar de reconhecimento do gesto (slop) — em casas pequenas
-            // esse limiar pode corresponder a quase uma célula inteira, e
-            // por essa altura `details.localPosition` já pode estar sobre a
-            // casa vizinha. `onDragDown` fixa a casa de fato tocada, antes de
-            // qualquer deslocamento, para o arraste sempre pegar a peça
-            // correta mesmo que o gesto só seja "aceito" mais adiante.
-            onVerticalDragDown: handleDragDown,
-            onVerticalDragStart: handleDragStart,
-            onVerticalDragUpdate: handleDragUpdate,
-            onVerticalDragEnd: handleDragEnd,
-            onVerticalDragCancel: handleDragCancel,
-            onHorizontalDragDown: handleDragDown,
-            onHorizontalDragStart: handleDragStart,
-            onHorizontalDragUpdate: handleDragUpdate,
-            onHorizontalDragEnd: handleDragEnd,
-            onHorizontalDragCancel: handleDragCancel,
-            child: Stack(
-              clipBehavior: Clip.none,
-              fit: StackFit.expand,
-              children: [
-                GridView.builder(
-                  key: const Key('chess-board-grid'),
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 8,
-                  ),
-                  itemCount: 64,
-                  itemBuilder: (context, index) {
-                    final displayRow = index ~/ 8;
-                    final displayCol = index % 8;
-                    final square = _squareAt(
-                      displayRow,
-                      displayCol,
-                      widget.orientation,
-                    );
-                    final piece = state.position.board.pieceAt(square);
-                    final isDark =
-                        (square.file.value + square.rank.value).isEven;
-                    final isSelected = square == selected;
-                    final isLegalTarget = legalDestinations.contains(square);
-                    final isBeingDragged = square == _draggingFrom;
-                    // Enquanto a peça está "voando" para esta casa, a
-                    // versão estática dela fica oculta (a peça visível é só
-                    // a que está no overlay de voo, abaixo).
-                    final isFlightDestination = _slideToSquare == square;
-                    // A casa de onde a peça acabou de sair não deve
-                    // esmaecer sozinha: o voo já cobre esse efeito, então a
-                    // troca para "vazia" aqui é instantânea.
-                    final isFlightOrigin =
-                        _slideFromSquare == square && _slideToSquare != null;
-
-                    return _SquareVisual(
-                      key: ValueKey('board-square-$displayRow-$displayCol'),
-                      piece: (isBeingDragged || isFlightDestination)
-                          ? null
-                          : piece,
-                      pieceKey: piece == null
-                          ? null
-                          : ValueKey('board-piece-$displayRow-$displayCol'),
-                      isDark: isDark,
-                      isSelected: isSelected,
-                      isLegalTarget: isLegalTarget,
-                      isLastMove:
-                          square == lastMoveFrom || square == lastMoveTo,
-                      isCheck: square == checkSquare,
-                      instantExit: isFlightOrigin,
-                    );
-                  },
-                ),
-                if (_slideToSquare != null && _slidePiece != null)
-                  AnimatedBuilder(
-                    key: const Key('board-slide-layer'),
-                    animation: _slideCurve,
-                    builder: (context, _) {
-                      final toSquare = _slideToSquare;
-                      final piece = _slidePiece;
-                      if (toSquare == null || piece == null) {
-                        return const SizedBox.shrink();
-                      }
-                      final fromOffset = _slideFromFractional != null
-                          ? _slideFromFractional! * cellSize
-                          : _slideFromSquare != null
-                          ? _squareTopLeft(
-                              _slideFromSquare!,
-                              widget.orientation,
-                              cellSize,
-                            )
-                          : null;
-                      if (fromOffset == null) return const SizedBox.shrink();
-                      final toOffset = _squareTopLeft(
-                        toSquare,
+          return Listener(
+            onPointerCancel: (_) => setState(_cancelInteraction),
+            child: GestureDetector(
+              excludeFromSemantics: true,
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                final square = _squareAtLocalPosition(
+                  details.localPosition,
+                  cellSize,
+                );
+                unawaited(
+                  controller.onSquareTapped(square, onPromotion: askPromotion),
+                );
+              },
+              // `onDragStart` só dispara depois que o movimento já superou o
+              // limiar de reconhecimento do gesto (slop) — em casas pequenas
+              // esse limiar pode corresponder a quase uma célula inteira, e
+              // por essa altura `details.localPosition` já pode estar sobre a
+              // casa vizinha. `onDragDown` fixa a casa de fato tocada, antes de
+              // qualquer deslocamento, para o arraste sempre pegar a peça
+              // correta mesmo que o gesto só seja "aceito" mais adiante.
+              onVerticalDragDown: handleDragDown,
+              onVerticalDragStart: handleDragStart,
+              onVerticalDragUpdate: handleDragUpdate,
+              onVerticalDragEnd: handleDragEnd,
+              onVerticalDragCancel: handleDragCancel,
+              onHorizontalDragDown: handleDragDown,
+              onHorizontalDragStart: handleDragStart,
+              onHorizontalDragUpdate: handleDragUpdate,
+              onHorizontalDragEnd: handleDragEnd,
+              onHorizontalDragCancel: handleDragCancel,
+              child: Stack(
+                clipBehavior: Clip.none,
+                fit: StackFit.expand,
+                children: [
+                  GridView.builder(
+                    key: const Key('chess-board-grid'),
+                    padding: EdgeInsets.zero,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 8,
+                        ),
+                    itemCount: 64,
+                    itemBuilder: (context, index) {
+                      final displayRow = index ~/ 8;
+                      final displayCol = index % 8;
+                      final square = _squareAt(
+                        displayRow,
+                        displayCol,
                         widget.orientation,
-                        cellSize,
                       );
-                      final offset = Offset.lerp(
-                        fromOffset,
-                        toOffset,
-                        _slideCurve.value,
-                      )!;
-                      return Positioned(
-                        left: offset.dx,
-                        top: offset.dy,
-                        width: cellSize,
-                        height: cellSize,
-                        child: IgnorePointer(
-                          child: FractionallySizedBox(
-                            widthFactor: _pieceScale,
-                            heightFactor: _pieceScale,
-                            child: ChessPieceWidget(piece: piece),
-                          ),
+                      final piece = state.position.board.pieceAt(square);
+                      final isDark =
+                          (square.file.value + square.rank.value).isEven;
+                      final isSelected = square == selected;
+                      final isLegalTarget = legalDestinations.contains(square);
+                      final isBeingDragged = square == _draggingFrom;
+                      // Enquanto a peça está "voando" para esta casa, a
+                      // versão estática dela fica oculta (a peça visível é só
+                      // a que está no overlay de voo, abaixo).
+                      final isFlightDestination =
+                          _slideToSquare == square || _rookTo == square;
+                      // A casa de onde a peça acabou de sair não deve
+                      // esmaecer sozinha: o voo já cobre esse efeito, então a
+                      // troca para "vazia" aqui é instantânea.
+                      final isFlightOrigin =
+                          (_slideFromSquare == square &&
+                              _slideToSquare != null) ||
+                          _rookFrom == square;
+
+                      return Semantics(
+                        key: ValueKey('board-semantics-${square.name}'),
+                        container: true,
+                        excludeSemantics: true,
+                        label: boardSquareLabel(square, piece),
+                        selected: isSelected,
+                        button: true,
+                        enabled: canInteract,
+                        value: [
+                          if (isLegalTarget) 'Destino legal',
+                          if (square == lastMoveFrom || square == lastMoveTo)
+                            'Último lance',
+                          if (square == checkSquare) 'Xeque',
+                        ].join(', '),
+                        onTap: canInteract
+                            ? () => unawaited(
+                                controller.onSquareTapped(
+                                  square,
+                                  onPromotion: askPromotion,
+                                ),
+                              )
+                            : null,
+                        child: _SquareVisual(
+                          key: ValueKey('board-square-$displayRow-$displayCol'),
+                          piece: (isBeingDragged || isFlightDestination)
+                              ? null
+                              : piece,
+                          pieceKey: piece == null
+                              ? null
+                              : ValueKey('board-piece-$displayRow-$displayCol'),
+                          isDark: isDark,
+                          isSelected: isSelected,
+                          isLegalTarget: isLegalTarget,
+                          isLastMove:
+                              square == lastMoveFrom || square == lastMoveTo,
+                          isCheck: square == checkSquare,
+                          instantExit:
+                              isFlightOrigin ||
+                              isBeingDragged ||
+                              isFlightDestination,
                         ),
                       );
                     },
                   ),
-                if (hoveredSquare != null)
-                  Positioned.fromRect(
-                    rect:
-                        _squareTopLeft(
-                          hoveredSquare,
+                  for (final flight in [
+                    if (_slideToSquare != null && _slidePiece != null)
+                      (
+                        from: _slideFromSquare,
+                        fractional: _slideFromFractional,
+                        to: _slideToSquare!,
+                        piece: _slidePiece!,
+                        key: 'board-slide-layer',
+                      ),
+                    if (_rookFrom != null &&
+                        _rookTo != null &&
+                        _rookPiece != null)
+                      (
+                        from: _rookFrom,
+                        fractional: null,
+                        to: _rookTo!,
+                        piece: _rookPiece!,
+                        key: 'board-rook-slide-layer',
+                      ),
+                  ])
+                    AnimatedBuilder(
+                      key: Key(flight.key),
+                      animation: _slideCurve,
+                      builder: (context, _) {
+                        final toSquare = flight.to;
+                        final piece = flight.piece;
+                        final fromOffset = flight.fractional != null
+                            ? flight.fractional! * cellSize
+                            : flight.from != null
+                            ? _squareTopLeft(
+                                flight.from!,
+                                widget.orientation,
+                                cellSize,
+                              )
+                            : null;
+                        if (fromOffset == null) return const SizedBox.shrink();
+                        final toOffset = _squareTopLeft(
+                          toSquare,
                           widget.orientation,
                           cellSize,
-                        ) &
-                        Size.square(cellSize),
-                    child: IgnorePointer(
-                      child: Container(
-                        key: const Key('board-drag-target'),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: DecoratedBox(
+                        );
+                        final offset = Offset.lerp(
+                          fromOffset,
+                          toOffset,
+                          _slideCurve.value,
+                        )!;
+                        return Positioned(
+                          left: offset.dx,
+                          top: offset.dy,
+                          width: cellSize,
+                          height: cellSize,
+                          child: IgnorePointer(
+                            child: FractionallySizedBox(
+                              widthFactor: _pieceScale,
+                              heightFactor: _pieceScale,
+                              child: ExcludeSemantics(
+                                child: ChessPieceWidget(piece: piece),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  if (hoveredSquare != null)
+                    Positioned.fromRect(
+                      rect:
+                          _squareTopLeft(
+                            hoveredSquare,
+                            widget.orientation,
+                            cellSize,
+                          ) &
+                          Size.square(cellSize),
+                      child: IgnorePointer(
+                        child: Container(
+                          key: const Key('board-drag-target'),
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.black87, width: 2),
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Colors.black87,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline,
                           ),
                         ),
                       ),
                     ),
                   ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline,
+                  // A peça ampliada fica acima de todas as camadas. O destino
+                  // continua sendo a casa sob o dedo, sem compensação visual.
+                  if (_draggingFrom != null && dragPosition != null)
+                    Positioned(
+                      key: const Key('board-drag-layer'),
+                      left: dragPosition.dx - cellSize / 2,
+                      top: dragPosition.dy - cellSize / 2,
+                      width: cellSize,
+                      height: cellSize,
+                      child: IgnorePointer(
+                        child: ExcludeSemantics(
+                          child: ChessPieceWidget(
+                            key: const Key('board-drag-piece'),
+                            piece: state.position.board.pieceAt(
+                              _draggingFrom!,
+                            )!,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                // A peça ampliada fica acima de todas as camadas. O destino
-                // continua sendo a casa sob o dedo, sem compensação visual.
-                if (_draggingFrom != null && dragPosition != null)
-                  Positioned(
-                    key: const Key('board-drag-layer'),
-                    left: dragPosition.dx - cellSize / 2,
-                    top: dragPosition.dy - cellSize / 2,
-                    width: cellSize,
-                    height: cellSize,
-                    child: IgnorePointer(
-                      child: ChessPieceWidget(
-                        key: const Key('board-drag-piece'),
-                        piece: state.position.board.pieceAt(_draggingFrom!)!,
-                      ),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -560,17 +715,22 @@ class StaticChessBoardWidget extends StatelessWidget {
               final displayCol = index % 8;
               final square = _squareAt(displayRow, displayCol, orientation);
               final piece = position.board.pieceAt(square);
-              return _SquareVisual(
-                piece: piece,
-                pieceKey: piece == null
-                    ? null
-                    : ValueKey('static-piece-$displayRow-$displayCol'),
-                isDark: (square.file.value + square.rank.value).isEven,
-                isSelected: false,
-                isLegalTarget: false,
-                isLastMove: false,
-                isCheck: false,
-                instantExit: false,
+              return Semantics(
+                container: true,
+                excludeSemantics: true,
+                label: boardSquareLabel(square, piece),
+                child: _SquareVisual(
+                  piece: piece,
+                  pieceKey: piece == null
+                      ? null
+                      : ValueKey('static-piece-$displayRow-$displayCol'),
+                  isDark: (square.file.value + square.rank.value).isEven,
+                  isSelected: false,
+                  isLegalTarget: false,
+                  isLastMove: false,
+                  isCheck: false,
+                  instantExit: false,
+                ),
               );
             },
           ),
