@@ -30,6 +30,17 @@ void main() {
       expect(hint1100.maiaSan, isNotEmpty);
       expect(hint1100.stockfishSan, isNotEmpty);
 
+      // Fechar uma dica pendente precisa liberar os motores e permitir
+      // que o lance seguinte recarregue o Maia normalmente.
+      final pendingHint = controller.getHint(stockfishMovetimeMs: 1000);
+      final cancellation = expectLater(
+        pendingHint,
+        throwsA(isA<HintCancelledException>()),
+      );
+      await controller.cancelHint();
+      await cancellation;
+      expect(container.read(gameControllerProvider).hintThinking, isFalse);
+
       await controller.attemptDragMove(
         Square.e2,
         Square.e4,
