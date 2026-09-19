@@ -11,6 +11,40 @@ import 'package:maia_chess/features/hints/domain/hint_result.dart';
 import 'package:maia_chess/features/hints/presentation/hint_dialog.dart';
 
 void main() {
+  for (final close in ['button', 'outside', 'back']) {
+    testWidgets('fechar dica cancela cálculo: $close', (tester) async {
+      final calculation = Completer<HintResult>();
+      var cancelled = 0;
+      await tester.pumpWidget(
+        _Harness(
+          onPressed: (context) => showHintDialog(
+            context,
+            calculation.future,
+            onClosed: () async {
+              cancelled++;
+              calculation.completeError(StateError('cancelado'));
+            },
+          ),
+        ),
+      );
+      await tester.tap(find.text('abrir'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      switch (close) {
+        case 'button':
+          await tester.tap(find.text('Fechar'));
+        case 'outside':
+          await tester.tapAt(const Offset(5, 5));
+        case 'back':
+          await tester.binding.handlePopRoute();
+      }
+      await tester.pumpAndSettle();
+      expect(cancelled, 1);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('mostra o indicador de progresso enquanto a dica calcula', (
     tester,
   ) async {

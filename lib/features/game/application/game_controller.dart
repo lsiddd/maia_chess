@@ -426,7 +426,10 @@ class GameController extends Notifier<GameState> {
         StateError('Dica só está disponível numa partida contra a IA.'),
       );
     }
-    if (state.aiThinking || state.isAiTurn || state.isGameOver) {
+    if (_promotionPending ||
+        state.aiThinking ||
+        state.isAiTurn ||
+        state.isGameOver) {
       return Future.error(
         StateError('Dica indisponível neste momento da partida.'),
       );
@@ -483,6 +486,7 @@ class GameController extends Notifier<GameState> {
   }) async {
     try {
       await prerequisite;
+      _ensureHintActive(generation);
       final fen = position.fen;
       await _ensureEngineLoaded(levelRating);
       _ensureHintActive(generation);
@@ -647,6 +651,9 @@ class GameController extends Notifier<GameState> {
       state = state.copyWith(hintThinking: false);
     }
   }
+
+  /// Cancela a consulta ao fechar a dica, sair da tela ou suspender o app.
+  Future<void> cancelHint() => _cancelHint('A dica foi cancelada.');
 
   Future<void> _cancelHint(String reason) async {
     if (_hintInFlight == null) return;

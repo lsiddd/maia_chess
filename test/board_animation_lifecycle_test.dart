@@ -198,10 +198,11 @@ void main() {
               action == 'reset' ? Chess.initial.fen : position.fen,
             );
           }
-          if (action == 'background')
+          if (action == 'background') {
             tester.binding.handleAppLifecycleStateChanged(
               AppLifecycleState.resumed,
             );
+          }
           expect(tester.takeException(), isNull);
         },
       );

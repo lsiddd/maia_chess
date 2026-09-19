@@ -21,7 +21,9 @@ class GameScreen extends ConsumerStatefulWidget {
   ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends ConsumerState<GameScreen> {
+class _GameScreenState extends ConsumerState<GameScreen>
+    with WidgetsBindingObserver {
+  late final GameController _controller;
   // Inverte a orientação padrão (perspectiva do jogador humano) quando o
   // jogador pede manualmente — útil sobretudo em partida local, onde o
   // segundo jogador no mesmo aparelho não tem lado "padrão" nenhum.
@@ -30,6 +32,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   @override
   void initState() {
     super.initState();
+    _controller = ref.read(gameControllerProvider.notifier);
+    WidgetsBinding.instance.addObserver(this);
     // Mantém a tela acesa durante a partida — sem isso, o bloqueio de tela
     // do aparelho pode interromper a espera pelo lance da IA ou a leitura
     // do tabuleiro em qualquer momento.
@@ -37,7 +41,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) unawaited(_controller.cancelHint());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_controller.cancelHint());
     unawaited(WakelockPlus.disable());
     super.dispose();
   }
@@ -51,6 +62,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
       final wasOver = previous?.isGameOver ?? false;
       if (!wasOver && next.isGameOver) {
+        unawaited(controller.cancelHint());
         _showGameOverDialog(context, next);
       }
     });
@@ -95,7 +107,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 actions: _GameActions(
                   showHint: vsAi,
                   onHint: canHint
-                      ? () => showHintDialog(context, controller.getHint())
+                      ? () => showHintDialog(
+                          context,
+                          controller.getHint(),
+                          onClosed: controller.cancelHint,
+                        )
                       : null,
                   onUndo: canUndo ? controller.undo : null,
                   onReset: busy
@@ -138,12 +154,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _showGameOverDialog(BuildContext context, GameState state) {
-    final message = switch (state.result) {
-      GameResult.vitoriaBrancas => 'Xeque-mate! Brancas vencem.',
-      GameResult.vitoriaPretas => 'Xeque-mate! Pretas vencem.',
-      GameResult.empate => 'Empate.',
-      GameResult.emAndamento => '',
-    };
+    final message = gameResultDescription(state);
     unawaited(
       showDialog<void>(
         context: context,
@@ -252,6 +263,25 @@ class _StatusBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
+
+    if (state.isGameOver) {
+      final result = gameResultDescription(state);
+      return Semantics(
+        key: const Key('turn-status'),
+        liveRegion: true,
+        label: result,
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              result,
+              key: const Key('game-result'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+        ),
+      );
+    }
 
     if (state.engineError != null) {
       return ErrorStateCard(

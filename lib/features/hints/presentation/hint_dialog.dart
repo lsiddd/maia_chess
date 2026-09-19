@@ -6,12 +6,17 @@ import '../domain/hint_result.dart';
 /// pelo callback do botão e exibe o resultado lado a lado.
 Future<void> showHintDialog(
   BuildContext context,
-  Future<HintResult> hintFuture,
-) {
-  return showDialog<void>(
-    context: context,
-    builder: (context) => _HintDialog(hintFuture: hintFuture),
-  );
+  Future<HintResult> hintFuture, {
+  Future<void> Function()? onClosed,
+}) async {
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _HintDialog(hintFuture: hintFuture),
+    );
+  } finally {
+    await onClosed?.call();
+  }
 }
 
 class _HintDialog extends StatelessWidget {

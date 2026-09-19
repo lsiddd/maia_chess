@@ -480,6 +480,36 @@ void main() {
       },
     );
 
+    test('cancelar dica libera interação e ignora resposta tardia', () async {
+      final reply = Completer<String>();
+      final started = Completer<void>();
+      final engine = FakeLc0Engine(
+        onMove: (_, _) {
+          started.complete();
+          return reply.future;
+        },
+      );
+      final container = _engineContainer(lc0Factory: () => engine);
+      addTearDown(container.dispose);
+      final controller = container.read(gameControllerProvider.notifier);
+      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+      final result = controller.getHint();
+      final cancelled = expectLater(
+        result,
+        throwsA(isA<HintCancelledException>()),
+      );
+      await started.future;
+      await controller.cancelHint();
+      await cancelled;
+      expect(engine.disposeCount, greaterThan(0));
+      expect(container.read(gameControllerProvider).hintThinking, isFalse);
+      expect(controller.selectForDrag(Square.e2), isTrue);
+      reply.complete('e2e4');
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(gameControllerProvider).uciHistory, isEmpty);
+      expect(container.read(gameControllerProvider).engineError, isNull);
+    });
+
     test(
       'timeout descarta motores e uma tentativa posterior se recupera',
       () async {
