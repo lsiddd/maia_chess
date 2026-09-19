@@ -29,18 +29,23 @@ void main() {
 
   for (final close in ['button', 'outside', 'back']) {
     testWidgets('fechar dica cancela cálculo: $close', (tester) async {
-      final calculation = Completer<HintResult>();
       var cancelled = 0;
       await tester.pumpWidget(
         _Harness(
-          onPressed: (context) => showHintDialog(
-            context,
-            calculation.future,
-            onClosed: () async {
-              cancelled++;
-              calculation.completeError(StateError('cancelado'));
-            },
-          ),
+          onPressed: (context) {
+            // Na integração, eventos de UI e o corpo do teste usam zonas
+            // de erro distintas. Cria a operação onde ela será observada,
+            // como ocorre com controller.getHint() no botão do app.
+            final calculation = Completer<HintResult>();
+            return showHintDialog(
+              context,
+              calculation.future,
+              onClosed: () async {
+                cancelled++;
+                calculation.completeError(StateError('cancelado'));
+              },
+            );
+          },
         ),
       );
       await tester.tap(find.text('abrir'));
