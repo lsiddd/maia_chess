@@ -25,7 +25,10 @@ Future<Role?> showPromotionDialog(
             iconSize: 48,
             tooltip: roleLabelPt(role),
             onPressed: () => Navigator.of(context).pop(role),
-            icon: ChessPieceWidget(piece: piece),
+            icon: SizedBox.square(
+              dimension: 48,
+              child: ChessPieceWidget(piece: piece),
+            ),
           );
         }).toList(),
       ),

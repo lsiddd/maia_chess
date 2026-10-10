@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../core/theming/board_theme.dart';
 import '../local/app_database.dart';
 import 'settings_repository.dart';
 
@@ -38,6 +39,7 @@ class DriftSettingsRepository implements SettingsRepository {
           AppSettingsCompanion.insert(
             id: const Value(1),
             pieceSet: Value(settings.pieceSet.name),
+            boardTheme: Value(settings.boardTheme.name),
             themeMode: Value(settings.themeMode.name),
             defaultClockEnabled: Value(settings.defaultClockEnabled),
             defaultTimeMinutes: Value(settings.defaultTimeMinutes),
@@ -49,6 +51,7 @@ class DriftSettingsRepository implements SettingsRepository {
   StoredAppSettings _map(AppSettingsRow row) {
     return StoredAppSettings(
       pieceSet: StoredPieceSet.values.byName(row.pieceSet),
+      boardTheme: BoardTheme.values.byName(row.boardTheme),
       themeMode: StoredThemeMode.values.byName(row.themeMode),
       defaultClockEnabled: row.defaultClockEnabled,
       defaultTimeMinutes: row.defaultTimeMinutes,

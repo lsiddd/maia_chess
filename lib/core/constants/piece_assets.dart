@@ -30,15 +30,15 @@ Future<void> precachePieceSvgs(BuildContext context) {
 /// glifos Unicode entre versões do Android e fontes de fabricantes.
 String pieceAssetPath(Piece piece) {
   final role = switch (piece.role) {
-    Role.king => 'king',
-    Role.queen => 'queen',
-    Role.rook => 'rook',
-    Role.bishop => 'bishop',
-    Role.knight => 'knight',
-    Role.pawn => 'pawn',
+    Role.king => 'K',
+    Role.queen => 'Q',
+    Role.rook => 'R',
+    Role.bishop => 'B',
+    Role.knight => 'N',
+    Role.pawn => 'P',
   };
   final side = piece.color == Side.white ? 'w' : 'b';
-  return 'assets/chess_pieces/$role-$side.svg';
+  return 'assets/chess_pieces/$side$role.svg';
 }
 
 /// Nome em português do papel da peça — usado no diálogo de promoção.

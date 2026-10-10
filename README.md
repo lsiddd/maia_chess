@@ -7,6 +7,32 @@ lc0 engine). A second AI (Stockfish) provides the objectively best move, for
 the hint system. Open source project, distributed as a direct APK (sideload),
 with no runtime network dependency.
 
+The appearance menu (palette icon on the home and game screens) offers light,
+dark and system modes, plus the original Lichess Brown, Blue, Green and Purple
+boards. Brown is the default (#F0D9B5 / #B58863). The app bundles the Lichess
+Cburnett SVG pieces and board images for offline use; selections are saved
+locally and also apply to game replays. Sources, authors and licenses are in
+`assets/chess_pieces/NOTICE.md` and `assets/chess_boards/NOTICE.md`, and available
+under **Aparência → Créditos e licenças** in the app.
+
+## Tactical aids
+
+The game screen includes **Peças atacadas**, which highlights attacked white
+pieces in orange and black pieces in purple, including defended pieces and
+attacks by pinned pieces. Highlights follow moves, undo and board rotation;
+legal en passant captures also mark the captured pawn.
+
+**Top 3 ameaças** uses a single 1-second Stockfish MultiPV search to rank the
+opponent's options if the current player passed the turn. These are alternatives,
+not a sequence or a prediction of Maia's move. The dialog shows SAN, origin and
+destination, score from the opponent's perspective, and search depth. Analysis
+is unavailable in check; passing clears en passant rights. Results are cached
+for the same position and game, and closing an unfinished analysis cancels it.
+Both aids exclude the game from rating, as existing hints and undo already do.
+
+Run the native MultiPV smoke test on Android with
+`flutter test integration_test/tactics_android_test.dart -d <device>`.
+
 ## How to run
 
 Prerequisites: Flutter **3.47.4** (Dart 3.13.3, matching CI), Android SDK +
@@ -27,10 +53,11 @@ the SDK, update both the workflow and this prerequisite and rerun the checks.
 
 ```bash
 flutter pub get
-dart format lib test integration_test
+dart format lib test integration_test test_driver
 flutter analyze --no-fatal-infos
-dart format --output=none --set-exit-if-changed lib test integration_test
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver
 flutter test --coverage
+python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 Commit the formatting changes before pushing. The CI formatting step only

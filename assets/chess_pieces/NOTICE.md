@@ -1,11 +1,14 @@
-# Chess pieces
+# Cburnett chess pieces
 
-The 12 classic SVGs in this folder were provided for embedding into the app.
-Each file preserves, in its header, the original attribution, the link to
-the source artwork on Wikipedia, and the Creative Commons
-Attribution-ShareAlike license notice given by the files' author, Uray M.
-János (2013–2019).
+The twelve SVG files (wK/wQ/wR/wB/wN/wP and bK/bQ/bR/bB/bN/bP) are
+unmodified copies of the Cburnett set distributed by Lichess.
 
-The provided files do not specify the Creative Commons license version in
-their own header. This should be confirmed against the assets' source
-before the app is publicly distributed.
+Author: Colin M. L. Burnett (https://en.wikipedia.org/wiki/User:Cburnett).
+License: GNU General Public License, version 2 or later (GPL-2.0-or-later).
+The full license is included in LICENSE-GPL-2.0.txt.
+
+Source: https://github.com/lichess-org/lila/tree/3747530a154ab955bfbcd8e2bba58787479098d4/public/piece/cburnett
+Pinned upstream commit: 3747530a154ab955bfbcd8e2bba58787479098d4
+License attribution: https://github.com/lichess-org/lila/tree/3747530a154ab955bfbcd8e2bba58787479098d4/COPYING.md
+
+The app uses the SVGs' original 45 by 45 viewBox, colors and internal margins.

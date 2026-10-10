@@ -85,7 +85,8 @@ class RatingHistory extends Table {
 @DataClassName('AppSettingsRow')
 class AppSettings extends Table {
   IntColumn get id => integer().withDefault(const Constant(1))();
-  TextColumn get pieceSet => text().withDefault(const Constant('classic'))();
+  TextColumn get pieceSet => text().withDefault(const Constant('cburnett'))();
+  TextColumn get boardTheme => text().withDefault(const Constant('brown'))();
   TextColumn get themeMode => text().withDefault(const Constant('system'))();
   BoolColumn get defaultClockEnabled =>
       boolean().withDefault(const Constant(false))();
@@ -106,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -126,6 +127,12 @@ class AppDatabase extends _$AppDatabase {
           difficultyProgress.windowGames,
         );
         await rebuildDerivedState();
+      }
+      if (from < 3) {
+        await migrator.addColumn(appSettings, appSettings.boardTheme);
+        await customStatement(
+          "UPDATE app_settings SET piece_set = 'cburnett' WHERE piece_set = 'classic'",
+        );
       }
     },
     beforeOpen: (details) async {

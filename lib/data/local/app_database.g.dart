@@ -2217,7 +2217,19 @@ class $AppSettingsTable extends AppSettings
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant('classic'),
+    defaultValue: const Constant('cburnett'),
+  );
+  static const VerificationMeta _boardThemeMeta = const VerificationMeta(
+    'boardTheme',
+  );
+  @override
+  late final GeneratedColumn<String> boardTheme = GeneratedColumn<String>(
+    'board_theme',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('brown'),
   );
   static const VerificationMeta _themeModeMeta = const VerificationMeta(
     'themeMode',
@@ -2271,6 +2283,7 @@ class $AppSettingsTable extends AppSettings
   List<GeneratedColumn> get $columns => [
     id,
     pieceSet,
+    boardTheme,
     themeMode,
     defaultClockEnabled,
     defaultTimeMinutes,
@@ -2295,6 +2308,12 @@ class $AppSettingsTable extends AppSettings
       context.handle(
         _pieceSetMeta,
         pieceSet.isAcceptableOrUnknown(data['piece_set']!, _pieceSetMeta),
+      );
+    }
+    if (data.containsKey('board_theme')) {
+      context.handle(
+        _boardThemeMeta,
+        boardTheme.isAcceptableOrUnknown(data['board_theme']!, _boardThemeMeta),
       );
     }
     if (data.containsKey('theme_mode')) {
@@ -2349,6 +2368,10 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.string,
         data['${effectivePrefix}piece_set'],
       )!,
+      boardTheme: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}board_theme'],
+      )!,
       themeMode: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}theme_mode'],
@@ -2377,6 +2400,7 @@ class $AppSettingsTable extends AppSettings
 class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   final int id;
   final String pieceSet;
+  final String boardTheme;
   final String themeMode;
   final bool defaultClockEnabled;
   final int defaultTimeMinutes;
@@ -2384,6 +2408,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   const AppSettingsRow({
     required this.id,
     required this.pieceSet,
+    required this.boardTheme,
     required this.themeMode,
     required this.defaultClockEnabled,
     required this.defaultTimeMinutes,
@@ -2394,6 +2419,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['piece_set'] = Variable<String>(pieceSet);
+    map['board_theme'] = Variable<String>(boardTheme);
     map['theme_mode'] = Variable<String>(themeMode);
     map['default_clock_enabled'] = Variable<bool>(defaultClockEnabled);
     map['default_time_minutes'] = Variable<int>(defaultTimeMinutes);
@@ -2405,6 +2431,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     return AppSettingsCompanion(
       id: Value(id),
       pieceSet: Value(pieceSet),
+      boardTheme: Value(boardTheme),
       themeMode: Value(themeMode),
       defaultClockEnabled: Value(defaultClockEnabled),
       defaultTimeMinutes: Value(defaultTimeMinutes),
@@ -2420,6 +2447,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     return AppSettingsRow(
       id: serializer.fromJson<int>(json['id']),
       pieceSet: serializer.fromJson<String>(json['pieceSet']),
+      boardTheme: serializer.fromJson<String>(json['boardTheme']),
       themeMode: serializer.fromJson<String>(json['themeMode']),
       defaultClockEnabled: serializer.fromJson<bool>(
         json['defaultClockEnabled'],
@@ -2434,6 +2462,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'pieceSet': serializer.toJson<String>(pieceSet),
+      'boardTheme': serializer.toJson<String>(boardTheme),
       'themeMode': serializer.toJson<String>(themeMode),
       'defaultClockEnabled': serializer.toJson<bool>(defaultClockEnabled),
       'defaultTimeMinutes': serializer.toJson<int>(defaultTimeMinutes),
@@ -2444,6 +2473,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   AppSettingsRow copyWith({
     int? id,
     String? pieceSet,
+    String? boardTheme,
     String? themeMode,
     bool? defaultClockEnabled,
     int? defaultTimeMinutes,
@@ -2451,6 +2481,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   }) => AppSettingsRow(
     id: id ?? this.id,
     pieceSet: pieceSet ?? this.pieceSet,
+    boardTheme: boardTheme ?? this.boardTheme,
     themeMode: themeMode ?? this.themeMode,
     defaultClockEnabled: defaultClockEnabled ?? this.defaultClockEnabled,
     defaultTimeMinutes: defaultTimeMinutes ?? this.defaultTimeMinutes,
@@ -2460,6 +2491,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     return AppSettingsRow(
       id: data.id.present ? data.id.value : this.id,
       pieceSet: data.pieceSet.present ? data.pieceSet.value : this.pieceSet,
+      boardTheme: data.boardTheme.present
+          ? data.boardTheme.value
+          : this.boardTheme,
       themeMode: data.themeMode.present ? data.themeMode.value : this.themeMode,
       defaultClockEnabled: data.defaultClockEnabled.present
           ? data.defaultClockEnabled.value
@@ -2478,6 +2512,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     return (StringBuffer('AppSettingsRow(')
           ..write('id: $id, ')
           ..write('pieceSet: $pieceSet, ')
+          ..write('boardTheme: $boardTheme, ')
           ..write('themeMode: $themeMode, ')
           ..write('defaultClockEnabled: $defaultClockEnabled, ')
           ..write('defaultTimeMinutes: $defaultTimeMinutes, ')
@@ -2490,6 +2525,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   int get hashCode => Object.hash(
     id,
     pieceSet,
+    boardTheme,
     themeMode,
     defaultClockEnabled,
     defaultTimeMinutes,
@@ -2501,6 +2537,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       (other is AppSettingsRow &&
           other.id == this.id &&
           other.pieceSet == this.pieceSet &&
+          other.boardTheme == this.boardTheme &&
           other.themeMode == this.themeMode &&
           other.defaultClockEnabled == this.defaultClockEnabled &&
           other.defaultTimeMinutes == this.defaultTimeMinutes &&
@@ -2510,6 +2547,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
 class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   final Value<int> id;
   final Value<String> pieceSet;
+  final Value<String> boardTheme;
   final Value<String> themeMode;
   final Value<bool> defaultClockEnabled;
   final Value<int> defaultTimeMinutes;
@@ -2517,6 +2555,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   const AppSettingsCompanion({
     this.id = const Value.absent(),
     this.pieceSet = const Value.absent(),
+    this.boardTheme = const Value.absent(),
     this.themeMode = const Value.absent(),
     this.defaultClockEnabled = const Value.absent(),
     this.defaultTimeMinutes = const Value.absent(),
@@ -2525,6 +2564,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   AppSettingsCompanion.insert({
     this.id = const Value.absent(),
     this.pieceSet = const Value.absent(),
+    this.boardTheme = const Value.absent(),
     this.themeMode = const Value.absent(),
     this.defaultClockEnabled = const Value.absent(),
     this.defaultTimeMinutes = const Value.absent(),
@@ -2533,6 +2573,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   static Insertable<AppSettingsRow> custom({
     Expression<int>? id,
     Expression<String>? pieceSet,
+    Expression<String>? boardTheme,
     Expression<String>? themeMode,
     Expression<bool>? defaultClockEnabled,
     Expression<int>? defaultTimeMinutes,
@@ -2541,6 +2582,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (pieceSet != null) 'piece_set': pieceSet,
+      if (boardTheme != null) 'board_theme': boardTheme,
       if (themeMode != null) 'theme_mode': themeMode,
       if (defaultClockEnabled != null)
         'default_clock_enabled': defaultClockEnabled,
@@ -2553,6 +2595,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   AppSettingsCompanion copyWith({
     Value<int>? id,
     Value<String>? pieceSet,
+    Value<String>? boardTheme,
     Value<String>? themeMode,
     Value<bool>? defaultClockEnabled,
     Value<int>? defaultTimeMinutes,
@@ -2561,6 +2604,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     return AppSettingsCompanion(
       id: id ?? this.id,
       pieceSet: pieceSet ?? this.pieceSet,
+      boardTheme: boardTheme ?? this.boardTheme,
       themeMode: themeMode ?? this.themeMode,
       defaultClockEnabled: defaultClockEnabled ?? this.defaultClockEnabled,
       defaultTimeMinutes: defaultTimeMinutes ?? this.defaultTimeMinutes,
@@ -2576,6 +2620,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     }
     if (pieceSet.present) {
       map['piece_set'] = Variable<String>(pieceSet.value);
+    }
+    if (boardTheme.present) {
+      map['board_theme'] = Variable<String>(boardTheme.value);
     }
     if (themeMode.present) {
       map['theme_mode'] = Variable<String>(themeMode.value);
@@ -2597,6 +2644,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     return (StringBuffer('AppSettingsCompanion(')
           ..write('id: $id, ')
           ..write('pieceSet: $pieceSet, ')
+          ..write('boardTheme: $boardTheme, ')
           ..write('themeMode: $themeMode, ')
           ..write('defaultClockEnabled: $defaultClockEnabled, ')
           ..write('defaultTimeMinutes: $defaultTimeMinutes, ')
@@ -4203,6 +4251,7 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
     AppSettingsCompanion Function({
       Value<int> id,
       Value<String> pieceSet,
+      Value<String> boardTheme,
       Value<String> themeMode,
       Value<bool> defaultClockEnabled,
       Value<int> defaultTimeMinutes,
@@ -4212,6 +4261,7 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
     AppSettingsCompanion Function({
       Value<int> id,
       Value<String> pieceSet,
+      Value<String> boardTheme,
       Value<String> themeMode,
       Value<bool> defaultClockEnabled,
       Value<int> defaultTimeMinutes,
@@ -4234,6 +4284,11 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<String> get pieceSet => $composableBuilder(
     column: $table.pieceSet,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get boardTheme => $composableBuilder(
+    column: $table.boardTheme,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4277,6 +4332,11 @@ class $$AppSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get boardTheme => $composableBuilder(
+    column: $table.boardTheme,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get themeMode => $composableBuilder(
     column: $table.themeMode,
     builder: (column) => ColumnOrderings(column),
@@ -4312,6 +4372,11 @@ class $$AppSettingsTableAnnotationComposer
 
   GeneratedColumn<String> get pieceSet =>
       $composableBuilder(column: $table.pieceSet, builder: (column) => column);
+
+  GeneratedColumn<String> get boardTheme => $composableBuilder(
+    column: $table.boardTheme,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get themeMode =>
       $composableBuilder(column: $table.themeMode, builder: (column) => column);
@@ -4365,6 +4430,7 @@ class $$AppSettingsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> pieceSet = const Value.absent(),
+                Value<String> boardTheme = const Value.absent(),
                 Value<String> themeMode = const Value.absent(),
                 Value<bool> defaultClockEnabled = const Value.absent(),
                 Value<int> defaultTimeMinutes = const Value.absent(),
@@ -4372,6 +4438,7 @@ class $$AppSettingsTableTableManager
               }) => AppSettingsCompanion(
                 id: id,
                 pieceSet: pieceSet,
+                boardTheme: boardTheme,
                 themeMode: themeMode,
                 defaultClockEnabled: defaultClockEnabled,
                 defaultTimeMinutes: defaultTimeMinutes,
@@ -4381,6 +4448,7 @@ class $$AppSettingsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> pieceSet = const Value.absent(),
+                Value<String> boardTheme = const Value.absent(),
                 Value<String> themeMode = const Value.absent(),
                 Value<bool> defaultClockEnabled = const Value.absent(),
                 Value<int> defaultTimeMinutes = const Value.absent(),
@@ -4388,6 +4456,7 @@ class $$AppSettingsTableTableManager
               }) => AppSettingsCompanion.insert(
                 id: id,
                 pieceSet: pieceSet,
+                boardTheme: boardTheme,
                 themeMode: themeMode,
                 defaultClockEnabled: defaultClockEnabled,
                 defaultTimeMinutes: defaultTimeMinutes,

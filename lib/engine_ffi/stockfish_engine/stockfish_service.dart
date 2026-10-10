@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:stockfish/stockfish.dart';
 
 import '../uci_wait.dart';
+import 'stockfish_analysis.dart';
 
 /// Serviço de alto nível para o motor Stockfish, usado para a dica de lance
 /// objetivamente melhor (independente do nível de dificuldade escolhido).
@@ -11,10 +12,17 @@ import '../uci_wait.dart';
 /// Mesma arquitetura do [Lc0Service]: FFI in-process via o pacote
 /// `stockfish`, sem subprocess, com o laço UCI rodando em Isolate dedicado.
 abstract interface class StockfishEngine {
+  static const defaultMovetimeMs = 500;
+
   bool get isReady;
 
   Future<void> init();
-  Future<String> getBestMove(String fen, {int movetimeMs = 1500});
+  Future<String> getBestMove(String fen, {int movetimeMs = defaultMovetimeMs});
+  Future<List<StockfishLine>> getTopMoves(
+    String fen, {
+    int count = 3,
+    int movetimeMs = 1000,
+  });
   Future<void> dispose();
 }
 
@@ -114,10 +122,34 @@ class StockfishService implements StockfishEngine {
   }
 
   /// Envia a posição [fen] e retorna o lance sugerido em notação UCI,
-  /// buscando por [movetimeMs] milissegundos (padrão configurável entre
-  /// ~1000-3000ms para a dica, conforme seção 7 da especificação).
+  /// buscando por [movetimeMs] milissegundos. O padrão de 500ms prioriza
+  /// a resposta rápida da dica; chamadas explícitas podem analisar por mais
+  /// tempo em posições difíceis.
   @override
-  Future<String> getBestMove(String fen, {int movetimeMs = 1500}) async {
+  Future<String> getBestMove(
+    String fen, {
+    int movetimeMs = StockfishEngine.defaultMovetimeMs,
+  }) async {
+    return (await _search(fen, movetimeMs: movetimeMs)).bestMove;
+  }
+
+  @override
+  Future<List<StockfishLine>> getTopMoves(
+    String fen, {
+    int count = 3,
+    int movetimeMs = 1000,
+  }) async {
+    if (count < 1 || count > 3) {
+      throw ArgumentError.value(count, 'count', 'deve estar entre 1 e 3');
+    }
+    return (await _search(fen, movetimeMs: movetimeMs, count: count)).lines;
+  }
+
+  Future<({String bestMove, List<StockfishLine> lines})> _search(
+    String fen, {
+    required int movetimeMs,
+    int count = 1,
+  }) async {
     if (!isReady) {
       throw StateError('Stockfish não está pronto. Chame init() primeiro.');
     }
@@ -129,9 +161,13 @@ class StockfishService implements StockfishEngine {
     }
 
     final engine = _engine!;
+    final analysis = StockfishAnalysisCollector(count);
     final waiter = awaitStdoutLine(
       stdout: engine.stdout,
-      predicate: (line) => line.startsWith('bestmove'),
+      predicate: (line) {
+        analysis.add(line);
+        return line.startsWith('bestmove');
+      },
       onStreamDone: () =>
           StateError('Stockfish encerrou antes de devolver bestmove'),
     );
@@ -142,6 +178,7 @@ class StockfishService implements StockfishEngine {
         'Iniciando busca movetime=${movetimeMs}ms',
         name: 'StockfishService',
       );
+      engine.stdin = 'setoption name MultiPV value $count';
       engine.stdin = 'position fen $fen';
       engine.stdin = 'go movetime $movetimeMs';
 
@@ -154,7 +191,7 @@ class StockfishService implements StockfishEngine {
           throw StateError('Stockfish não devolveu um lance válido');
         }
         developer.log('Bestmove recebido: $move', name: 'StockfishService');
-        return move;
+        return (bestMove: move, lines: analysis.lines);
       } on TimeoutException {
         // Interrompe uma busca atrasada para ela não deixar um `bestmove`
         // órfão no stream e contaminar a próxima solicitação.
@@ -166,7 +203,9 @@ class StockfishService implements StockfishEngine {
           engine.stdin = 'stop';
           final line = await waiter.future.timeout(_stopGracePeriod);
           final move = parseBestMove(line);
-          if (move.isNotEmpty && move != '(none)') return move;
+          if (move.isNotEmpty && move != '(none)') {
+            return (bestMove: move, lines: analysis.lines);
+          }
         } on Object {
           // O descarte abaixo é o caminho de recuperação.
         }
@@ -176,6 +215,10 @@ class StockfishService implements StockfishEngine {
         );
       }
     } finally {
+      // Every search also sets its own value, so hints remain single-PV.
+      if (identical(_engine, engine) && isReady) {
+        engine.stdin = 'setoption name MultiPV value 1';
+      }
       _searchInProgress = false;
       await waiter.cancel();
     }
