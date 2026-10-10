@@ -9,7 +9,8 @@ import '../../../core/theming/app_theme.dart';
 import '../../../core/theming/app_page_route.dart';
 import '../../../core/widgets/error_state_card.dart';
 import '../../hints/presentation/hint_dialog.dart';
-import '../../tactics/presentation/threat_dialog.dart';
+import '../../tactics/application/live_threat_controller.dart';
+import '../../tactics/presentation/live_threat_status.dart';
 import '../../settings/presentation/appearance_screen.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
@@ -27,6 +28,7 @@ class GameScreen extends ConsumerStatefulWidget {
 class _GameScreenState extends ConsumerState<GameScreen>
     with WidgetsBindingObserver {
   late final GameController _controller;
+  late final LiveThreatController _threatController;
   // Inverte a orientação padrão (perspectiva do jogador humano) quando o
   // jogador pede manualmente — útil sobretudo em partida local, onde o
   // segundo jogador no mesmo aparelho não tem lado "padrão" nenhum.
@@ -37,6 +39,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void initState() {
     super.initState();
     _controller = ref.read(gameControllerProvider.notifier);
+    _threatController = ref.read(liveThreatControllerProvider.notifier);
     WidgetsBinding.instance.addObserver(this);
     // Mantém a tela acesa durante a partida — sem isso, o bloqueio de tela
     // do aparelho pode interromper a espera pelo lance da IA ou a leitura
@@ -46,6 +49,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _threatController.setPaused(state != AppLifecycleState.resumed);
     if (state != AppLifecycleState.resumed) unawaited(_controller.cancelHint());
   }
 
@@ -60,6 +64,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(gameControllerProvider);
+    final threats = ref.watch(liveThreatControllerProvider);
     final controller = ref.read(gameControllerProvider.notifier);
     final vsAi = state.aiSide != null;
 
@@ -119,10 +124,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 board: ChessBoardWidget(
                   orientation: orientation,
                   showAttackedPieces: _showAttackedPieces,
+                  threats: threats.result?.threats ?? const [],
                 ),
                 status: _StatusBar(state: state),
                 actions: _GameActions(
                   showHint: vsAi,
+                  threats: threats,
+                  threatStatus: LiveThreatStatus(
+                    analysis: threats,
+                    game: state,
+                    onRetry: _threatController.retry,
+                  ),
                   showAttackedPieces: _showAttackedPieces,
                   onAttackedPieces: () {
                     setState(() => _showAttackedPieces = !_showAttackedPieces);
@@ -130,18 +142,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
                       unawaited(controller.markAsNotEvaluated());
                     }
                   },
-                  onThreats:
-                      !busy &&
-                          !state.isAiTurn &&
-                          !state.isGameOver &&
-                          !state.position.isCheck
-                      ? () => showThreatDialog(
-                          context,
-                          controller.getOpponentThreats(),
-                          onClosed: controller.cancelHint,
-                        )
-                      : null,
-                  inCheck: state.position.isCheck,
+                  onThreats: () =>
+                      _threatController.setEnabled(!threats.enabled),
                   onHint: canHint
                       ? () => showHintDialog(
                           context,
@@ -471,7 +473,8 @@ class _GameActions extends StatelessWidget {
     required this.showAttackedPieces,
     required this.onAttackedPieces,
     required this.onThreats,
-    required this.inCheck,
+    required this.threats,
+    required this.threatStatus,
     required this.onHint,
     required this.onUndo,
     required this.onReset,
@@ -479,9 +482,10 @@ class _GameActions extends StatelessWidget {
 
   final bool showHint;
   final bool showAttackedPieces;
-  final bool inCheck;
+  final LiveThreatState threats;
+  final Widget threatStatus;
   final VoidCallback onAttackedPieces;
-  final VoidCallback? onThreats;
+  final VoidCallback onThreats;
   final VoidCallback? onHint;
   final VoidCallback? onUndo;
   final VoidCallback? onReset;
@@ -503,15 +507,20 @@ class _GameActions extends StatelessWidget {
           ),
         ),
       ),
-      Tooltip(
-        message: inCheck
-            ? 'Saia do xeque antes de analisar as ameaças.'
-            : 'As 3 melhores opções do adversário se você passasse a vez',
-        child: FilledButton.tonalIcon(
-          key: const Key('show-opponent-threats'),
-          onPressed: onThreats,
-          icon: const Icon(Icons.manage_search, size: 21),
-          label: const Text('Top 3 ameaças'),
+      Semantics(
+        toggled: threats.enabled,
+        child: Tooltip(
+          message:
+              'As 3 melhores opções do adversário se você passasse a vez. '
+              'Atualiza automaticamente após cada lance.',
+          child: FilledButton.tonalIcon(
+            key: const Key('show-opponent-threats'),
+            onPressed: onThreats,
+            icon: const Icon(Icons.trending_up, size: 21),
+            label: Text(
+              threats.enabled ? 'Ocultar ameaças' : 'Setas de ameaças',
+            ),
+          ),
         ),
       ),
       if (showHint)
@@ -566,6 +575,7 @@ class _GameActions extends StatelessWidget {
                   )
                   .toList(growable: false),
             ),
+            if (threats.enabled) ...[const SizedBox(height: 8), threatStatus],
             if (showAttackedPieces) ...[
               const SizedBox(height: 8),
               const Text(

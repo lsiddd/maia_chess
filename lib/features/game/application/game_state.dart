@@ -104,10 +104,10 @@ class GameState {
   /// para bloquear interação do jogador e mostrar indicador de progresso.
   final bool aiThinking;
 
-  /// `true` enquanto uma dica ou análise de ameaças está sendo calculada.
-  /// A posição fica
-  /// bloqueada nesse intervalo para que a FEN consultada pelos motores e a
-  /// posição usada na conversão UCI -> SAN permaneçam consistentes.
+  /// `true` enquanto uma dica está sendo calculada.
+  /// A posição fica bloqueada nesse intervalo para que a FEN consultada
+  /// pelos motores e a posição usada na conversão UCI -> SAN permaneçam
+  /// consistentes.
   final bool hintThinking;
 
   /// Mensagem de erro do motor (ex: falha ao carregar peso), ou `null`.

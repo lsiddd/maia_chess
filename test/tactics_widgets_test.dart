@@ -7,8 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
-import 'package:maia_chess/features/tactics/presentation/threat_dialog.dart';
-import 'package:maia_chess/features/tactics/domain/tactical_analysis.dart';
+import 'package:maia_chess/features/tactics/presentation/threat_arrows.dart';
+import 'package:maia_chess/features/tactics/application/live_threat_controller.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_analysis.dart';
 
 import 'game_controller_test.dart' show FakeGameRepository;
@@ -80,21 +80,18 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('botão mostra três alternativas, avaliação e fecha sem erro', (
+  testWidgets('setas atualizam sem bloquear lances, seguem rotação e undo', (
     tester,
   ) async {
-    final engine = MultiPvEngine();
-    final container = ProviderContainer(
-      overrides: [
-        stockfishEngineFactoryProvider.overrideWithValue(() => engine),
-        stockfishWarmupEnabledProvider.overrideWithValue(false),
-        gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
-      ],
+    final secondReply = Completer<List<StockfishLine>>();
+    var searches = 0;
+    final engine = MultiPvEngine(
+      onAnalysis: (fen) async {
+        if (++searches == 2) return secondReply.future;
+        return legalLines(fen);
+      },
     );
-    addTearDown(() async {
-      await container.read(gameControllerProvider.notifier).shutdownEngines();
-      container.dispose();
-    });
+    final container = threatContainer(engine);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -104,61 +101,67 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
-    expect(find.text('e5'), findsOneWidget);
-    expect(find.text('d5'), findsOneWidget);
-    expect(find.text('Nf6'), findsOneWidget);
-    expect(find.text('e7 → e5'), findsOneWidget);
-    expect(find.textContaining('perspectiva do adversário'), findsOneWidget);
-    await tester.tap(find.text('Fechar'));
-    await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byKey(const Key('opponent-threat-arrows')), findsOneWidget);
+    expect(painter(tester).threats, hasLength(3));
+    expect(container.read(gameControllerProvider).hintThinking, isFalse);
+    expect(container.read(gameControllerProvider).evaluated, isFalse);
+    await tester.tap(find.byTooltip('Inverter tabuleiro'));
+    await tester.pumpAndSettle();
+    expect(painter(tester).orientation, Side.black);
+    expect(searches, 1);
+
+    // Os toques passam pela camada das setas; selecionar não recalcula.
+    await tester.tap(find.byKey(const ValueKey('board-semantics-e2')));
+    await tester.pumpAndSettle();
+    expect(searches, 1);
+    await tester.tap(find.byKey(const ValueKey('board-semantics-e4')));
+    await tester.pump();
+    expect(find.byKey(const Key('opponent-threat-arrows')), findsNothing);
+    expect(container.read(gameControllerProvider).uciHistory, ['e2e4']);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(searches, 2);
+
+    // Continua jogando enquanto Stockfish calcula a posição anterior.
+    final game = container.read(gameControllerProvider.notifier);
+    await game.attemptDragMove(
+      Square.e7,
+      Square.e5,
+      onPromotion: () async => null,
+    );
+    await tester.pump();
+    expect(searches, 2);
+    secondReply.complete(legalLines(engine.analyses[1]));
+    await tester.pumpAndSettle();
+    expect(searches, 3);
+    expect(engine.analyses.last, contains(' b '));
+    final result = container.read(liveThreatControllerProvider).result!;
+    expect(
+      result.position.board,
+      container.read(gameControllerProvider).position.board,
+    );
+    expect(painter(tester).threats, same(result.threats));
+    await game.undo();
+    await tester.pumpAndSettle();
+    expect(engine.analyses.last, contains(' w '));
+    expect(engine.disposeCount, 0);
+    await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
+    await tester.tap(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('opponent-threat-arrows')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('diálogo cabe em tela pequena com fonte ampliada', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 480);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final result = ThreatResult.fromLines(
-      opponentThreatPosition(Chess.initial),
-      [
-        StockfishLine(rank: 1, depth: 12, moves: ['e7e5'], centipawns: 30),
-        StockfishLine(rank: 2, depth: 12, moves: ['d7d5'], centipawns: -15),
-        StockfishLine(rank: 3, depth: 12, moves: ['g8f6'], mate: -3),
-      ],
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(2)),
-          child: child!,
-        ),
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => unawaited(
-                showThreatDialog(
-                  context,
-                  Future.value(result),
-                  onClosed: () async {},
-                ),
-              ),
-              child: const Text('Abrir'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Abrir'));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Fechar'));
-    await tester.pumpAndSettle();
+  test('geometria das setas inverte origem e destino com o tabuleiro', () {
+    const white = ThreatArrowPainter(threats: [], orientation: Side.white);
+    const black = ThreatArrowPainter(threats: [], orientation: Side.black);
+    const size = Size.square(400);
+    expect(white.squareCenter(Square.e7, size), const Offset(225, 75));
+    expect(white.squareCenter(Square.e5, size), const Offset(225, 175));
+    expect(black.squareCenter(Square.e7, size), const Offset(175, 325));
+    expect(black.squareCenter(Square.e5, size), const Offset(175, 225));
+    expect(black.shouldRepaint(white), isTrue);
+    expect(white.shouldRepaint(white), isFalse);
   });
 
   testWidgets('ajudas ativas cabem em tela estreita com fonte ampliada', (
@@ -170,10 +173,15 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final container = ProviderContainer(
       overrides: [
+        stockfishEngineFactoryProvider.overrideWithValue(MultiPvEngine.new),
+        stockfishWarmupEnabledProvider.overrideWithValue(false),
         gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
       ],
     );
-    addTearDown(container.dispose);
+    addTearDown(() async {
+      await container.read(gameControllerProvider.notifier).shutdownEngines();
+      container.dispose();
+    });
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -191,38 +199,80 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
     await tester.pumpAndSettle();
-  });
-
-  testWidgets('erro da análise permite fechar e tentar novamente', (
-    tester,
-  ) async {
-    var closed = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => unawaited(
-                showThreatDialog(
-                  context,
-                  Future.error(StateError('motor indisponível')),
-                  onClosed: () async {
-                    closed = true;
-                  },
-                ),
-              ),
-              child: const Text('Abrir'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Abrir'));
+    await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
+    await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Não foi possível concluir'), findsOneWidget);
-    await tester.tap(find.text('Fechar'));
-    await tester.pumpAndSettle();
-    expect(closed, isTrue);
+    expect(find.byKey(const Key('opponent-threat-legend')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('erro das setas permite repetir sem bloquear a partida', (
+    tester,
+  ) async {
+    var attempts = 0;
+    final engine = MultiPvEngine(
+      onAnalysis: (fen) async {
+        if (++attempts == 1) throw StateError('motor indisponível');
+        return legalLines(fen);
+      },
+    );
+    final container = threatContainer(engine);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: GameScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Não foi possível atualizar'), findsOneWidget);
+    expect(container.read(gameControllerProvider).hintThinking, isFalse);
+    await tester.ensureVisible(find.byKey(const Key('retry-opponent-threats')));
+    await tester.tap(find.byKey(const Key('retry-opponent-threats')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('opponent-threat-arrows')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+ThreatArrowPainter painter(WidgetTester tester) =>
+    tester
+            .widget<CustomPaint>(
+              find.byKey(const Key('opponent-threat-arrows')),
+            )
+            .painter!
+        as ThreatArrowPainter;
+
+ProviderContainer threatContainer(MultiPvEngine engine) {
+  final container = ProviderContainer(
+    overrides: [
+      stockfishEngineFactoryProvider.overrideWithValue(() => engine),
+      stockfishWarmupEnabledProvider.overrideWithValue(false),
+      gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
+    ],
+  );
+  addTearDown(() async {
+    await container.read(gameControllerProvider.notifier).shutdownEngines();
+    container.dispose();
+  });
+  return container;
+}
+
+List<StockfishLine> legalLines(String fen) {
+  final position = Chess.fromSetup(Setup.parseFen(fen));
+  final moves = [
+    for (final entry in position.legalMoves.entries)
+      for (final to in entry.value.squares)
+        NormalMove(from: entry.key, to: to).uci,
+  ].take(3).toList();
+  return [
+    for (var i = 0; i < moves.length; i++)
+      StockfishLine(
+        rank: i + 1,
+        depth: 10,
+        moves: [moves[i]],
+        centipawns: 30 - i * 10,
+      ),
+  ];
 }

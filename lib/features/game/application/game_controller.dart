@@ -62,7 +62,10 @@ class GameController extends Notifier<GameState> {
 
   Future<HintResult>? _hintInFlight;
   ({_HintCacheKey key, HintResult result})? _cachedHint;
-  Future<ThreatResult>? _threatInFlight;
+  ({String fen, Future<ThreatResult> future, Completer<Never> cancellation})?
+  _threatInFlight;
+  int _threatGeneration = 0;
+  Future<void> _stockfishSearchTail = Future.value();
   ({int gameGeneration, String fen, ThreatResult result})? _cachedThreats;
   Completer<Never>? _hintCancellation;
   int _hintGeneration = 0;
@@ -78,6 +81,7 @@ class GameController extends Notifier<GameState> {
     ref.onDispose(() {
       _isDisposed = true;
       _hintGeneration++;
+      cancelOpponentThreats();
       final cancellation = _hintCancellation;
       if (cancellation != null && !cancellation.isCompleted) {
         cancellation.completeError(
@@ -459,6 +463,7 @@ class GameController extends Notifier<GameState> {
     final evaluationPersistence = markAsNotEvaluated();
 
     final position = state.position;
+    cancelOpponentThreats();
     final generation = ++_hintGeneration;
     final cancellation = Completer<Never>();
     _hintCancellation = cancellation;
@@ -496,86 +501,136 @@ class GameController extends Notifier<GameState> {
     return exposed;
   }
 
-  /// Classifica as opções do adversário se o jogador atual passasse a vez.
-  /// Compartilha bloqueio, cancelamento e instância do motor com as dicas.
+  /// Analisa a posição congelada em segundo plano, sem bloquear os lances.
+  /// Buscas obsoletas são descartadas; o singleton Stockfish recebe uma busca
+  /// por vez, inclusive quando uma dica é solicitada durante a análise.
   Future<ThreatResult> getOpponentThreats() {
-    final pending = _threatInFlight;
-    if (pending != null) return pending;
     if (_promotionPending ||
         state.aiThinking ||
         state.hintThinking ||
         state.isAiTurn ||
         state.isGameOver ||
         state.position.isCheck) {
-      return Future.error(
-        StateError(
-          state.position.isCheck
-              ? 'Saia do xeque antes de analisar as ameaças.'
-              : 'Análise indisponível neste momento da partida.',
-        ),
-      );
+      return Future.error(StateError('Análise indisponível nesta posição.'));
     }
+    final fen = state.position.fen;
+    final pending = _threatInFlight;
+    if (pending != null && pending.fen == fen) return pending.future;
+    cancelOpponentThreats();
+    final generation = _threatGeneration;
+    final gameGeneration = _gameGeneration;
     final position = opponentThreatPosition(state.position);
     final prerequisite = markAsNotEvaluated();
-    final generation = ++_hintGeneration;
     final cancellation = Completer<Never>();
-    _hintCancellation = cancellation;
-    state = state.copyWith(hintThinking: true);
-    final calculation = _calculateThreats(position, generation, prerequisite);
-    late final Future<ThreatResult> exposed;
-    exposed = Future.any([calculation, cancellation.future]).timeout(
-      ref.read(hintTotalTimeoutProvider),
-      onTimeout: () async {
-        await _abortHintAfterFailure(generation);
-        throw TimeoutException('O cálculo das ameaças excedeu o tempo limite.');
-      },
-    );
-    _threatInFlight = exposed;
+    final future = Future.any<ThreatResult>([
+      _calculateThreats(
+        position,
+        fen,
+        generation,
+        gameGeneration,
+        prerequisite,
+      ),
+      cancellation.future,
+    ]);
+    _threatInFlight = (fen: fen, future: future, cancellation: cancellation);
+    void finish() {
+      if (identical(_threatInFlight?.future, future)) _threatInFlight = null;
+    }
+
     unawaited(
-      exposed.then<void>(
-        (_) => _finishHint(exposed),
-        onError: (Object error, StackTrace stack) => _finishHint(exposed),
+      future.then<void>(
+        (_) => finish(),
+        onError: (Object _, StackTrace _) => finish(),
       ),
     );
-    return exposed;
+    return future;
+  }
+
+  /// Cancela a entrega e as buscas na fila. A busca nativa em andamento termina
+  /// no seu limite de 1 segundo, evitando recriar o motor a cada lance.
+  void cancelOpponentThreats() {
+    _threatGeneration++;
+    final cancellation = _threatInFlight?.cancellation;
+    _threatInFlight = null;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.completeError(
+        const HintCancelledException('A posição das ameaças mudou.'),
+      );
+    }
+  }
+
+  void _ensureThreatActive(int generation, int gameGeneration, String fen) {
+    if (_isDisposed ||
+        generation != _threatGeneration ||
+        gameGeneration != _gameGeneration ||
+        state.position.fen != fen ||
+        state.hintThinking ||
+        state.aiThinking ||
+        state.isAiTurn ||
+        state.isGameOver) {
+      throw const HintCancelledException('A posição das ameaças mudou.');
+    }
   }
 
   Future<ThreatResult> _calculateThreats(
     Chess position,
+    String fen,
     int generation,
+    int gameGeneration,
     Future<void> prerequisite,
   ) async {
-    try {
-      await prerequisite;
-      _ensureHintActive(generation);
+    await prerequisite;
+    void ensureActive() => _ensureThreatActive(generation, gameGeneration, fen);
+    final result = await _queueStockfishSearch(() async {
+      ensureActive();
       final cached = _cachedThreats;
       if (cached != null &&
-          cached.gameGeneration == _gameGeneration &&
-          cached.fen == position.fen) {
+          cached.gameGeneration == gameGeneration &&
+          cached.fen == fen) {
         return cached.result;
       }
-      final ThreatResult result;
       if (position.legalMoves.values.every((moves) => moves.isEmpty)) {
-        result = ThreatResult(position: position, threats: const []);
-      } else {
-        final engine = await _ensureStockfishLoaded();
-        _ensureHintActive(generation);
-        final lines = await engine.getTopMoves(position.fen);
-        _ensureHintActive(generation);
-        result = ThreatResult.fromLines(position, lines);
+        return ThreatResult(position: position, threats: const []);
       }
-      _cachedThreats = (
-        gameGeneration: _gameGeneration,
-        fen: position.fen,
-        result: result,
-      );
-      return result;
-    } on HintCancelledException {
-      rethrow;
-    } catch (_) {
-      await _abortHintAfterFailure(generation);
-      rethrow;
-    }
+      StockfishEngine? engine;
+      try {
+        return await (() async {
+          final startup = _ensureStockfishLoaded();
+          engine = _stockfish;
+          engine = await startup;
+          ensureActive();
+          final lines = await engine!.getTopMoves(position.fen);
+          ensureActive();
+          return ThreatResult.fromLines(position, lines);
+        })().timeout(ref.read(hintTotalTimeoutProvider));
+      } on HintCancelledException {
+        rethrow;
+      } catch (_) {
+        // Falhas das setas não descartam o Maia que pode estar respondendo.
+        final currentRequest =
+            generation == _threatGeneration &&
+            gameGeneration == _gameGeneration;
+        final failedEngine = engine ?? (currentRequest ? _stockfish : null);
+        if (failedEngine != null && identical(_stockfish, failedEngine)) {
+          _stockfish = null;
+          _stockfishStartup = null;
+          await _trackEngineDisposal([failedEngine.dispose()]);
+        }
+        rethrow;
+      }
+    });
+    ensureActive();
+    _cachedThreats = (gameGeneration: gameGeneration, fen: fen, result: result);
+    return result;
+  }
+
+  Future<T> _queueStockfishSearch<T>(Future<T> Function() search) {
+    final operation = _stockfishSearchTail.then((_) => search());
+    _stockfishSearchTail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
   }
 
   Future<HintResult> _calculateHint({
@@ -643,10 +698,12 @@ class GameController extends Notifier<GameState> {
     int movetimeMs,
     int generation,
   ) async {
-    _ensureHintActive(generation);
-    final engine = await _ensureStockfishLoaded();
-    _ensureHintActive(generation);
-    final uci = await engine.getBestMove(position.fen, movetimeMs: movetimeMs);
+    final uci = await _queueStockfishSearch(() async {
+      _ensureHintActive(generation);
+      final engine = await _ensureStockfishLoaded();
+      _ensureHintActive(generation);
+      return engine.getBestMove(position.fen, movetimeMs: movetimeMs);
+    });
     _ensureHintActive(generation);
     return _sanFor(position, uci);
   }
@@ -789,6 +846,11 @@ class GameController extends Notifier<GameState> {
   }
 
   Future<StockfishEngine> _ensureStockfishLoaded() {
+    if (_isDisposed) {
+      return Future.error(
+        const HintCancelledException('Controller descartado'),
+      );
+    }
     final disposal = _engineDisposal;
     if (disposal != null) {
       return disposal.then((_) => _ensureStockfishLoaded());
@@ -836,23 +898,22 @@ class GameController extends Notifier<GameState> {
   }
 
   void _finishHint(Future<Object> operation) {
-    if (!identical(_hintInFlight, operation) &&
-        !identical(_threatInFlight, operation)) {
-      return;
-    }
+    if (!identical(_hintInFlight, operation)) return;
     _hintInFlight = null;
-    _threatInFlight = null;
     _hintCancellation = null;
     if (!_isDisposed && state.hintThinking) {
       state = state.copyWith(hintThinking: false);
     }
   }
 
-  /// Cancela dica ou ameaças ao fechar a consulta, sair da tela ou suspender o app.
-  Future<void> cancelHint() => _cancelHint('A dica foi cancelada.');
+  /// Cancela a dica ao fechar a consulta, sair da tela ou suspender o app.
+  Future<void> cancelHint() => _hintInFlight == null
+      ? Future.value()
+      : _cancelHint('A dica foi cancelada.');
 
   Future<void> _cancelHint(String reason) async {
-    if (_hintInFlight == null && _threatInFlight == null) return;
+    cancelOpponentThreats();
+    if (_hintInFlight == null) return;
     _hintGeneration++;
     final cancellation = _hintCancellation;
     if (cancellation != null && !cancellation.isCompleted) {
@@ -876,17 +937,19 @@ class GameController extends Notifier<GameState> {
     _loadedLevelRating = null;
     _cachedHint = null;
     _cachedThreats = null;
-    // O diálogo pode fechar antes de o singleton nativo terminar. Uma nova
-    // análise aguarda esta liberação antes de construir outro motor.
+    return _trackEngineDisposal([
+      if (lc0 != null) lc0.dispose(),
+      if (stockfish != null) stockfish.dispose(),
+    ]);
+  }
+
+  Future<void> _trackEngineDisposal(List<Future<void>> operations) {
     final previous = _engineDisposal;
-    if (lc0 == null && stockfish == null) return previous ?? Future.value();
+    if (operations.isEmpty) return previous ?? Future.value();
     late final Future<void> disposal;
-    disposal =
-        Future.wait<void>([
-          ?previous,
-          if (lc0 != null) lc0.dispose(),
-          if (stockfish != null) stockfish.dispose(),
-        ]).then<void>((_) {}).whenComplete(() {
+    disposal = Future.wait<void>([?previous, ...operations])
+        .then<void>((_) {})
+        .whenComplete(() {
           if (identical(_engineDisposal, disposal)) _engineDisposal = null;
         });
     _engineDisposal = disposal;
