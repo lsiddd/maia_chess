@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'board_theme.dart';
+
 /// Escala de espaçamento compartilhada por todas as telas, para que o
 /// padding/gap entre elementos siga a mesma progressão em vez de cada
 /// widget escolher seu próprio valor (ver relatório de UI/UX, item
@@ -47,24 +49,64 @@ abstract final class AppTypography {
 /// AUD-012) em vez de inline em `main.dart`, consistente com a
 /// organização feature-first do resto do projeto.
 abstract final class AppTheme {
-  static const _seedColor = Colors.brown;
+  static const _seedColor = Color(0xFF629924);
 
-  static ThemeData get light => _themeFor(Brightness.light);
+  static ThemeData get light => lightFor(BoardTheme.brown);
 
-  static ThemeData get dark => _themeFor(Brightness.dark);
+  static ThemeData get dark => darkFor(BoardTheme.brown);
 
-  static ThemeData _themeFor(Brightness brightness) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: brightness,
-    );
+  static ThemeData lightFor(BoardTheme boardTheme) =>
+      _themeFor(Brightness.light, boardTheme);
+
+  static ThemeData darkFor(BoardTheme boardTheme) =>
+      _themeFor(Brightness.dark, boardTheme);
+
+  static ThemeData _themeFor(Brightness brightness, BoardTheme boardTheme) {
+    final dark = brightness == Brightness.dark;
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: _seedColor,
+          brightness: brightness,
+        ).copyWith(
+          primary: dark ? const Color(0xFF9BC95D) : const Color(0xFF4B751C),
+          onPrimary: dark ? const Color(0xFF18240F) : Colors.white,
+          surface: dark ? const Color(0xFF262421) : Colors.white,
+          onSurface: dark ? const Color(0xFFBABABA) : const Color(0xFF4D4D4D),
+          onSurfaceVariant: dark
+              ? const Color(0xFFB0ACA5)
+              : const Color(0xFF5E5A53),
+          surfaceContainerLowest: dark ? const Color(0xFF161512) : Colors.white,
+          surfaceContainerLow: dark
+              ? const Color(0xFF211F1C)
+              : const Color(0xFFF8F7F5),
+          surfaceContainer: dark
+              ? const Color(0xFF302E2B)
+              : const Color(0xFFF2F0ED),
+          surfaceContainerHigh: dark
+              ? const Color(0xFF383633)
+              : const Color(0xFFEAE7E2),
+          surfaceContainerHighest: dark
+              ? const Color(0xFF403D39)
+              : const Color(0xFFE2DFD8),
+        );
     return ThemeData(
       colorScheme: colorScheme,
       useMaterial3: true,
-      // Raio único para os cards que não definem sua própria forma
-      // (vários hoje ficam com o padrão do Material, outros já cravavam
-      // 12-28 caso a caso); mantém elevação/cor default de cada Card.
+      scaffoldBackgroundColor: dark
+          ? const Color(0xFF161512)
+          : const Color(0xFFEDEBE8),
+      extensions: [BoardAppearance(boardTheme: boardTheme)],
+      appBarTheme: AppBarTheme(
+        backgroundColor: dark
+            ? const Color(0xFF161512)
+            : const Color(0xFFEDEBE8),
+        foregroundColor: colorScheme.onSurface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      // Cards com superfícies neutras e o raio compartilhado do app.
       cardTheme: CardThemeData(
+        color: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.medium),

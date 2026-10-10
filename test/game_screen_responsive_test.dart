@@ -51,7 +51,7 @@ void main() {
     expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
   });
 
-  testWidgets('as 64 casas são uniformes e as peças usam 78% da célula', (
+  testWidgets('as 64 casas são uniformes e Cburnett usa a margem do SVG', (
     tester,
   ) async {
     await pumpGameAt(tester, const Size(400, 800));
@@ -75,8 +75,8 @@ void main() {
     final pieceSize = tester.getSize(
       find.byKey(const ValueKey('board-piece-0-0')),
     );
-    expect(pieceSize.width, closeTo(referenceSquare.width * 0.78, 0.01));
-    expect(pieceSize.height, closeTo(referenceSquare.height * 0.78, 0.01));
+    expect(pieceSize.width, closeTo(referenceSquare.width, 0.01));
+    expect(pieceSize.height, closeTo(referenceSquare.height, 0.01));
     expect(tester.takeException(), isNull);
   });
 

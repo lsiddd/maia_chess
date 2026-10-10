@@ -104,7 +104,8 @@ class GameState {
   /// para bloquear interação do jogador e mostrar indicador de progresso.
   final bool aiThinking;
 
-  /// `true` enquanto a dica dupla está sendo calculada. A posição fica
+  /// `true` enquanto uma dica ou análise de ameaças está sendo calculada.
+  /// A posição fica
   /// bloqueada nesse intervalo para que a FEN consultada pelos motores e a
   /// posição usada na conversão UCI -> SAN permaneçam consistentes.
   final bool hintThinking;

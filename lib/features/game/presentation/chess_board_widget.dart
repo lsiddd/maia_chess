@@ -7,9 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_theme.dart';
+import '../../../core/theming/board_theme.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
 import '../application/move_feedback.dart';
+import '../../tactics/domain/tactical_analysis.dart';
 import 'chess_piece_widget.dart';
 import 'promotion_dialog.dart';
 import 'board_accessibility.dart';
@@ -27,7 +29,13 @@ import 'board_accessibility.dart';
 /// estado exposto por [GameController] (que consulta `dartchess`) e envia
 /// intenções de lance de volta a ele.
 class ChessBoardWidget extends ConsumerStatefulWidget {
-  const ChessBoardWidget({super.key, this.orientation = Side.white});
+  const ChessBoardWidget({
+    super.key,
+    this.orientation = Side.white,
+    this.showAttackedPieces = false,
+  });
+
+  final bool showAttackedPieces;
 
   /// Lado exibido na parte inferior do tabuleiro (perspectiva do jogador).
   final Side orientation;
@@ -38,6 +46,8 @@ class ChessBoardWidget extends ConsumerStatefulWidget {
 
 class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  Chess? _attackPosition;
+  Set<Square> _attackedSquares = const {};
   Square? _draggingFrom;
   final _dragPosition = ValueNotifier<Offset?>(null);
 
@@ -196,6 +206,11 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   Widget build(BuildContext context) {
     final state = ref.watch(gameControllerProvider);
     final controller = ref.read(gameControllerProvider.notifier);
+    if (widget.showAttackedPieces &&
+        !identical(_attackPosition, state.position)) {
+      _attackPosition = state.position;
+      _attackedSquares = attackedPieces(state.position);
+    }
 
     // Sempre que um novo lance entra no histórico — jogado por toque,
     // arraste ou pela engine —, dispara a animação de deslizamento da peça
@@ -505,8 +520,6 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                         widget.orientation,
                       );
                       final piece = state.position.board.pieceAt(square);
-                      final isDark =
-                          (square.file.value + square.rank.value).isEven;
                       final isSelected = square == selected;
                       final isLegalTarget = legalDestinations.contains(square);
                       final isBeingDragged =
@@ -539,6 +552,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           if (square == lastMoveFrom || square == lastMoveTo)
                             'Último lance',
                           if (square == checkSquare) 'Xeque',
+                          if (widget.showAttackedPieces &&
+                              _attackedSquares.contains(square))
+                            'Peça atacada',
                         ].join(', '),
                         onTap: canInteract
                             ? () => unawaited(tapSquare(square))
@@ -551,12 +567,18 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           pieceKey: piece == null
                               ? null
                               : ValueKey('board-piece-$displayRow-$displayCol'),
-                          isDark: isDark,
                           isSelected: isSelected,
                           isLegalTarget: isLegalTarget,
                           isLastMove:
                               square == lastMoveFrom || square == lastMoveTo,
                           isCheck: square == checkSquare,
+                          attackedColor:
+                              widget.showAttackedPieces &&
+                                  _attackedSquares.contains(square)
+                              ? (piece?.color == Side.white
+                                    ? const Color(0xFFE65100)
+                                    : const Color(0xFF8E24AA))
+                              : null,
                           instantExit:
                               isFlightOrigin ||
                               isBeingDragged ||
@@ -580,6 +602,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                     clipBehavior: Clip.none,
                     fit: StackFit.expand,
                     children: [
+                      _BoardBackground(
+                        boardTheme: BoardAppearance.of(context).boardTheme,
+                      ),
                       board!,
                       for (final flight in [
                         if (_slideToSquare != null && _slidePiece != null)
@@ -713,10 +738,11 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                       if (_draggingFrom != null && dragPosition != null)
                         Positioned(
                           key: const Key('board-drag-layer'),
-                          left: dragPosition.dx - cellSize / 2,
-                          top: dragPosition.dy - cellSize / 2,
-                          width: cellSize,
-                          height: cellSize,
+                          left:
+                              dragPosition.dx - cellSize * _dragPieceScale / 2,
+                          top: dragPosition.dy - cellSize * _dragPieceScale / 2,
+                          width: cellSize * _dragPieceScale,
+                          height: cellSize * _dragPieceScale,
                           child: IgnorePointer(
                             child: ExcludeSemantics(
                               child: ChessPieceWidget(
@@ -740,7 +766,28 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   }
 }
 
-const _pieceScale = 0.78;
+// Os SVGs Cburnett já incluem a margem interna usada pelo Lichess.
+const _pieceScale = 1.0;
+const _dragPieceScale = 1.15;
+
+class _BoardBackground extends StatelessWidget {
+  const _BoardBackground({required this.boardTheme});
+
+  final BoardTheme boardTheme;
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: Image.asset(
+      boardTheme.assetPath,
+      key: const Key('chess-board-background'),
+      fit: BoxFit.fill,
+      cacheWidth: 1024,
+      filterQuality: FilterQuality.none,
+      gaplessPlayback: true,
+      excludeFromSemantics: true,
+    ),
+  );
+}
 
 /// Ajusta o tabuleiro ao menor eixo finito recebido pelo pai.
 ///
@@ -783,10 +830,12 @@ class StaticChessBoardWidget extends StatelessWidget {
     required this.position,
     super.key,
     this.orientation = Side.white,
+    this.boardTheme,
   });
 
   final Chess position;
   final Side orientation;
+  final BoardTheme? boardTheme;
 
   @override
   Widget build(BuildContext context) {
@@ -794,6 +843,9 @@ class StaticChessBoardWidget extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          _BoardBackground(
+            boardTheme: boardTheme ?? BoardAppearance.of(context).boardTheme,
+          ),
           GridView.builder(
             padding: EdgeInsets.zero,
             physics: const NeverScrollableScrollPhysics(),
@@ -815,7 +867,6 @@ class StaticChessBoardWidget extends StatelessWidget {
                   pieceKey: piece == null
                       ? null
                       : ValueKey('static-piece-$displayRow-$displayCol'),
-                  isDark: (square.file.value + square.rank.value).isEven,
                   isSelected: false,
                   isLegalTarget: false,
                   isLastMove: false,
@@ -863,17 +914,13 @@ Offset _squareTopLeft(Square square, Side orientation, double cellSize) {
   return Offset(displayCol * cellSize, displayRow * cellSize);
 }
 
-/// Paleta do tabuleiro em si, fixa independente do tema claro/escuro do
-/// app: é a convenção visual do domínio de xadrez (mesmas cores usadas por
-/// chess.com/lichess), não uma escolha de marca do app.
+/// Destaques sobre os assets do tabuleiro, seguindo as cores do Lichess.
 abstract final class _BoardColors {
-  static const lightSquare = Color(0xFFEEEED2);
-  static const darkSquare = Color(0xFF769656);
-  static const selectionTint = Color(0xA6FFD54F);
+  static const selectionTint = Color(0x8014551E);
 
-  // Mesmo tom da seleção, porém mais discreto: marca as duas casas do
-  // último lance sem competir visualmente com a casa selecionada agora.
-  static const lastMoveTint = Color(0x66FFD54F);
+  // Verde amarelado para marcar a origem e o destino do último lance.
+  static const lastMoveTint = Color(0x699BC700);
+  static const greenBoardLastMoveTint = Color(0x69009BC7);
 
   // Brilho radial vermelho por trás do rei em xeque, com o mesmo padrão de
   // fade implícito (AnimatedOpacity) usado no indicador de lance legal.
@@ -886,17 +933,17 @@ class _SquareVisual extends StatelessWidget {
     super.key,
     required this.piece,
     required this.pieceKey,
-    required this.isDark,
     required this.isSelected,
     required this.isLegalTarget,
     required this.isLastMove,
     required this.isCheck,
     required this.instantExit,
+    this.attackedColor,
   });
 
   final Piece? piece;
+  final Color? attackedColor;
   final Key? pieceKey;
-  final bool isDark;
   final bool isSelected;
   final bool isLegalTarget;
 
@@ -912,12 +959,11 @@ class _SquareVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = isDark
-        ? _BoardColors.darkSquare
-        : _BoardColors.lightSquare;
-    var squareColor = baseColor;
+    var squareColor = Colors.transparent;
     if (isLastMove) {
-      squareColor = Color.alphaBlend(_BoardColors.lastMoveTint, squareColor);
+      squareColor = BoardAppearance.of(context).boardTheme == BoardTheme.green
+          ? _BoardColors.greenBoardLastMoveTint
+          : _BoardColors.lastMoveTint;
     }
     if (isSelected) {
       squareColor = Color.alphaBlend(_BoardColors.selectionTint, squareColor);
@@ -963,6 +1009,10 @@ class _SquareVisual extends StatelessWidget {
                 // coberta por um voo (`instantExit`), a transição de saída
                 // é instantânea para não duplicar a animação.
                 child: AnimatedSwitcher(
+                  layoutBuilder: (currentChild, previousChildren) => Stack(
+                    fit: StackFit.expand,
+                    children: [...previousChildren, ?currentChild],
+                  ),
                   duration: AppMotion.medium,
                   reverseDuration: instantExit ? Duration.zero : null,
                   switchInCurve: AppMotion.curve,
@@ -977,6 +1027,26 @@ class _SquareVisual extends StatelessWidget {
                 ),
               ),
             ),
+            if (attackedColor != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    key: const Key('attacked-piece-indicator'),
+                    margin: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: attackedColor!, width: 3),
+                      borderRadius: BorderRadius.circular(6),
+                      color: attackedColor!.withValues(alpha: 0.16),
+                    ),
+                    alignment: Alignment.topRight,
+                    child: Icon(
+                      Icons.warning_rounded,
+                      size: 13,
+                      color: attackedColor,
+                    ),
+                  ),
+                ),
+              ),
             Positioned.fill(
               child: AnimatedOpacity(
                 key: const ValueKey('legal-target-indicator'),
@@ -990,13 +1060,10 @@ class _SquareVisual extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: piece == null
-                          ? Colors.black.withValues(alpha: 0.30)
+                          ? _BoardColors.selectionTint
                           : Colors.transparent,
                       border: piece != null
-                          ? Border.all(
-                              color: Colors.black.withValues(alpha: 0.46),
-                              width: 3,
-                            )
+                          ? Border.all(color: const Color(0x4D145500), width: 3)
                           : null,
                     ),
                   ),

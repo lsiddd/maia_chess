@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:maia_chess/data/local/app_database.dart';
+import 'package:maia_chess/core/theming/board_theme.dart';
 import 'package:maia_chess/data/repositories/drift_game_repository.dart';
 import 'package:maia_chess/data/repositories/drift_progress_repository.dart';
 import 'package:maia_chess/data/repositories/drift_settings_repository.dart';
@@ -41,7 +42,7 @@ void main() {
           .map((row) => row.read<int>('foreign_keys'))
           .getSingle();
 
-      expect(version, 2);
+      expect(version, 3);
       expect(
         tables,
         containsAll([
@@ -69,17 +70,29 @@ void main() {
       expect(progress.every((row) => row.winsRequired == 2), isTrue);
       expect(progress.every((row) => row.windowSize == 3), isTrue);
       expect(settings.defaultTimeMinutes, 10);
+      expect(settings.boardTheme, BoardTheme.brown);
+      expect(settings.pieceSet, StoredPieceSet.cburnett);
       expect(foreignKeys, 1);
     });
 
     test(
-      'migração v1 -> v2 acrescenta janela e reconstrói projeções',
+      'migração v1 -> v3 acrescenta janela, aparência e reconstrói projeções',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
           NativeDatabase.memory(
             setup: (raw) {
               raw
+                ..execute('''
+                CREATE TABLE app_settings (
+                  id INTEGER NOT NULL PRIMARY KEY DEFAULT 1,
+                  piece_set TEXT NOT NULL DEFAULT 'classic',
+                  theme_mode TEXT NOT NULL DEFAULT 'system',
+                  default_clock_enabled INTEGER NOT NULL DEFAULT 0,
+                  default_time_minutes INTEGER NOT NULL DEFAULT 10,
+                  updated_at_utc INTEGER NOT NULL
+                )
+              ''')
                 ..execute('''
                 CREATE TABLE games (
                   id TEXT NOT NULL PRIMARY KEY,
@@ -134,11 +147,46 @@ void main() {
             .get();
         final progress = await DriftProgressRepository(migrated).getAll();
 
-        expect(version, 2);
+        expect(version, 3);
         expect(columns, contains('window_games'));
         expect(progress, hasLength(9));
         expect(progress.first.unlocked, isTrue);
         expect(progress.every((item) => item.gamesInWindow == 0), isTrue);
+      },
+    );
+
+    test(
+      'migração v2 -> v3 preserva preferências e adota Cburnett e Brown',
+      () async {
+        final migrated = AppDatabase.forTesting(
+          NativeDatabase.memory(
+            setup: (raw) {
+              raw
+                ..execute('''
+                CREATE TABLE app_settings (
+                  id INTEGER NOT NULL PRIMARY KEY DEFAULT 1,
+                  piece_set TEXT NOT NULL DEFAULT 'classic',
+                  theme_mode TEXT NOT NULL DEFAULT 'system',
+                  default_clock_enabled INTEGER NOT NULL DEFAULT 0,
+                  default_time_minutes INTEGER NOT NULL DEFAULT 10,
+                  updated_at_utc INTEGER NOT NULL
+                )
+              ''')
+                ..execute(
+                  "INSERT INTO app_settings VALUES (1, 'classic', 'dark', 1, 15, 0)",
+                )
+                ..execute('PRAGMA user_version = 2');
+            },
+          ),
+        );
+        addTearDown(migrated.close);
+
+        final settings = await DriftSettingsRepository(migrated).get();
+        expect(settings.boardTheme, BoardTheme.brown);
+        expect(settings.pieceSet, StoredPieceSet.cburnett);
+        expect(settings.themeMode, StoredThemeMode.dark);
+        expect(settings.defaultClockEnabled, isTrue);
+        expect(settings.defaultTimeMinutes, 15);
       },
     );
 
@@ -400,6 +448,7 @@ void main() {
     test('configurações são tipadas e persistidas', () async {
       final repository = DriftSettingsRepository(database);
       const settings = StoredAppSettings(
+        boardTheme: BoardTheme.blue,
         themeMode: StoredThemeMode.dark,
         defaultClockEnabled: true,
         defaultTimeMinutes: 15,
@@ -408,6 +457,8 @@ void main() {
 
       final restored = await repository.get();
       expect(restored.themeMode, StoredThemeMode.dark);
+      expect(restored.boardTheme, BoardTheme.blue);
+      expect(restored.pieceSet, StoredPieceSet.cburnett);
       expect(restored.defaultClockEnabled, isTrue);
       expect(restored.defaultTimeMinutes, 15);
     });

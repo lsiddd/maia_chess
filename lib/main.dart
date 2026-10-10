@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/constants/board_assets.dart';
+import 'core/constants/chess_asset_licenses.dart';
 import 'core/constants/piece_assets.dart';
 import 'core/theming/app_page_route.dart';
 import 'core/theming/app_theme.dart';
+import 'core/theming/board_theme.dart';
 import 'core/widgets/error_state_card.dart';
 import 'core/widgets/max_width_body.dart';
 import 'data/providers.dart';
@@ -16,9 +19,11 @@ import 'features/difficulty/presentation/new_game_vs_ai_screen.dart';
 import 'features/game/application/game_controller.dart';
 import 'features/game/presentation/game_screen.dart';
 import 'features/history/presentation/history_screen.dart';
+import 'features/settings/presentation/appearance_screen.dart';
 import 'features/stats/presentation/stats_screen.dart';
 
 void main() {
+  registerChessAssetLicenses();
   runApp(const ProviderScope(child: MaiaChessApp()));
 }
 
@@ -27,12 +32,14 @@ class MaiaChessApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final storedTheme = ref.watch(appSettingsProvider).valueOrNull?.themeMode;
+    final settings = ref.watch(appSettingsProvider).valueOrNull;
+    final storedTheme = settings?.themeMode;
+    final boardTheme = settings?.boardTheme ?? BoardTheme.brown;
     return MaterialApp(
       title: 'Xadrez Maia',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.lightFor(boardTheme),
+      darkTheme: AppTheme.darkFor(boardTheme),
       themeMode: switch (storedTheme) {
         StoredThemeMode.light => ThemeMode.light,
         StoredThemeMode.dark => ThemeMode.dark,
@@ -52,17 +59,17 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _precachedPieces = false;
+  bool _precachedChessAssets = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Aquece os SVGs das peças enquanto o jogador ainda está no menu: se
-    // isso só acontecesse ao abrir o tabuleiro, a decodificação cairia no
-    // primeiro quadro da partida e no primeiro arraste.
-    if (_precachedPieces) return;
-    _precachedPieces = true;
+    // Aquece peças e tabuleiros no menu para que a decodificação não caia
+    // no primeiro quadro da partida ou no primeiro arraste.
+    if (_precachedChessAssets) return;
+    _precachedChessAssets = true;
     unawaited(precachePieceSvgs(context));
+    unawaited(precacheBoardImages(context));
   }
 
   @override
@@ -70,7 +77,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final activeGame = ref.watch(activeGameProvider);
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Xadrez Maia')),
+      appBar: AppBar(
+        title: const Text('Xadrez Maia'),
+        actions: [
+          IconButton(
+            tooltip: 'Aparência',
+            icon: const Icon(Icons.palette_outlined),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(AppPageRoute(builder: (_) => const AppearanceScreen())),
+          ),
+        ],
+      ),
       body: MaxWidthBody(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.l),

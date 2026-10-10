@@ -9,6 +9,7 @@ import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/engine_ffi/lc0_engine/lc0_service.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_service.dart';
+import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_analysis.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/application/game_state.dart';
 
@@ -776,6 +777,14 @@ class FakeLc0Engine implements Lc0Engine {
 }
 
 class FakeStockfishEngine implements StockfishEngine {
+  @override
+  Future<List<StockfishLine>> getTopMoves(
+    String fen, {
+    int count = 3,
+    int movetimeMs = 1000,
+  }) async =>
+      throw UnimplementedError('Configure a MultiPV fake for this test.');
+
   FakeStockfishEngine({required this.onMove, this.initError});
 
   final Future<String> Function(String fen, int movetimeMs) onMove;
@@ -794,7 +803,10 @@ class FakeStockfishEngine implements StockfishEngine {
   }
 
   @override
-  Future<String> getBestMove(String fen, {int movetimeMs = 1500}) {
+  Future<String> getBestMove(
+    String fen, {
+    int movetimeMs = StockfishEngine.defaultMovetimeMs,
+  }) {
     requestedFens.add(fen);
     return onMove(fen, movetimeMs);
   }

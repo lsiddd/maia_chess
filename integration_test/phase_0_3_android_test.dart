@@ -32,7 +32,8 @@ void main() {
 
       // Fechar uma dica pendente precisa liberar os motores e permitir
       // que o lance seguinte recarregue o Maia normalmente.
-      final pendingHint = controller.getHint(stockfishMovetimeMs: 1000);
+      // Um tempo diferente evita reutilizar a dica já armazenada acima.
+      final pendingHint = controller.getHint(stockfishMovetimeMs: 1500);
       final cancellation = expectLater(
         pendingHint,
         throwsA(isA<HintCancelledException>()),

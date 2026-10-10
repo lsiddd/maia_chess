@@ -47,6 +47,7 @@ flutter:
   # github.com/CSSLab/maia-chess/releases/tag/v1.0. Ver ADR-007 (licença).
   assets:
     - assets/chess_pieces/
+    - assets/chess_boards/
     - assets/maia_weights/maia-1100.pb.gz
     - assets/maia_weights/maia-1200.pb.gz
     - assets/maia_weights/maia-1300.pb.gz

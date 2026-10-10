@@ -6,8 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/theming/app_theme.dart';
+import '../../../core/theming/app_page_route.dart';
 import '../../../core/widgets/error_state_card.dart';
 import '../../hints/presentation/hint_dialog.dart';
+import '../../tactics/presentation/threat_dialog.dart';
+import '../../settings/presentation/appearance_screen.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
 import 'chess_board_widget.dart';
@@ -28,6 +31,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   // jogador pede manualmente — útil sobretudo em partida local, onde o
   // segundo jogador no mesmo aparelho não tem lado "padrão" nenhum.
   bool _manualFlip = false;
+  bool _showAttackedPieces = false;
 
   @override
   void initState() {
@@ -60,6 +64,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final vsAi = state.aiSide != null;
 
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
+      if (previous?.gameId != next.gameId && _showAttackedPieces) {
+        setState(() => _showAttackedPieces = false);
+      }
       final wasOver = previous?.isGameOver ?? false;
       if (!wasOver && next.isGameOver) {
         unawaited(controller.cancelHint());
@@ -89,6 +96,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ),
         actions: [
           IconButton(
+            tooltip: 'Aparência',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(AppPageRoute(builder: (_) => const AppearanceScreen())),
+            icon: const Icon(Icons.palette_outlined),
+          ),
+          IconButton(
             tooltip: 'Inverter tabuleiro',
             onPressed: () => setState(() => _manualFlip = !_manualFlip),
             icon: const Icon(Icons.swap_vert),
@@ -102,10 +116,32 @@ class _GameScreenState extends ConsumerState<GameScreen>
             builder: (context, constraints) {
               return _ResponsiveGameLayout(
                 constraints: constraints,
-                board: ChessBoardWidget(orientation: orientation),
+                board: ChessBoardWidget(
+                  orientation: orientation,
+                  showAttackedPieces: _showAttackedPieces,
+                ),
                 status: _StatusBar(state: state),
                 actions: _GameActions(
                   showHint: vsAi,
+                  showAttackedPieces: _showAttackedPieces,
+                  onAttackedPieces: () {
+                    setState(() => _showAttackedPieces = !_showAttackedPieces);
+                    if (_showAttackedPieces && !state.isGameOver) {
+                      unawaited(controller.markAsNotEvaluated());
+                    }
+                  },
+                  onThreats:
+                      !busy &&
+                          !state.isAiTurn &&
+                          !state.isGameOver &&
+                          !state.position.isCheck
+                      ? () => showThreatDialog(
+                          context,
+                          controller.getOpponentThreats(),
+                          onClosed: controller.cancelHint,
+                        )
+                      : null,
+                  inCheck: state.position.isCheck,
                   onHint: canHint
                       ? () => showHintDialog(
                           context,
@@ -295,7 +331,7 @@ class _StatusBar extends ConsumerWidget {
     final activity = state.aiThinking
         ? 'Maia está pensando…'
         : state.hintThinking
-        ? 'Calculando dica…'
+        ? 'Calculando análise…'
         : 'Sua vez de escolher um lance';
 
     return Semantics(
@@ -371,30 +407,36 @@ class _StatusBar extends ConsumerWidget {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2.5),
                     ),
-                  if (state.position.isCheck) ...[
-                    const SizedBox(width: 8),
-                    Chip(
-                      visualDensity: VisualDensity.compact,
-                      label: Text(
-                        'Xeque',
-                        style: TextStyle(color: colors.onErrorContainer),
-                      ),
-                      backgroundColor: colors.errorContainer,
-                      side: BorderSide.none,
-                    ),
-                  ],
-                  if (!state.evaluated) ...[
-                    const SizedBox(width: 8),
-                    const Tooltip(
-                      message: 'Dicas ou desfazer retiram a partida do rating',
-                      child: Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text('Não avaliada'),
-                      ),
-                    ),
-                  ],
                 ],
               ),
+              if (state.position.isCheck || !state.evaluated) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (state.position.isCheck)
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          'Xeque',
+                          style: TextStyle(color: colors.onErrorContainer),
+                        ),
+                        backgroundColor: colors.errorContainer,
+                        side: BorderSide.none,
+                      ),
+                    if (!state.evaluated)
+                      const Tooltip(
+                        message:
+                            'Ajudas ou desfazer retiram a partida do rating',
+                        child: Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text('Não avaliada'),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               if (state.persistenceError != null) ...[
                 const SizedBox(height: 8),
                 Row(
@@ -426,12 +468,20 @@ class _StatusBar extends ConsumerWidget {
 class _GameActions extends StatelessWidget {
   const _GameActions({
     required this.showHint,
+    required this.showAttackedPieces,
+    required this.onAttackedPieces,
+    required this.onThreats,
+    required this.inCheck,
     required this.onHint,
     required this.onUndo,
     required this.onReset,
   });
 
   final bool showHint;
+  final bool showAttackedPieces;
+  final bool inCheck;
+  final VoidCallback onAttackedPieces;
+  final VoidCallback? onThreats;
   final VoidCallback? onHint;
   final VoidCallback? onUndo;
   final VoidCallback? onReset;
@@ -439,6 +489,31 @@ class _GameActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = <Widget>[
+      Semantics(
+        toggled: showAttackedPieces,
+        child: FilledButton.tonalIcon(
+          key: const Key('toggle-attacked-pieces'),
+          onPressed: onAttackedPieces,
+          icon: Icon(
+            showAttackedPieces ? Icons.visibility : Icons.visibility_outlined,
+            size: 21,
+          ),
+          label: Text(
+            showAttackedPieces ? 'Ocultar ataques' : 'Peças atacadas',
+          ),
+        ),
+      ),
+      Tooltip(
+        message: inCheck
+            ? 'Saia do xeque antes de analisar as ameaças.'
+            : 'As 3 melhores opções do adversário se você passasse a vez',
+        child: FilledButton.tonalIcon(
+          key: const Key('show-opponent-threats'),
+          onPressed: onThreats,
+          icon: const Icon(Icons.manage_search, size: 21),
+          label: const Text('Top 3 ameaças'),
+        ),
+      ),
       if (showHint)
         FilledButton.tonalIcon(
           onPressed: onHint,
@@ -466,22 +541,40 @@ class _GameActions extends StatelessWidget {
         final availablePerButton =
             (constraints.maxWidth - (actions.length - 1) * spacing) /
             actions.length;
-        final buttonWidth = availablePerButton >= 112
+        final buttonWidth = availablePerButton >= 180
             ? availablePerButton
             : (constraints.maxWidth >= 232
                   ? (constraints.maxWidth - spacing) / 2
                   : constraints.maxWidth);
 
-        return Wrap(
-          key: const Key('game-actions'),
-          spacing: spacing,
-          runSpacing: spacing,
-          children: actions
-              .map(
-                (action) =>
-                    SizedBox(width: buttonWidth, height: 48, child: action),
-              )
-              .toList(growable: false),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              key: const Key('game-actions'),
+              spacing: spacing,
+              runSpacing: spacing,
+              children: actions
+                  .map(
+                    (action) => SizedBox(
+                      width: buttonWidth,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: action,
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+            if (showAttackedPieces) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Peças atacadas: laranja = brancas; roxo = pretas. '
+                'Inclui peças defendidas e ataques de peças cravadas.',
+                key: Key('attacked-pieces-legend'),
+              ),
+            ],
+          ],
         );
       },
     );
