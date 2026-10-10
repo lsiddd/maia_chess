@@ -22,8 +22,8 @@ class MultiPvEngine extends FakeStockfishEngine {
     int count = 3,
     int movetimeMs = 1000,
   }) async {
-    expect(count, 3);
-    expect(movetimeMs, 1000);
+    expectSync(count, 3);
+    expectSync(movetimeMs, 1000);
     analyses.add(fen);
     if (onAnalysis != null) return onAnalysis!(fen);
     final moves = fen.split(' ')[1] == 'b'
@@ -38,17 +38,6 @@ class MultiPvEngine extends FakeStockfishEngine {
           centipawns: 30 - i * 10,
         ),
     ];
-  }
-}
-
-class SlowDisposalEngine extends MultiPvEngine {
-  SlowDisposalEngine(this.released, {super.onAnalysis});
-  final Future<void> released;
-
-  @override
-  Future<void> dispose() async {
-    await released;
-    await super.dispose();
   }
 }
 
@@ -73,7 +62,10 @@ void main() {
         stockfishEngineFactoryProvider.overrideWithValue(factory),
         stockfishWarmupEnabledProvider.overrideWithValue(false),
         lc0EngineFactoryProvider.overrideWithValue(
-          () => FakeLc0Engine(onMove: (_, _) async => 'e7e5'),
+          () => FakeLc0Engine(
+            onMove: (fen, _) async =>
+                fen.split(' ')[1] == 'b' ? 'e7e5' : 'e2e4',
+          ),
         ),
         maiaWeightsResolverProvider.overrideWithValue(
           (level) async => level.weightsAsset,
@@ -96,7 +88,7 @@ void main() {
     await controller.startTwoPlayers();
     final first = controller.getOpponentThreats();
     expect(identical(first, controller.getOpponentThreats()), isTrue);
-    expect(container.read(gameControllerProvider).hintThinking, isTrue);
+    expect(container.read(gameControllerProvider).hintThinking, isFalse);
     final result = await first;
     expect(result.threats.map((t) => t.san), ['e5', 'd5', 'Nf6']);
     expect(container.read(gameControllerProvider).evaluated, isFalse);
@@ -123,28 +115,20 @@ void main() {
   });
 
   test(
-    'bloqueia lances, undo e dica enquanto analisa; cancelamento recupera',
+    'análise permite mover e descarta a resposta da posição antiga',
     () async {
       final started = Completer<void>();
-      final late = Completer<List<StockfishLine>>();
-      final engines = <MultiPvEngine>[];
-      final container = containerFor(() {
-        final first = engines.isEmpty;
-        final engine = MultiPvEngine(
-          onAnalysis: first
-              ? (_) {
-                  started.complete();
-                  return late.future;
-                }
-              : null,
-        );
-        engines.add(engine);
-        return engine;
-      });
+      final reply = Completer<List<StockfishLine>>();
+      final engine = MultiPvEngine(
+        onAnalysis: (_) {
+          started.complete();
+          return reply.future;
+        },
+      );
+      final container = containerFor(() => engine);
       final controller = container.read(gameControllerProvider.notifier);
-      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
       final pending = controller.getOpponentThreats();
-      final cancelled = expectLater(
+      final stale = expectLater(
         pending,
         throwsA(isA<HintCancelledException>()),
       );
@@ -154,16 +138,64 @@ void main() {
         Square.e4,
         onPromotion: () async => null,
       );
+      expect(container.read(gameControllerProvider).uciHistory, ['e2e4']);
+      reply.complete([]);
+      await stale;
       await controller.undo();
       expect(container.read(gameControllerProvider).position, Chess.initial);
-      await expectLater(controller.getHint(), throwsStateError);
+      expect(engine.disposeCount, 0);
+    },
+  );
+
+  test('dica aguarda a busca de ameaças sem sobrepor o Stockfish', () async {
+    final started = Completer<void>();
+    final reply = Completer<List<StockfishLine>>();
+    final engine = MultiPvEngine(
+      onAnalysis: (_) {
+        started.complete();
+        return reply.future;
+      },
+    );
+    final container = containerFor(() => engine);
+    final controller = container.read(gameControllerProvider.notifier);
+    await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+    final threat = controller.getOpponentThreats();
+    final cancelled = expectLater(
+      threat,
+      throwsA(isA<HintCancelledException>()),
+    );
+    await started.future;
+    final hint = controller.getHint();
+    await cancelled;
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.requestedFens, isEmpty);
+    reply.complete([]);
+    expect((await hint).stockfishSan, 'e4');
+    expect(engine.requestedFens, hasLength(1));
+    expect(engine.disposeCount, 0);
+  });
+
+  test(
+    'fechar uma dica concluída não cancela as setas em segundo plano',
+    () async {
+      final started = Completer<void>();
+      final reply = Completer<List<StockfishLine>>();
+      final engine = MultiPvEngine(
+        onAnalysis: (_) {
+          started.complete();
+          return reply.future;
+        },
+      );
+      final container = containerFor(() => engine);
+      final controller = container.read(gameControllerProvider.notifier);
+      final pending = controller.getOpponentThreats();
+      await started.future;
       await controller.cancelHint();
-      await cancelled;
-      late.completeError(StateError('resposta tardia'));
-      await Future<void>.delayed(Duration.zero);
-      expect((await controller.getOpponentThreats()).threats, hasLength(3));
-      expect(engines.first.disposeCount, 1);
-      expect(container.read(gameControllerProvider).hintThinking, isFalse);
+      reply.complete([
+        StockfishLine(rank: 1, depth: 10, moves: ['e7e5'], centipawns: 0),
+      ]);
+      expect((await pending).threats.single.san, 'e5');
+      expect(engine.disposeCount, 0);
     },
   );
 
@@ -209,24 +241,22 @@ void main() {
     late.complete([]);
   });
 
-  test('reabrir análise aguarda liberação do singleton nativo', () async {
+  test('cancelar e reabrir reutiliza o motor após a busca anterior', () async {
     final started = Completer<void>();
     final reply = Completer<List<StockfishLine>>();
-    final released = Completer<void>();
-    final engines = <MultiPvEngine>[];
-    final container = containerFor(() {
-      final engine = engines.isEmpty
-          ? SlowDisposalEngine(
-              released.future,
-              onAnalysis: (_) {
-                started.complete();
-                return reply.future;
-              },
-            )
-          : MultiPvEngine();
-      engines.add(engine);
-      return engine;
-    });
+    var searches = 0;
+    final engine = MultiPvEngine(
+      onAnalysis: (_) async {
+        if (++searches == 1) {
+          started.complete();
+          return reply.future;
+        }
+        return [
+          StockfishLine(rank: 1, depth: 8, moves: ['e7e5'], centipawns: 0),
+        ];
+      },
+    );
+    final container = containerFor(() => engine);
     final controller = container.read(gameControllerProvider.notifier);
     final first = controller.getOpponentThreats();
     final cancelled = expectLater(
@@ -234,18 +264,15 @@ void main() {
       throwsA(isA<HintCancelledException>()),
     );
     await started.future;
-    final closing = controller.cancelHint();
+    controller.cancelOpponentThreats();
     await cancelled;
     final second = controller.getOpponentThreats();
     await Future<void>.delayed(Duration.zero);
-    expect(engines, hasLength(1));
-    released.complete();
-    await closing;
-    expect((await second).threats, hasLength(3));
-    expect(engines, hasLength(2));
+    expect(engine.analyses, hasLength(1));
     reply.complete([]);
-    await Future<void>.delayed(Duration.zero);
-    expect(container.read(gameControllerProvider).hintThinking, isFalse);
+    expect((await second).threats.single.san, 'e5');
+    expect(engine.disposeCount, 0);
+    expect(engine.analyses, hasLength(2));
   });
 
   test('mudar de posição invalida cache e consulta o outro lado', () async {

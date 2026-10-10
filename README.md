@@ -22,12 +22,16 @@ pieces in orange and black pieces in purple, including defended pieces and
 attacks by pinned pieces. Highlights follow moves, undo and board rotation;
 legal en passant captures also mark the captured pawn.
 
-**Top 3 ameaças** uses a single 1-second Stockfish MultiPV search to rank the
-opponent's options if the current player passed the turn. These are alternatives,
-not a sequence or a prediction of Maia's move. The dialog shows SAN, origin and
-destination, score from the opponent's perspective, and search depth. Analysis
-is unavailable in check; passing clears en passant rights. Results are cached
-for the same position and game, and closing an unfinished analysis cancels it.
+**Setas de ameaças** toggles three ranked arrows on the board, updated
+in the background after each position change using a single 1-second Stockfish
+MultiPV search. Moves and undo remain available during analysis. These are the
+opponent's alternatives if you passed the turn, not a sequence or a prediction
+of Maia's move. Numbered arrows follow board rotation; their legend shows SAN
+and scores from the opponent's perspective. Outdated results are discarded,
+requests are coalesced and serialized with hints, and results are cached for
+the same position and game. Arrows clear immediately when the position changes;
+analysis pauses during check, the AI's turn, hints, and app suspension. Passing
+clears en passant rights. Disable the toggle to stop automatic analysis.
 Both aids exclude the game from rating, as existing hints and undo already do.
 
 Run the native MultiPV smoke test on Android with

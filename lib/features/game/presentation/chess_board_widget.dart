@@ -12,6 +12,7 @@ import '../application/game_controller.dart';
 import '../application/game_state.dart';
 import '../application/move_feedback.dart';
 import '../../tactics/domain/tactical_analysis.dart';
+import '../../tactics/presentation/threat_arrows.dart';
 import 'chess_piece_widget.dart';
 import 'promotion_dialog.dart';
 import 'board_accessibility.dart';
@@ -33,9 +34,11 @@ class ChessBoardWidget extends ConsumerStatefulWidget {
     super.key,
     this.orientation = Side.white,
     this.showAttackedPieces = false,
+    this.threats = const [],
   });
 
   final bool showAttackedPieces;
+  final List<OpponentThreat> threats;
 
   /// Lado exibido na parte inferior do tabuleiro (perspectiva do jogador).
   final Side orientation;
@@ -606,6 +609,13 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                         boardTheme: BoardAppearance.of(context).boardTheme,
                       ),
                       board!,
+                      if (widget.threats.isNotEmpty)
+                        Positioned.fill(
+                          child: ThreatArrows(
+                            threats: widget.threats,
+                            orientation: widget.orientation,
+                          ),
+                        ),
                       for (final flight in [
                         if (_slideToSquare != null && _slidePiece != null)
                           (
