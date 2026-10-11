@@ -7,7 +7,7 @@ lc0 engine). A second AI (Stockfish) provides the objectively best move, for
 the hint system. Open source project, distributed as a direct APK (sideload),
 with no runtime network dependency.
 
-The appearance menu (palette icon on the home and game screens) offers light,
+The appearance menu (home palette icon or **Mais → Configurações** in a game) offers light,
 dark and system modes, plus the original Lichess Brown, Blue, Green and Purple
 boards. Brown is the default (#F0D9B5 / #B58863). The app bundles the Lichess
 Cburnett SVG pieces and board images for offline use; selections are saved
@@ -15,27 +15,55 @@ locally and also apply to game replays. Sources, authors and licenses are in
 `assets/chess_pieces/NOTICE.md` and `assets/chess_boards/NOTICE.md`, and available
 under **Aparência → Créditos e licenças** in the app.
 
-## Tactical aids
+## Game screen and tactical aids
 
-The game screen includes **Peças atacadas**, which highlights attacked white
-pieces in orange and black pieces in purple, including defended pieces and
-attacks by pinned pieces. Highlights follow moves, undo and board rotation;
-legal en passant captures also mark the captured pawn.
+The board fits both available axes inside the system safe areas. Its geometry
+stays fixed when tools load, fail, or change state. The toolbar contains
+**Desfazer**, **Dica**, **Ataques**, **Planos** and **Mais**; landscape layouts
+place the controls beside the board. **Mais** contains restart, rotation,
+manual save, appearance, the attack filter and contextual help. Restart asks
+for confirmation when moves have been played. Autosave and resume remain active.
 
-**Setas de ameaças** toggles three ranked arrows on the board, updated
-in the background after each position change using a single 1-second Stockfish
-MultiPV search. Moves and undo remain available during analysis. These are the
-opponent's alternatives if you passed the turn, not a sequence or a prediction
-of Maia's move. Numbered arrows follow board rotation; their legend shows SAN
-and scores from the opponent's perspective. Outdated results are discarded,
-requests are coalesced and serialized with hints, and results are cached for
-the same position and game. Arrows clear immediately when the position changes;
-analysis pauses during check, the AI's turn, hints, and app suspension. Passing
-clears en passant rights. Disable the toggle to stop automatic analysis.
-Both aids exclude the game from rating, as existing hints and undo already do.
+**Dica** uses Stockfish exclusively and highlights only the origin square with
+an amber outline, without a dialog or destination. Tap again or interact with
+the board to clear it. Loading stays in the button. Pending hints are cancelled
+on interaction, position changes and suspension; hint failures do not dispose
+Maia, which only selects the opponent's moves.
+
+**Ataques** draws an orange square border for attacked pieces without geometric
+defence and a rounded double blue border for attacked, defended pieces. These
+are geometric attacks (including pinned attackers), not a verdict about tactical
+material loss. Legal en passant also marks the captured pawn. Both the toggle
+and the own-pieces-only filter are saved locally. Help is available in **Mais**.
+
+**Planos do adversário** shows one Stockfish candidate at a time for a hypothetical
+opponent turn. The compact counter switches candidates. These are plans, not
+proven threats or a prediction of Maia's move. Searches use MultiPV in the
+background, are serialized with hints and discard stale results. Analysis pauses
+in check, during Maia's turn, while calculating a hint and on app suspension.
+No SAN, evaluations or legends are inserted above the board.
+
+The collapsed history shows recent move pairs. Tap it to open a separate review
+panel with a board, scrollable move pairs, selected-move highlight and
+**Posição atual**. Review never changes the live game. Assistance and undo remove
+the game from rating and campaign progression; undo returns to the human decision
+against Maia and removes one ply in local play.
 
 Run the native MultiPV smoke test on Android with
 `flutter test integration_test/tactics_android_test.dart -d <device>`.
+
+Run the Android acceptance suite (native Stockfish, SQLite, campaign, game UI,
+promotion, castling and check escapes) with:
+
+```bash
+flutter test integration_test/android_acceptance_test.dart -d <device>
+flutter test integration_test/phase_0_3_android_test.dart -d <device>
+```
+
+For the game-screen matrix, set the emulator display size, font scale and
+navigation mode, then rerun `integration_test/section_2_android_test.dart`.
+It checks fixed board geometry, origin-only hints, single-plan arrows, history
+review, preferences, reset confirmation and resume using real engines/storage.
 
 ## How to run
 

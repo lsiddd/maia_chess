@@ -67,7 +67,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Uma nova falha deve manter a posição e permitir outra tentativa.
-    await tester.tap(find.text('Tentar de novo'));
+    await tester.tap(find.byTooltip('Tentar novamente'));
     await tester.pumpAndSettle();
     final failedAgain = container.read(gameControllerProvider);
     expect(failedAgain.position.fen, before.position.fen);
@@ -77,12 +77,12 @@ void main() {
     expect(engines.take(2).every((engine) => engine.disposeCount == 1), isTrue);
 
     // Dois toques antes do rebuild não podem iniciar duas buscas.
-    await tester.tap(find.text('Tentar de novo'));
-    await tester.tap(find.text('Tentar de novo'));
+    await tester.tap(find.byTooltip('Tentar novamente'));
+    await tester.tap(find.byTooltip('Tentar novamente'));
     await tester.pump();
     expect(container.read(gameControllerProvider).aiThinking, isTrue);
-    expect(find.text('Tentar de novo'), findsNothing);
-    expect(find.text('Maia está pensando…'), findsOneWidget);
+    expect(find.byTooltip('Tentar novamente'), findsNothing);
+    expect(find.text('Vez da Maia'), findsOneWidget);
     expect(engines, hasLength(3));
     expect(engines.last.requestedFens, [before.position.fen]);
 

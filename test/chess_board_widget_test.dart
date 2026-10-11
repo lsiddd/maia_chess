@@ -233,7 +233,7 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('e4'), findsOneWidget);
+    expect(find.text('1. e4'), findsOneWidget);
     expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
     expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
     expect(find.byType(ChessPieceWidget), findsNWidgets(32));
@@ -259,7 +259,7 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
 
-      expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
+      expect(find.text('Jogadas · Nenhum lance'), findsOneWidget);
       expect(find.byKey(const ValueKey('board-piece-6-4')), findsOneWidget);
       expect(find.byKey(const ValueKey('board-piece-3-4')), findsNothing);
       expect(find.byType(ChessPieceWidget), findsNWidgets(32));
@@ -323,7 +323,9 @@ void main() {
       (tester) async {
         await pumpGame(tester);
         if (flipped) {
-          await tester.tap(find.byTooltip('Inverter tabuleiro'));
+          await tester.tap(find.text('Mais'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Girar tabuleiro'));
           await tester.pumpAndSettle();
         }
         Finder squareAt(int row, int col) => find.byKey(
@@ -369,7 +371,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(highlight, findsNothing);
         expect(dragged, findsNothing);
-        expect(find.text('e4'), findsOneWidget);
+        expect(find.text('1. e4'), findsOneWidget);
         expect(
           find.descendant(of: target, matching: find.byType(ChessPieceWidget)),
           findsOneWidget,
@@ -382,7 +384,9 @@ void main() {
           '$selection, invertido=$flipped', (tester) async {
         await pumpGame(tester);
         if (flipped) {
-          await tester.tap(find.byTooltip('Inverter tabuleiro'));
+          await tester.tap(find.text('Mais'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Girar tabuleiro'));
           await tester.pumpAndSettle();
         }
         String keyAt(int row, int col) =>
@@ -427,12 +431,12 @@ void main() {
         await gesture.up();
         await tester.pumpAndSettle();
         expectPawnSelected();
-        expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
+        expect(find.text('Jogadas · Nenhum lance'), findsOneWidget);
 
         // Depois de devolver a peça, basta tocar no destino para jogar.
         await tester.tap(find.byKey(ValueKey(targetKey)));
         await tester.pumpAndSettle();
-        expect(find.text('e4'), findsOneWidget);
+        expect(find.text('1. e4'), findsOneWidget);
         expect(
           indicatorOpacity(tester, targetKey, 'legal-target-indicator'),
           0,
@@ -446,7 +450,9 @@ void main() {
           'com tabuleiro ${flipped ? 'invertido' : 'normal'}', (tester) async {
         await pumpGame(tester);
         if (flipped) {
-          await tester.tap(find.byTooltip('Inverter tabuleiro'));
+          await tester.tap(find.text('Mais'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Girar tabuleiro'));
           await tester.pumpAndSettle();
         }
 
@@ -476,7 +482,7 @@ void main() {
         await gesture.up();
         await tester.pumpAndSettle();
 
-        expect(find.text('Ainda não houve nenhum lance.'), findsOneWidget);
+        expect(find.text('Jogadas · Nenhum lance'), findsOneWidget);
         expect(
           find.byKey(ValueKey('board-piece-$fromRow-$fromCol')),
           findsOneWidget,
@@ -492,7 +498,7 @@ void main() {
         await tester.pump();
         await nextGesture.up();
         await tester.pumpAndSettle();
-        expect(find.text(kingSide ? 'Nh3' : 'Na3'), findsOneWidget);
+        expect(find.text(kingSide ? '1. Nh3' : '1. Na3'), findsOneWidget);
         expect(
           find.byKey(ValueKey('board-piece-$toRow-$toCol')),
           findsOneWidget,

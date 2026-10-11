@@ -11,16 +11,78 @@ import 'package:maia_chess/features/tactics/presentation/threat_arrows.dart';
 import 'package:maia_chess/features/tactics/application/live_threat_controller.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_analysis.dart';
 
+import 'package:maia_chess/data/repositories/settings_repository.dart';
+import 'support_game_settings.dart';
 import 'game_controller_test.dart' show FakeGameRepository;
 import 'opponent_threats_test.dart' show PositionedController, MultiPvEngine;
 
 void main() {
+  testWidgets(
+    'preferência filtra peças próprias e distingue defesa de ataque',
+    (tester) async {
+      final settings = MemorySettings(
+        const StoredAppSettings(
+          showAttackedPieces: true,
+          ownAttackedPiecesOnly: true,
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          settingsRepositoryProvider.overrideWithValue(settings),
+          gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
+          gameControllerProvider.overrideWith(
+            () => PositionedController('4k3/8/2p5/3p4/4P3/8/8/4K3 w - - 0 1'),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await settings.close();
+      });
+      final semantics = tester.ensureSemantics();
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: GameScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('attacked-piece-indicator')), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byKey(const Key('board-semantics-e4'))).value,
+        contains('sem defesa geométrica'),
+      );
+      expect(
+        tester.getSemantics(find.byKey(const Key('board-semantics-d5'))).value,
+        isNot(contains('Peça atacada')),
+      );
+      await settings.save(
+        settings.value.copyWith(ownAttackedPiecesOnly: false),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('attacked-piece-indicator')),
+        findsNWidgets(2),
+      );
+      expect(
+        tester.getSemantics(find.byKey(const Key('board-semantics-d5'))).value,
+        contains('defendida'),
+      );
+      expect(container.read(gameControllerProvider).evaluated, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      semantics.dispose();
+    },
+  );
+
   testWidgets('botão destaca os dois lados, acompanha lance e orientação', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
     final container = ProviderContainer(
       overrides: [
+        settingsRepositoryProvider.overrideWithValue(MemorySettings()),
         gameControllerProvider.overrideWith(
           () => PositionedController('4k3/8/2p5/3p4/4P3/5P2/8/4K3 w - - 0 1'),
         ),
@@ -51,9 +113,11 @@ void main() {
         contains('Peça atacada'),
       );
     }
-    expect(find.byKey(const Key('attacked-pieces-legend')), findsOneWidget);
+    expect(find.byKey(const Key('attacked-pieces-legend')), findsNothing);
     expect(container.read(gameControllerProvider).evaluated, isFalse);
-    await tester.tap(find.byTooltip('Inverter tabuleiro'));
+    await tester.tap(find.text('Mais'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Girar tabuleiro'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('attacked-piece-indicator')), findsNWidgets(2));
     await container
@@ -99,14 +163,24 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final boardRect = tester.getRect(find.byKey(const Key('chess-board')));
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
+    expect(tester.getRect(find.byKey(const Key('chess-board'))), boardRect);
+    final firstPlan = painter(tester).threats.single;
+    await tester.tap(find.byKey(const Key('next-opponent-plan')));
+    await tester.pumpAndSettle();
+    expect(painter(tester).threats.single, isNot(same(firstPlan)));
+    expect(painter(tester).threats, hasLength(1));
+    expect(tester.getRect(find.byKey(const Key('chess-board'))), boardRect);
     expect(find.byKey(const Key('opponent-threat-arrows')), findsOneWidget);
-    expect(painter(tester).threats, hasLength(3));
+    expect(painter(tester).threats, hasLength(1));
     expect(container.read(gameControllerProvider).hintThinking, isFalse);
     expect(container.read(gameControllerProvider).evaluated, isFalse);
-    await tester.tap(find.byTooltip('Inverter tabuleiro'));
+    await tester.tap(find.text('Mais'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Girar tabuleiro'));
     await tester.pumpAndSettle();
     expect(painter(tester).orientation, Side.black);
     expect(searches, 1);
@@ -140,7 +214,7 @@ void main() {
       result.position.board,
       container.read(gameControllerProvider).position.board,
     );
-    expect(painter(tester).threats, same(result.threats));
+    expect(painter(tester).threats.single, same(result.threats.first));
     await game.undo();
     await tester.pumpAndSettle();
     expect(engine.analyses.last, contains(' w '));
@@ -173,6 +247,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final container = ProviderContainer(
       overrides: [
+        settingsRepositoryProvider.overrideWithValue(MemorySettings()),
         stockfishEngineFactoryProvider.overrideWithValue(MultiPvEngine.new),
         stockfishWarmupEnabledProvider.overrideWithValue(false),
         gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
@@ -202,7 +277,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('opponent-threat-legend')), findsOneWidget);
+    expect(find.byKey(const Key('opponent-threat-legend')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -226,10 +301,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Não foi possível atualizar'), findsOneWidget);
+    expect(find.textContaining('Análise indisponível'), findsOneWidget);
     expect(container.read(gameControllerProvider).hintThinking, isFalse);
-    await tester.ensureVisible(find.byKey(const Key('retry-opponent-threats')));
-    await tester.tap(find.byKey(const Key('retry-opponent-threats')));
+    await tester.tap(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('opponent-threat-arrows')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -247,6 +323,7 @@ ThreatArrowPainter painter(WidgetTester tester) =>
 ProviderContainer threatContainer(MultiPvEngine engine) {
   final container = ProviderContainer(
     overrides: [
+      settingsRepositoryProvider.overrideWithValue(MemorySettings()),
       stockfishEngineFactoryProvider.overrideWithValue(() => engine),
       stockfishWarmupEnabledProvider.overrideWithValue(false),
       gameRepositoryProvider.overrideWithValue(FakeGameRepository()),

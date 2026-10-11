@@ -42,7 +42,7 @@ void main() {
           .map((row) => row.read<int>('foreign_keys'))
           .getSingle();
 
-      expect(version, 3);
+      expect(version, 4);
       expect(
         tables,
         containsAll([
@@ -69,6 +69,8 @@ void main() {
       expect(progress.every((row) => row.gamesInWindow == 0), isTrue);
       expect(progress.every((row) => row.winsRequired == 2), isTrue);
       expect(progress.every((row) => row.windowSize == 3), isTrue);
+      expect(settings.showAttackedPieces, isFalse);
+      expect(settings.ownAttackedPiecesOnly, isFalse);
       expect(settings.defaultTimeMinutes, 10);
       expect(settings.boardTheme, BoardTheme.brown);
       expect(settings.pieceSet, StoredPieceSet.cburnett);
@@ -76,7 +78,7 @@ void main() {
     });
 
     test(
-      'migração v1 -> v3 acrescenta janela, aparência e reconstrói projeções',
+      'migração v1 -> v4 acrescenta janela, aparência e reconstrói projeções',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
@@ -147,7 +149,7 @@ void main() {
             .get();
         final progress = await DriftProgressRepository(migrated).getAll();
 
-        expect(version, 3);
+        expect(version, 4);
         expect(columns, contains('window_games'));
         expect(progress, hasLength(9));
         expect(progress.first.unlocked, isTrue);
@@ -156,7 +158,7 @@ void main() {
     );
 
     test(
-      'migração v2 -> v3 preserva preferências e adota Cburnett e Brown',
+      'migração v2 -> v4 preserva preferências e adota Cburnett e Brown',
       () async {
         final migrated = AppDatabase.forTesting(
           NativeDatabase.memory(
@@ -448,6 +450,8 @@ void main() {
     test('configurações são tipadas e persistidas', () async {
       final repository = DriftSettingsRepository(database);
       const settings = StoredAppSettings(
+        showAttackedPieces: true,
+        ownAttackedPiecesOnly: true,
         boardTheme: BoardTheme.blue,
         themeMode: StoredThemeMode.dark,
         defaultClockEnabled: true,
@@ -456,6 +460,8 @@ void main() {
       await repository.save(settings);
 
       final restored = await repository.get();
+      expect(restored.showAttackedPieces, isTrue);
+      expect(restored.ownAttackedPiecesOnly, isTrue);
       expect(restored.themeMode, StoredThemeMode.dark);
       expect(restored.boardTheme, BoardTheme.blue);
       expect(restored.pieceSet, StoredPieceSet.cburnett);
