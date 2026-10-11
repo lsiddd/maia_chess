@@ -45,6 +45,38 @@ class GameState {
        uciHistory = List.unmodifiable(uciHistory),
        moveActorHistory = List.unmodifiable(moveActorHistory),
        moveTimeHistoryUtc = List.unmodifiable(moveTimeHistoryUtc) {
+    _validateHistory();
+  }
+
+  // Only copyWith calls this constructor, with immutable snapshots or lists
+  // already owned by another GameState. Public inputs are always copied.
+  GameState._({
+    required this.position,
+    required this.positionHistory,
+    required this.sanHistory,
+    required this.uciHistory,
+    required this.moveActorHistory,
+    required this.moveTimeHistoryUtc,
+    this.selectedSquare,
+    this.evaluated = true,
+    this.aiSide,
+    this.levelRating,
+    this.aiThinking = false,
+    this.hintThinking = false,
+    this.engineError,
+    this.persistenceError,
+    this.gameId,
+    this.startedAtUtc,
+    this.campaignMode = false,
+    this.clockEnabled = false,
+    this.initialTimeMs,
+    this.whiteTimeMs,
+    this.blackTimeMs,
+  }) {
+    _validateHistory();
+  }
+
+  void _validateHistory() {
     final length = sanHistory.length;
     if (positionHistory.length != length ||
         uciHistory.length != length ||
@@ -132,7 +164,15 @@ class GameState {
   /// resolvidas aqui.
   bool get isDrawByFiftyMoveRule => position.halfmoves >= 100;
 
-  bool get isDrawByThreefoldRepetition {
+  // Memoization is internal: every public field remains immutable. These
+  // facts depend only on the position and position history, never selection.
+  bool? _threefoldRepetition;
+  bool? _gameOver;
+
+  bool get isDrawByThreefoldRepetition =>
+      _threefoldRepetition ??= _hasThreefoldRepetition();
+
+  bool _hasThreefoldRepetition() {
     final currentKey = _repetitionKey(position);
     var occurrences = 1; // A posição atual não está em positionHistory.
     for (final previous in positionHistory) {
@@ -144,7 +184,7 @@ class GameState {
     return false;
   }
 
-  bool get isGameOver =>
+  bool get isGameOver => _gameOver ??=
       position.isGameOver ||
       isDrawByFiftyMoveRule ||
       isDrawByThreefoldRepetition;
@@ -273,13 +313,23 @@ class GameState {
     int? whiteTimeMs,
     int? blackTimeMs,
   }) {
-    return GameState(
+    final next = GameState._(
       position: position ?? this.position,
-      positionHistory: positionHistory ?? this.positionHistory,
-      sanHistory: sanHistory ?? this.sanHistory,
-      uciHistory: uciHistory ?? this.uciHistory,
-      moveActorHistory: moveActorHistory ?? this.moveActorHistory,
-      moveTimeHistoryUtc: moveTimeHistoryUtc ?? this.moveTimeHistoryUtc,
+      positionHistory: positionHistory == null
+          ? this.positionHistory
+          : List.unmodifiable(positionHistory),
+      sanHistory: sanHistory == null
+          ? this.sanHistory
+          : List.unmodifiable(sanHistory),
+      uciHistory: uciHistory == null
+          ? this.uciHistory
+          : List.unmodifiable(uciHistory),
+      moveActorHistory: moveActorHistory == null
+          ? this.moveActorHistory
+          : List.unmodifiable(moveActorHistory),
+      moveTimeHistoryUtc: moveTimeHistoryUtc == null
+          ? this.moveTimeHistoryUtc
+          : List.unmodifiable(moveTimeHistoryUtc),
       selectedSquare: clearSelection
           ? null
           : (selectedSquare ?? this.selectedSquare),
@@ -300,6 +350,12 @@ class GameState {
       whiteTimeMs: whiteTimeMs ?? this.whiteTimeMs,
       blackTimeMs: blackTimeMs ?? this.blackTimeMs,
     );
+    if (identical(next.position, this.position) &&
+        identical(next.positionHistory, this.positionHistory)) {
+      next._threefoldRepetition = _threefoldRepetition;
+      next._gameOver = _gameOver;
+    }
+    return next;
   }
 
   /// Identidade de posição usada pela regra de repetição: colocação das
