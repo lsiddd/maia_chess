@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.release_tag || github.ref }}
+          ref: ${{ inputs.release_tag || github.sha }}
 
       - uses: subosito/flutter-action@v2
         with:
@@ -76,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.release_tag || github.ref }}
+          ref: ${{ inputs.release_tag || github.sha }}
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -120,7 +120,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' }}
+          REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
           SIGNING_REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
         run: GITHUB_REF_TYPE="$SIGNING_REF_TYPE" python3 scripts/configure_android_signing.py
       - name: Gerar APK release
@@ -149,6 +149,63 @@ jobs:
       - name: Remover material de assinatura
         if: always()
         run: rm -f android/app/key.properties android/app/ci-release.jks
+
+  nightly:
+    name: Publicar nightly
+    needs: apk
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-nightly
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: android-release
+          path: dist
+      - name: Atualizar tag, APK e checksum da nightly
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APP_VERSION: ${{ needs.apk.outputs.version }}
+        run: |
+          # Um build antigo que terminou depois de outro push não deve
+          # substituir a nightly do commit mais recente da main.
+          latest_sha="$(gh api "repos/$GH_REPO/commits/main" --jq .sha)"
+          if [[ "$latest_sha" != "$GITHUB_SHA" ]]; then
+            echo '::notice::Novo commit na main; esta nightly foi substituída.'
+            exit 0
+          fi
+
+          cd dist
+          sha256sum --check SHA256SUMS
+          mv "maia-chess-$APP_VERSION-arm64-v8a.apk" maia-chess-nightly-arm64-v8a.apk
+          sha256sum maia-chess-nightly-arm64-v8a.apk > SHA256SUMS
+          notes_file="$RUNNER_TEMP/nightly-notes.md"
+          cat > "$notes_file" <<EOF
+          Build automático de desenvolvimento da branch main.
+
+          - Commit: [$GITHUB_SHA]($GITHUB_SERVER_URL/$GH_REPO/commit/$GITHUB_SHA)
+          - Versão: $APP_VERSION (build $GITHUB_RUN_NUMBER)
+          - CI: [execução $GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID)
+
+          APK ARM64 assinado com a chave de release. Confira SHA256SUMS antes de instalar.
+          Esta pré-release é atualizada a cada push na main que passa pelas verificações.
+          EOF
+
+          git tag --force nightly "$GITHUB_SHA"
+          git push --force origin refs/tags/nightly
+          if gh release view nightly > /dev/null 2>&1; then
+            gh release upload nightly maia-chess-nightly-arm64-v8a.apk SHA256SUMS --clobber
+            gh release edit nightly --title 'Xadrez Maia Nightly' --notes-file "$notes_file" --prerelease --latest=false
+          else
+            gh release create nightly maia-chess-nightly-arm64-v8a.apk SHA256SUMS --verify-tag --title 'Xadrez Maia Nightly' --notes-file "$notes_file" --prerelease --latest=false
+          fi
 
   release:
     name: Publicar GitHub Release
