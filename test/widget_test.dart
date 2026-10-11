@@ -1,6 +1,8 @@
 // Teste de fumaça: a tela inicial sobe sem erros e mostra os pontos de
 // entrada esperados (Fase 1: jogo local; Fase 0: diagnóstico técnico).
 
+import 'dart:async';
+
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +64,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Substituir partida em andamento?'), findsNothing);
   });
+
+  testWidgets('bloqueia abrir outra partida durante restauração', (
+    tester,
+  ) async {
+    final repository = _PendingGameRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          gameRepositoryProvider.overrideWithValue(repository),
+          activeGameProvider.overrideWith((ref) => Stream.value(_activeGame())),
+          appSettingsProvider.overrideWith(
+            (ref) => Stream.value(const StoredAppSettings()),
+          ),
+        ],
+        child: const MaiaChessApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continuar partida salva'));
+    // Dois callbacks antes do rebuild também precisam respeitar o bloqueio.
+    await tester.tap(find.text('Jogar (2 jogadores locais)'));
+    await tester.pump();
+    expect(repository.reads, 1);
+    repository.pending.complete(null);
+    await tester.pumpAndSettle();
+    expect(find.text('Não há partida para continuar.'), findsOneWidget);
+    expect(find.text('Substituir partida em andamento?'), findsNothing);
+  });
+}
+
+class _PendingGameRepository extends Fake implements GameRepository {
+  final pending = Completer<StoredGame?>();
+  int reads = 0;
+  @override
+  Future<StoredGame?> getActiveGame() {
+    reads++;
+    return pending.future;
+  }
 }
 
 class _FakeGameRepository extends Fake implements GameRepository {

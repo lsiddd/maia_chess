@@ -24,34 +24,33 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
 
   Future<void> _startLevel(DifficultyProgressModel progress) async {
     if (!progress.unlocked || _startingRating != null) return;
-    final active = await ref.read(gameRepositoryProvider).getActiveGame();
-    if (!mounted) return;
-    if (active != null) {
-      final replace = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Substituir partida em andamento?'),
-          content: const Text(
-            'A partida atual será removida do autosave quando a etapa da '
-            'campanha começar.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Começar campanha'),
-            ),
-          ],
-        ),
-      );
-      if (replace != true || !mounted) return;
-    }
-
     setState(() => _startingRating = progress.rating);
     try {
+      final active = await ref.read(gameRepositoryProvider).getActiveGame();
+      if (!mounted) return;
+      if (active != null) {
+        final replace = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Substituir partida em andamento?'),
+            content: const Text(
+              'A partida atual será removida do autosave quando a etapa da '
+              'campanha começar.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Começar campanha'),
+              ),
+            ],
+          ),
+        );
+        if (replace != true || !mounted) return;
+      }
       final started = await ref
           .read(gameControllerProvider.notifier)
           .startVsAi(
@@ -76,6 +75,11 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
       await Navigator.of(
         context,
       ).push(AppPageRoute(builder: (_) => const GameScreen()));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível iniciar esta etapa: $error')),
+      );
     } finally {
       if (mounted) setState(() => _startingRating = null);
     }
