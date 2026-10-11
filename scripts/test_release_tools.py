@@ -37,6 +37,13 @@ class SigningTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Secrets ausentes", result.stderr)
 
+    def test_nightly_requires_secrets(self):
+        with tempfile.TemporaryDirectory() as root:
+            result = self.run_signing(root, REQUIRE_RELEASE_SIGNING="true")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Secrets ausentes", result.stderr)
+            self.assertFalse(Path(root, "android/app/key.properties").exists())
+
     def test_partial_configuration_fails(self):
         with tempfile.TemporaryDirectory() as root:
             result = self.run_signing(root, ANDROID_KEY_ALIAS="maia")

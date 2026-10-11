@@ -75,6 +75,14 @@ On pushes to `main` and manual runs, it then builds an ARM64 release APK and
 uploads the `android-release` artifact (APK plus `SHA256SUMS`, retained 14 days).
 Pull requests run the checks without receiving signing secrets or publishing.
 
+Every push to `main` that passes the checks and signed build automatically
+creates or updates the [Nightly pre-release](https://github.com/lsiddd/maia_chess/releases/tag/nightly).
+The moving `nightly` tag points to the built commit, with
+`maia-chess-nightly-arm64-v8a.apk`, `SHA256SUMS`, and notes linking to the commit
+and CI run. The same release is updated in place and does not replace the
+latest stable release. Publication is serialized; builds superseded by a newer
+commit on `main` skip publication so they cannot replace a newer nightly.
+
 Release signing uses these repository Actions secrets:
 
 - `ANDROID_KEYSTORE_BASE64`: base64-encoded keystore, without line breaks.
@@ -97,10 +105,11 @@ git push origin v1.0.0
 Use `vX.Y.Z` tags. The tag supplies the APK version name; the workflow run number
 supplies its increasing Android version code. After all checks and the signed
 build succeed, CI publishes a GitHub Release with the APK, SHA-256 checksum and
-generated notes. Tags fail if signing secrets are missing. Main/manual builds
-without any signing secrets produce only a development-signed test artifact.
-Release names are unique: use a new version tag for a new publication; the
-workflow does not overwrite an existing release. ARM64 targets modern Android
+generated notes. Tags and pushes to `main` fail if signing secrets are missing;
+nightlies use the same signing key as stable releases. Manual builds without a
+release tag or any signing secrets produce a development-signed test artifact.
+Stable release names are unique: use a new version tag for a new publication;
+the workflow only overwrites the `nightly` pre-release. ARM64 targets modern Android
 devices (Android 7.0/API 24 or later); this APK does not support 32-bit devices.
 
 If infrastructure fails before publication, fix the workflow on `main`, then
