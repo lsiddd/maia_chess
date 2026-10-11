@@ -82,11 +82,11 @@ lc0.dispose();
 
 Unlike Stockfish which embeds evaluation weights at compile time, lc0 requires you to provide a neural network weights file at runtime.
 
-### Bundled Weights
+### Weights in this vendored copy
 
-This package includes **Maia-1900** weights (~1.2MB) - a neural network trained to play like a ~1900 rated human player. Maia networks are from the [maia-chess project](https://github.com/CSSLab/maia-chess).
+The standalone example includes **Maia-1900** weights (~1.2MB), from the [maia-chess project](https://github.com/CSSLab/maia-chess). This vendored plugin does not bundle the file automatically: the host application declares its chosen weights in its own `pubspec.yaml`. Maia Chess already bundles all nine networks, including Maia 1900, under `assets/maia_weights/`.
 
-To use the bundled weights, first copy them from assets to a writable location:
+The standalone example explicitly declares `assets/weights/maia-1900.pb.gz` in its own `pubspec.yaml`. The previous implicit package asset key is no longer available. In Maia Chess, copy the application asset to a writable location:
 
 ```dart
 import 'dart:io';
@@ -98,7 +98,7 @@ Future<String> extractWeights() async {
   final weightsPath = '${dir.path}/maia-1900.pb.gz';
 
   if (!await File(weightsPath).exists()) {
-    final data = await rootBundle.load('assets/weights/maia-1900.pb.gz');
+    final data = await rootBundle.load('assets/maia_weights/maia-1900.pb.gz');
     await File(weightsPath).writeAsBytes(data.buffer.asUint8List());
   }
 

@@ -15,6 +15,12 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
     missing = required - names
     if missing:
         raise SystemExit("Arquivos ausentes: " + ", ".join(sorted(missing)))
+    duplicated_weights = (
+        "assets/flutter_assets/packages/leela_chess_zero/"
+        "assets/weights/maia-1900.pb.gz"
+    )
+    if duplicated_weights in names:
+        raise SystemExit("Peso Maia 1900 duplicado pelo plugin lc0")
     for engine in ("lc0", "stockfish"):
         if not any(name.startswith("lib/arm64-v8a/") and engine in name.lower()
                    and name.endswith(".so") for name in names):
