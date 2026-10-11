@@ -101,11 +101,12 @@ class HistoryScreen extends ConsumerWidget {
     try {
       final source = await const PgnFileService().pickPgn();
       if (source == null || !context.mounted) return;
-      final game = const PgnService().parseImport(
+      final game = await const PgnService().parseImportAsync(
         pgn: source,
         id: ref.read(gameIdFactoryProvider)(),
         importedAtUtc: DateTime.now().toUtc(),
       );
+      if (!context.mounted) return;
       await ref.read(gameRepositoryProvider).importGame(game);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
