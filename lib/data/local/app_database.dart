@@ -110,6 +110,9 @@ class AppDatabase extends _$AppDatabase {
 
   AppDatabase.forTesting(super.executor);
 
+  /// Shares the existing executor and stream notifications with a worker.
+  AppDatabase.connect(DatabaseConnection super.connection);
+
   @override
   int get schemaVersion => 4;
 
@@ -172,7 +175,15 @@ class AppDatabase extends _$AppDatabase {
   /// Reconstrói todas as projeções da Fase 5 a partir de `games`, a fonte de
   /// verdade. O chamador deve executar este método dentro da mesma transação
   /// da conclusão/exclusão que motivou a reconstrução.
-  Future<void> rebuildDerivedState() async {
+  Future<void> rebuildDerivedState() => computeWithDatabase(
+    connect: AppDatabase.connect,
+    computation: _rebuildOnWorker,
+  );
+
+  static Future<void> _rebuildOnWorker(AppDatabase database) =>
+      database._rebuildDerivedState();
+
+  Future<void> _rebuildDerivedState() async {
     final rows =
         await (select(games)..where(
               (row) =>

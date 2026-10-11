@@ -1,0 +1,96 @@
+{
+  "stats_performance": {
+    "1000": {
+      "rebuild": [
+        {
+          "elapsed_ms": 143.582,
+          "max_event_loop_gap_ms": 35.266
+        },
+        {
+          "elapsed_ms": 148.362,
+          "max_event_loop_gap_ms": 18.963
+        },
+        {
+          "elapsed_ms": 172.127,
+          "max_event_loop_gap_ms": 15.567
+        },
+        {
+          "elapsed_ms": 38.742,
+          "max_event_loop_gap_ms": 3.292
+        },
+        {
+          "elapsed_ms": 33.381,
+          "max_event_loop_gap_ms": 3.006
+        }
+      ],
+      "read": [
+        {
+          "elapsed_ms": 76.708,
+          "max_event_loop_gap_ms": 22.164
+        },
+        {
+          "elapsed_ms": 61.51,
+          "max_event_loop_gap_ms": 8.584
+        },
+        {
+          "elapsed_ms": 30.182,
+          "max_event_loop_gap_ms": 5.697
+        },
+        {
+          "elapsed_ms": 18.237,
+          "max_event_loop_gap_ms": 3.036
+        },
+        {
+          "elapsed_ms": 17.134,
+          "max_event_loop_gap_ms": 2.99
+        }
+      ]
+    },
+    "5000": {
+      "rebuild": [
+        {
+          "elapsed_ms": 135.134,
+          "max_event_loop_gap_ms": 11.776
+        },
+        {
+          "elapsed_ms": 144.314,
+          "max_event_loop_gap_ms": 9.988
+        },
+        {
+          "elapsed_ms": 116.147,
+          "max_event_loop_gap_ms": 14.116
+        },
+        {
+          "elapsed_ms": 134.762,
+          "max_event_loop_gap_ms": 11.503
+        },
+        {
+          "elapsed_ms": 250.432,
+          "max_event_loop_gap_ms": 17.363
+        }
+      ],
+      "read": [
+        {
+          "elapsed_ms": 93.381,
+          "max_event_loop_gap_ms": 11.408
+        },
+        {
+          "elapsed_ms": 95.476,
+          "max_event_loop_gap_ms": 8.05
+        },
+        {
+          "elapsed_ms": 63.608,
+          "max_event_loop_gap_ms": 6.906
+        },
+        {
+          "elapsed_ms": 90.25,
+          "max_event_loop_gap_ms": 9.706
+        },
+        {
+          "elapsed_ms": 108.048,
+          "max_event_loop_gap_ms": 10.564
+        }
+      ]
+    }
+  }
+}

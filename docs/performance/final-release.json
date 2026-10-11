@@ -1,0 +1,90 @@
+{
+  "arm64-v8a": {
+    "bytes": 150737806,
+    "sha256": "07ee0b49dfbaaefd1d545875a108e4d7ae3c484eeeff11b4f1f30e2a48bb38fd",
+    "all_nine_weights_identical_to_source": true,
+    "plugin_weight_duplicate": false,
+    "elf_load_alignment": {
+      "lib/arm64-v8a/libapp.so": [
+        65536,
+        65536,
+        65536
+      ],
+      "lib/arm64-v8a/libc++_shared.so": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "lib/arm64-v8a/libdartjni.so": [
+        16384,
+        16384,
+        16384
+      ],
+      "lib/arm64-v8a/libflutter.so": [
+        65536,
+        65536,
+        65536
+      ],
+      "lib/arm64-v8a/liblc0.so": [
+        16384,
+        16384,
+        16384
+      ],
+      "lib/arm64-v8a/libsqlite3.so": [
+        16384,
+        16384,
+        16384
+      ],
+      "lib/arm64-v8a/libstockfish.so": [
+        16384,
+        16384,
+        16384
+      ]
+    }
+  },
+  "x86_64": {
+    "bytes": 152463137,
+    "sha256": "3eeb5fa8774ce8c2783ad5687d4304954e1afe9d13d3c80d5b2c45122d2d5d55",
+    "all_nine_weights_identical_to_source": true,
+    "plugin_weight_duplicate": false,
+    "elf_load_alignment": {
+      "lib/x86_64/libapp.so": [
+        65536,
+        65536,
+        65536
+      ],
+      "lib/x86_64/libc++_shared.so": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "lib/x86_64/libdartjni.so": [
+        16384,
+        16384,
+        16384
+      ],
+      "lib/x86_64/libflutter.so": [
+        65536,
+        65536,
+        65536
+      ],
+      "lib/x86_64/liblc0.so": [
+        16384,
+        16384,
+        16384
+      ],
+      "lib/x86_64/libsqlite3.so": [
+        16384,
+        16384,
+        16384
+      ],
+      "lib/x86_64/libstockfish.so": [
+        16384,
+        16384,
+        16384
+      ]
+    }
+  }
+}

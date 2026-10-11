@@ -1,0 +1,13 @@
+{
+  "mode": "release",
+  "abi": "x86_64",
+  "device": "AVD human_chess_phase0_api36 / API 36",
+  "method": "ADB + UIAutomator; labels and history checked by assertions",
+  "maia_rating": 1900,
+  "human_side": "black",
+  "history_observed": "1. e4 e5 · 2. Nf3",
+  "stockfish_suggestion_observed": "Peça sugerida pelo Stockfish, b8, Cavalo preto",
+  "stats_screen_loaded": true,
+  "initial_estimated_rating_observed": 1500,
+  "initial_evaluated_games_observed": 0
+}

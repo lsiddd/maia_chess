@@ -13,12 +13,24 @@ class DriftStatsRepository implements StatsRepository {
 
   @override
   Stream<PlayerStatsSnapshot> watch() {
-    final query = _eligibleGamesQuery();
-    return query.watch().asyncMap((rows) => _snapshot(rows));
+    // Keep the initial/update signal tiny. Row mapping, sorting and rating
+    // projection happen in the worker through the shared connection.
+    return _db
+        .customSelect('SELECT 1', readsFrom: {_db.games, _db.ratingHistory})
+        .watch()
+        .asyncMap((_) => get());
   }
 
   @override
-  Future<PlayerStatsSnapshot> get() async {
+  Future<PlayerStatsSnapshot> get() => _db.computeWithDatabase(
+    connect: AppDatabase.connect,
+    computation: _readOnWorker,
+  );
+
+  static Future<PlayerStatsSnapshot> _readOnWorker(AppDatabase database) =>
+      DriftStatsRepository(database)._readSnapshot();
+
+  Future<PlayerStatsSnapshot> _readSnapshot() async {
     return _snapshot(await _eligibleGamesQuery().get());
   }
 
