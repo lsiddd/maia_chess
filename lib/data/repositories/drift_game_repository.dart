@@ -13,7 +13,7 @@ class DriftGameRepository implements GameRepository {
   Stream<List<StoredGame>> watchLibrary() {
     final query = _db.select(_db.games)
       ..orderBy([(row) => OrderingTerm.desc(row.lastModifiedAtUtc)]);
-    return query.watch().asyncMap((rows) => Future.wait(rows.map(_hydrate)));
+    return query.watch().asyncMap(_hydrateLibrary);
   }
 
   @override
@@ -132,6 +132,29 @@ class DriftGameRepository implements GameRepository {
       ..where((move) => move.gameId.equals(row.id))
       ..orderBy([(move) => OrderingTerm.asc(move.ply)]);
     final moves = await moveQuery.get();
+    return _fromRows(row, moves);
+  }
+
+  Future<List<StoredGame>> _hydrateLibrary(List<GameRow> rows) async {
+    if (rows.isEmpty) return const [];
+    // The library includes every game. Reading all moves avoids both N+1
+    // queries and an IN clause that could exceed SQLite's bind limit.
+    final moves =
+        await (_db.select(_db.gameMoves)..orderBy([
+              (move) => OrderingTerm.asc(move.gameId),
+              (move) => OrderingTerm.asc(move.ply),
+            ]))
+            .get();
+    final byGame = <String, List<GameMoveRow>>{};
+    for (final move in moves) {
+      (byGame[move.gameId] ??= []).add(move);
+    }
+    return rows
+        .map((row) => _fromRows(row, byGame[row.id] ?? const []))
+        .toList(growable: false);
+  }
+
+  StoredGame _fromRows(GameRow row, List<GameMoveRow> moves) {
     return StoredGame(
       id: row.id,
       startedAtUtc: row.startedAtUtc.toUtc(),
