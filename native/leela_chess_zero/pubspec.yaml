@@ -27,5 +27,5 @@ flutter:
       ios:
         pluginClass: Lc0Plugin
 
-  assets:
-    - assets/weights/maia-1900.pb.gz
+  # The host application chooses and bundles its weights. Declaring the
+  # example network here duplicates Maia 1900 in the Maia Chess APK.

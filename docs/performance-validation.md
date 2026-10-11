@@ -30,6 +30,24 @@ A medição independente de arraste coletou 253 frames: build médio 0,389 ms, p
 
 O atraso de raster continua presente no emulador com GPU por software. Não há comparação antes/depois de raster neste conjunto e não foi alterada a aparência do tabuleiro. O diagnóstico em aparelho físico permanece pendente.
 
+## Tamanho e empacotamento Android
+
+Dois builds consecutivos com o mesmo SDK, código Dart/nativo, configuração e comando `flutter build apk --release --split-per-abi --target-platform android-arm64`:
+
+| APK ARM64 | Bytes |
+|---|---:|
+| Antes da remoção da duplicata | 152.001.006 |
+| Depois | 150.737.798 |
+| Redução | 1.263.208 |
+
+O plugin vendorizado deixou de declarar o asset Maia 1900; o arquivo e sua declaração foram movidos para o exemplo, que agora usa um asset próprio. O bundle do exemplo foi compilado e contém os bytes corretos no caminho declarado. A aplicação continua usando `assets/maia_weights/maia-1900.pb.gz`. Consumidores externos deste fork que usassem a chave implícita `packages/leela_chess_zero/assets/weights/maia-1900.pb.gz` precisam declarar seus próprios pesos, conforme o README do plugin.
+
+Os nove pesos da aplicação e todas as bibliotecas `.so`, inclusive `libapp.so`, são idênticos entre os APKs. A redução resulta da duplicata e dos metadados correspondentes. [Comparação instrumentada](performance/apk-size.json). `libstockfish.so` continua sendo o maior componente; alterar sua NNUE exigiria uma validação separada da qualidade de análise.
+
+`verify_apk.py`, verificação da assinatura com `apksigner`, alinhamento ZIP via `zipalign -c -P 16 4` e inspeção dos segmentos ELF LOAD passaram. Todas as sete bibliotecas ARM64 têm alinhamento ELF de pelo menos 16 KB. Os scripts possuem dez testes passando, incluindo rejeição da duplicata do plugin.
+
+O build local utiliza a chave de debug prevista pela configuração existente, pois não há `android/app/key.properties`. Os APKs servem à validação local; a assinatura de distribuição não foi exercitada. O SDK também emitiu avisos de futura descontinuação de suporte a AGP 8.11.1 e Kotlin 2.2.20; os builds concluíram sem erro.
+
 ## Reproduzir
 
 ```sh

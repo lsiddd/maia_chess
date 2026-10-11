@@ -47,7 +47,7 @@ class _AppState extends State<MyApp> {
       final weightsPath = '${dir.path}/maia-1900.pb.gz';
 
       if (!await File(weightsPath).exists()) {
-        final data = await rootBundle.load('packages/leela_chess_zero/assets/weights/maia-1900.pb.gz');
+        final data = await rootBundle.load('assets/weights/maia-1900.pb.gz');
         await File(weightsPath).writeAsBytes(data.buffer.asUint8List());
       }
 

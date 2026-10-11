@@ -1,0 +1,15 @@
+{
+  "build_command": "flutter build apk --release --split-per-abi --target-platform android-arm64",
+  "before_ref": "5a5392e",
+  "before_bytes": 152001006,
+  "after_bytes": 150737798,
+  "saved_bytes": 1263208,
+  "duplicate_before": true,
+  "duplicate_after": false,
+  "duplicate_uncompressed_bytes": 1262607,
+  "duplicate_compressed_bytes": 1262956,
+  "duplicate_identical_to_app": true,
+  "all_nine_weights_unchanged": true,
+  "native_libraries_unchanged": true,
+  "stockfish_uncompressed_bytes": 114021256
+}

@@ -88,6 +88,12 @@ class ApkTests(unittest.TestCase):
     def test_extra_architecture(self):
         self.assertNotEqual(self.verify(extra="lib/x86_64/liblc0.so"), 0)
 
+    def test_duplicate_plugin_weights(self):
+        self.assertNotEqual(self.verify(extra=(
+            "assets/flutter_assets/packages/leela_chess_zero/"
+            "assets/weights/maia-1900.pb.gz"
+        )), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
