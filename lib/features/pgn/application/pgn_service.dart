@@ -3,6 +3,7 @@ import 'dart:io' as io;
 
 import 'package:dartchess/dartchess.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -20,6 +21,26 @@ class PgnFormatException implements Exception {
 
 class PgnService {
   const PgnService();
+
+  /// Keeps file validation and SAN replay off the UI isolate on Android.
+  /// The synchronous API remains available for callers with small inputs.
+  Future<StoredGame> parseImportAsync({
+    required String pgn,
+    required String id,
+    required DateTime importedAtUtc,
+  }) => compute(_parseImport, (
+    pgn: pgn,
+    id: id,
+    importedAtUtc: importedAtUtc,
+  ), debugLabel: 'PGN import');
+
+  static StoredGame _parseImport(
+    ({String pgn, String id, DateTime importedAtUtc}) request,
+  ) => const PgnService().parseImport(
+    pgn: request.pgn,
+    id: request.id,
+    importedAtUtc: request.importedAtUtc,
+  );
 
   StoredGame parseImport({
     required String pgn,
@@ -156,15 +177,24 @@ class PgnService {
 
   int _validateVariations(PgnNode<PgnNodeData> root, Position position) {
     var count = 0;
-    for (final child in root.children) {
-      final move = position.parseSan(child.data.san);
+    final pending = <({PgnChildNode<PgnNodeData> node, Position before})>[
+      for (final child in root.children.reversed)
+        (node: child, before: position),
+    ];
+    while (pending.isNotEmpty) {
+      final current = pending.removeLast();
+      final move = current.before.parseSan(current.node.data.san);
       if (move == null) {
         throw PgnFormatException(
           'O PGN contém uma variante com lance ilegal: '
-          '"${child.data.san}".',
+          '"${current.node.data.san}".',
         );
       }
-      count += 1 + _validateVariations(child, position.play(move));
+      count++;
+      final after = current.before.play(move);
+      for (final child in current.node.children.reversed) {
+        pending.add((node: child, before: after));
+      }
     }
     return count;
   }
@@ -307,24 +337,29 @@ class PgnFileService {
     final selected = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pgn'],
-      withData: true,
+      withData: false,
     );
     if (selected == null) return null;
     final file = selected.files.single;
     final bytes = file.bytes;
     try {
-      if (bytes != null) return utf8.decode(bytes);
+      if (bytes != null) return await compute(_decodePgn, bytes);
       final path = file.path;
       if (path == null) {
         throw const PgnFormatException(
           'O Android não forneceu acesso ao arquivo selecionado.',
         );
       }
-      return await io.File(path).readAsString();
+      return await compute(_readPgn, path);
     } on FormatException {
       throw const PgnFormatException('O arquivo PGN não está em UTF-8.');
     }
   }
+
+  static String _decodePgn(Uint8List bytes) => utf8.decode(bytes);
+
+  static Future<String> _readPgn(String filename) =>
+      io.File(filename).readAsString();
 
   Future<void> sharePgn({required String gameId, required String pgn}) async {
     final cache = await getTemporaryDirectory();
