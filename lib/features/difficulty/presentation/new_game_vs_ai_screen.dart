@@ -27,6 +27,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   bool _starting = false;
 
   Future<void> _start() async {
+    if (_starting) return;
     setState(() => _starting = true);
     final controller = ref.read(gameControllerProvider.notifier);
     try {

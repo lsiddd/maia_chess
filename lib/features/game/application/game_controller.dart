@@ -68,6 +68,7 @@ class GameController extends Notifier<GameState> {
     _isDisposed = false;
     ref.onDispose(() {
       _isDisposed = true;
+      _gameGeneration++;
       _hintGeneration++;
       cancelOpponentThreats();
       final cancellation = _hintCancellation;
@@ -84,9 +85,11 @@ class GameController extends Notifier<GameState> {
   /// Inicia uma partida local entre dois jogadores humanos, descartando
   /// qualquer modo vs. IA anterior (os motores não ficam mais ativos).
   Future<void> startTwoPlayers() async {
-    _gameGeneration++;
+    final generation = ++_gameGeneration;
     await _cancelHint('Uma nova partida foi iniciada.');
+    if (!_isCurrentGame(generation)) return;
     await _disposeEngines();
+    if (!_isCurrentGame(generation)) return;
     state = GameState.initial();
     await _beginPersistedGame();
   }
@@ -104,8 +107,10 @@ class GameController extends Notifier<GameState> {
     _gameGeneration++;
     final gameGeneration = _gameGeneration;
     await _cancelHint('Uma nova partida foi iniciada.');
+    if (!_isCurrentGame(gameGeneration)) return false;
     if (state.aiThinking) {
       await _discardLc0();
+      if (!_isCurrentGame(gameGeneration)) return false;
     }
 
     state = GameState.initial().copyWith(
@@ -117,16 +122,17 @@ class GameController extends Notifier<GameState> {
     try {
       await _ensureEngineLoaded(levelRating);
     } catch (e) {
-      if (gameGeneration == _gameGeneration) {
+      if (_isCurrentGame(gameGeneration)) {
         state = state.copyWith(aiThinking: false, engineError: 'Maia: $e');
       }
       return false;
     }
-    if (gameGeneration != _gameGeneration) return false;
+    if (!_isCurrentGame(gameGeneration)) return false;
     state = state.copyWith(aiThinking: false);
     if (!await _beginPersistedGame(playerSide: humanSide)) {
       return false;
     }
+    if (!_isCurrentGame(gameGeneration)) return false;
     return _maybePlayAiTurn();
   }
 
@@ -138,18 +144,21 @@ class GameController extends Notifier<GameState> {
     _gameGeneration++;
     final generation = _gameGeneration;
     await _cancelHint('Uma partida salva foi restaurada.');
+    if (!_isCurrentGame(generation)) return false;
     await _disposeEngines();
+    if (!_isCurrentGame(generation)) return false;
 
     StoredGame? stored;
     try {
       stored = await ref.read(gameRepositoryProvider).getActiveGame();
     } catch (error) {
+      if (!_isCurrentGame(generation)) return false;
       state = GameState.initial().copyWith(
         persistenceError: 'Não foi possível abrir o autosave: $error',
       );
       return false;
     }
-    if (stored == null) return false;
+    if (!_isCurrentGame(generation) || stored == null) return false;
     late final ReplayedGame replayed;
     try {
       replayed = const GameReplayer().replay(stored);
@@ -193,7 +202,7 @@ class GameController extends Notifier<GameState> {
       try {
         await _ensureEngineLoaded(stored.levelRating!);
       } catch (error) {
-        if (generation == _gameGeneration) {
+        if (_isCurrentGame(generation)) {
           state = state.copyWith(
             aiThinking: false,
             engineError: 'Maia: $error',
@@ -201,7 +210,7 @@ class GameController extends Notifier<GameState> {
         }
         return false;
       }
-      if (generation != _gameGeneration) return false;
+      if (!_isCurrentGame(generation)) return false;
       state = state.copyWith(aiThinking: false);
       return _maybePlayAiTurn();
     }
@@ -698,10 +707,12 @@ class GameController extends Notifier<GameState> {
   /// Reinicia a partida para a posição inicial, preservando o modo atual
   /// (dois jogadores ou vs. IA, com o mesmo nível).
   Future<void> reset() async {
-    _gameGeneration++;
+    final generation = ++_gameGeneration;
     await _cancelHint('A partida foi reiniciada.');
+    if (!_isCurrentGame(generation)) return;
     if (state.aiThinking) {
       await _discardLc0();
+      if (!_isCurrentGame(generation)) return;
     }
     state = GameState.initial().copyWith(
       aiSide: state.aiSide,
@@ -710,6 +721,7 @@ class GameController extends Notifier<GameState> {
     );
     final playerSide = state.aiSide?.opposite;
     if (!await _beginPersistedGame(playerSide: playerSide)) return;
+    if (!_isCurrentGame(generation)) return;
     await _maybePlayAiTurn();
   }
 
@@ -728,6 +740,7 @@ class GameController extends Notifier<GameState> {
   }
 
   Future<bool> _maybePlayAiTurn() async {
+    if (_isDisposed) return false;
     if (state.levelRating != null && !state.isGameOver) {
       unawaited(_warmUpStockfish());
     }
@@ -739,7 +752,7 @@ class GameController extends Notifier<GameState> {
     try {
       final levelRating = state.levelRating!;
       await _ensureEngineLoaded(levelRating);
-      if (gameGeneration != _gameGeneration) return false;
+      if (!_isCurrentGame(gameGeneration)) return false;
       final uci = await _lc0!.getBestMove(fen, nodes: 1);
       final move = Move.parse(uci);
       if (move == null) {
@@ -747,7 +760,7 @@ class GameController extends Notifier<GameState> {
       }
       // Além do modo/turno, confere a geração e a FEN para uma resposta
       // atrasada jamais cair numa partida reiniciada.
-      if (gameGeneration == _gameGeneration &&
+      if (_isCurrentGame(gameGeneration) &&
           state.isAiTurn &&
           state.position.fen == fen) {
         await _applyMove(move, actor: GameMoveActor.maia);
@@ -755,22 +768,26 @@ class GameController extends Notifier<GameState> {
       }
       return false;
     } catch (e) {
-      if (gameGeneration == _gameGeneration) {
+      if (_isCurrentGame(gameGeneration)) {
         final failedEngine = _lc0;
         _lc0 = null;
         _loadedLevelRating = null;
         await failedEngine?.dispose();
+        if (!_isCurrentGame(gameGeneration)) return false;
         state = state.copyWith(engineError: 'Maia: $e');
       }
       return false;
     } finally {
-      if (gameGeneration == _gameGeneration) {
+      if (_isCurrentGame(gameGeneration)) {
         state = state.copyWith(aiThinking: false);
       }
     }
   }
 
   Future<void> _ensureEngineLoaded(int levelRating) async {
+    if (_isDisposed) {
+      throw const HintCancelledException('Controller descartado');
+    }
     final disposal = _engineDisposal;
     if (disposal != null) await disposal;
     if (_lc0?.isReady == true && _loadedLevelRating == levelRating) return;
@@ -779,6 +796,9 @@ class GameController extends Notifier<GameState> {
     _lc0 = null;
     _loadedLevelRating = null;
     await previous?.dispose();
+    if (_isDisposed) {
+      throw const HintCancelledException('Controller descartado');
+    }
 
     final level = DifficultyLevel.byRating(levelRating);
     final engine = ref.read(lc0EngineFactoryProvider)();
@@ -944,6 +964,8 @@ class GameController extends Notifier<GameState> {
   }
 
   Future<bool> _beginPersistedGame({Side? playerSide}) async {
+    if (_isDisposed) return false;
+    final generation = _gameGeneration;
     final id = ref.read(gameIdFactoryProvider)();
     final now = DateTime.now().toUtc();
     state = state.copyWith(
@@ -958,31 +980,33 @@ class GameController extends Notifier<GameState> {
     );
     try {
       await _queuePersistence(
-        () => ref
-            .read(gameRepositoryProvider)
-            .beginGame(
-              StoredGame(
-                id: snapshot.id,
-                startedAtUtc: snapshot.startedAtUtc,
-                lastModifiedAtUtc: snapshot.lastModifiedAtUtc,
-                status: snapshot.status,
-                levelRating: snapshot.levelRating,
-                playerSide: playerSide,
-                result: snapshot.result,
-                evaluated: snapshot.evaluated,
-                campaignMode: snapshot.campaignMode,
-                initialFen: snapshot.initialFen,
-                currentFen: snapshot.currentFen,
-                pgn: snapshot.pgn,
-                clockEnabled: snapshot.clockEnabled,
-                initialTimeMs: snapshot.initialTimeMs,
-                whiteTimeMs: snapshot.whiteTimeMs,
-                blackTimeMs: snapshot.blackTimeMs,
-                moves: snapshot.moves,
-              ),
-            ),
+        () => !_isCurrentGame(generation)
+            ? Future.value()
+            : ref
+                  .read(gameRepositoryProvider)
+                  .beginGame(
+                    StoredGame(
+                      id: snapshot.id,
+                      startedAtUtc: snapshot.startedAtUtc,
+                      lastModifiedAtUtc: snapshot.lastModifiedAtUtc,
+                      status: snapshot.status,
+                      levelRating: snapshot.levelRating,
+                      playerSide: playerSide,
+                      result: snapshot.result,
+                      evaluated: snapshot.evaluated,
+                      campaignMode: snapshot.campaignMode,
+                      initialFen: snapshot.initialFen,
+                      currentFen: snapshot.currentFen,
+                      pgn: snapshot.pgn,
+                      clockEnabled: snapshot.clockEnabled,
+                      initialTimeMs: snapshot.initialTimeMs,
+                      whiteTimeMs: snapshot.whiteTimeMs,
+                      blackTimeMs: snapshot.blackTimeMs,
+                      moves: snapshot.moves,
+                    ),
+                  ),
       );
-      return true;
+      return _isCurrentGame(generation) && state.gameId == id;
     } catch (error) {
       if (!_isDisposed && state.gameId == id) {
         state = state.copyWith(
@@ -1121,6 +1145,9 @@ class GameController extends Notifier<GameState> {
     final piece = state.position.board.pieceAt(square);
     return piece != null && piece.color == state.position.turn;
   }
+
+  bool _isCurrentGame(int generation) =>
+      !_isDisposed && generation == _gameGeneration;
 }
 
 class HintCancelledException implements Exception {

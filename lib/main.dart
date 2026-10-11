@@ -60,6 +60,22 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _precachedChessAssets = false;
+  bool _openingGame = false;
+
+  Future<void> _openGame(Future<void> Function() open) async {
+    if (_openingGame || !mounted) return;
+    setState(() => _openingGame = true);
+    try {
+      await open();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível abrir a partida: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _openingGame = false);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -97,22 +113,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: AppSpacing.xl),
             if (activeGame.valueOrNull != null) ...[
               FilledButton.icon(
-                onPressed: () => _resume(context, ref),
+                onPressed: _openingGame
+                    ? null
+                    : () => _openGame(() => _resume(context, ref)),
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Continuar partida salva'),
               ),
               const SizedBox(height: AppSpacing.m),
             ],
             FilledButton.icon(
-              onPressed: () => Navigator.of(
-                context,
-              ).push(AppPageRoute(builder: (_) => const CampaignScreen())),
+              onPressed: _openingGame
+                  ? null
+                  : () => _openGame(() async {
+                      await Navigator.of(context).push(
+                        AppPageRoute(builder: (_) => const CampaignScreen()),
+                      );
+                    }),
               icon: const Icon(Icons.flag_outlined),
               label: const Text('Campanha Maia'),
             ),
             const SizedBox(height: AppSpacing.m),
             FilledButton.tonalIcon(
-              onPressed: () => _openNewAiGame(context, ref),
+              onPressed: _openingGame
+                  ? null
+                  : () => _openGame(() => _openNewAiGame(context, ref)),
               icon: const Icon(Icons.psychology_outlined),
               label: const Text('Modo livre contra a IA'),
             ),
@@ -132,7 +156,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ListTile(
                     leading: const Icon(Icons.sports_esports_outlined),
                     title: const Text('Jogar (2 jogadores locais)'),
-                    onTap: () => _startLocalGame(context, ref),
+                    onTap: _openingGame
+                        ? null
+                        : () => _openGame(() => _startLocalGame(context, ref)),
                   ),
                   const Divider(height: 1),
                   ListTile(
@@ -183,11 +209,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
       return;
     }
-    unawaited(
-      Navigator.of(
-        context,
-      ).push(AppPageRoute(builder: (_) => const GameScreen())),
-    );
+    await Navigator.of(
+      context,
+    ).push(AppPageRoute(builder: (_) => const GameScreen()));
   }
 
   Future<void> _openNewAiGame(BuildContext context, WidgetRef ref) async {
@@ -200,6 +224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _startLocalGame(BuildContext context, WidgetRef ref) async {
     if (!await _confirmReplacingActiveGame(context, ref)) return;
+    if (!context.mounted) return;
     await ref.read(gameControllerProvider.notifier).startTwoPlayers();
     if (!context.mounted) return;
     final error = ref.read(gameControllerProvider).persistenceError;
