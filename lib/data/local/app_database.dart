@@ -85,6 +85,10 @@ class RatingHistory extends Table {
 @DataClassName('AppSettingsRow')
 class AppSettings extends Table {
   IntColumn get id => integer().withDefault(const Constant(1))();
+  BoolColumn get showAttackedPieces =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get ownAttackedPiecesOnly =>
+      boolean().withDefault(const Constant(false))();
   TextColumn get pieceSet => text().withDefault(const Constant('cburnett'))();
   TextColumn get boardTheme => text().withDefault(const Constant('brown'))();
   TextColumn get themeMode => text().withDefault(const Constant('system'))();
@@ -107,7 +111,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -127,6 +131,13 @@ class AppDatabase extends _$AppDatabase {
           difficultyProgress.windowGames,
         );
         await rebuildDerivedState();
+      }
+      if (from < 4) {
+        await migrator.addColumn(appSettings, appSettings.showAttackedPieces);
+        await migrator.addColumn(
+          appSettings,
+          appSettings.ownAttackedPiecesOnly,
+        );
       }
       if (from < 3) {
         await migrator.addColumn(appSettings, appSettings.boardTheme);

@@ -35,8 +35,12 @@ class ChessBoardWidget extends ConsumerStatefulWidget {
     this.orientation = Side.white,
     this.showAttackedPieces = false,
     this.threats = const [],
+    this.hintSquare,
+    this.attackedSide,
   });
 
+  final Square? hintSquare;
+  final Side? attackedSide;
   final bool showAttackedPieces;
   final List<OpponentThreat> threats;
 
@@ -274,10 +278,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
 
     final selected = state.selectedSquare;
     final canInteract =
-        !state.isGameOver &&
-        !state.isAiTurn &&
-        !state.aiThinking &&
-        !state.hintThinking;
+        !state.isGameOver && !state.isAiTurn && !state.aiThinking;
     final legalDestinations = selected != null
         ? state.legalDestinationsFrom(selected).toSet()
         : const <Square>{};
@@ -551,18 +552,28 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                         button: true,
                         enabled: canInteract,
                         value: [
+                          if (square == widget.hintSquare)
+                            'Peça sugerida pelo Stockfish',
                           if (isLegalTarget) 'Destino legal',
                           if (square == lastMoveFrom || square == lastMoveTo)
                             'Último lance',
                           if (square == checkSquare) 'Xeque',
                           if (widget.showAttackedPieces &&
-                              _attackedSquares.contains(square))
-                            'Peça atacada',
+                              _attackedSquares.contains(square) &&
+                              (widget.attackedSide == null ||
+                                  piece?.color == widget.attackedSide))
+                            'Peça atacada${piece != null && state.position.board.attacksTo(square, piece.color).isNotEmpty ? ', defendida' : ', sem defesa geométrica'}',
                         ].join(', '),
                         onTap: canInteract
                             ? () => unawaited(tapSquare(square))
                             : null,
                         child: _SquareVisual(
+                          isHint: square == widget.hintSquare,
+                          defended:
+                              piece != null &&
+                              state.position.board
+                                  .attacksTo(square, piece.color)
+                                  .isNotEmpty,
                           key: ValueKey('board-square-$displayRow-$displayCol'),
                           piece: (isBeingDragged || isFlightDestination)
                               ? null
@@ -575,13 +586,11 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           isLastMove:
                               square == lastMoveFrom || square == lastMoveTo,
                           isCheck: square == checkSquare,
-                          attackedColor:
+                          isAttacked:
                               widget.showAttackedPieces &&
-                                  _attackedSquares.contains(square)
-                              ? (piece?.color == Side.white
-                                    ? const Color(0xFFE65100)
-                                    : const Color(0xFF8E24AA))
-                              : null,
+                              _attackedSquares.contains(square) &&
+                              (widget.attackedSide == null ||
+                                  piece?.color == widget.attackedSide),
                           instantExit:
                               isFlightOrigin ||
                               isBeingDragged ||
@@ -948,11 +957,15 @@ class _SquareVisual extends StatelessWidget {
     required this.isLastMove,
     required this.isCheck,
     required this.instantExit,
-    this.attackedColor,
+    this.isAttacked = false,
+    this.isHint = false,
+    this.defended = false,
   });
 
   final Piece? piece;
-  final Color? attackedColor;
+  final bool isAttacked;
+  final bool isHint;
+  final bool defended;
   final Key? pieceKey;
   final bool isSelected;
   final bool isLegalTarget;
@@ -1037,22 +1050,47 @@ class _SquareVisual extends StatelessWidget {
                 ),
               ),
             ),
-            if (attackedColor != null)
+            if (isAttacked)
               Positioned.fill(
                 child: IgnorePointer(
                   child: Container(
                     key: const Key('attacked-piece-indicator'),
                     margin: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
-                      border: Border.all(color: attackedColor!, width: 3),
-                      borderRadius: BorderRadius.circular(6),
-                      color: attackedColor!.withValues(alpha: 0.16),
+                      border: Border.all(
+                        color: defended
+                            ? const Color(0xFF1565C0)
+                            : const Color(0xFFC45500),
+                        width: 3,
+                      ),
+                      borderRadius: BorderRadius.circular(defended ? 8 : 0),
                     ),
-                    alignment: Alignment.topRight,
-                    child: Icon(
-                      Icons.warning_rounded,
-                      size: 13,
-                      color: attackedColor,
+                    child: defended
+                        ? Container(
+                            margin: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: const Color(0xFF1565C0),
+                              ),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+              ),
+            if (isHint)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    key: const Key('hint-origin-indicator'),
+                    margin: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFFFFB300),
+                        width: 4,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
                 ),

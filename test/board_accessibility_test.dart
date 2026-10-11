@@ -74,7 +74,9 @@ void main() {
       await pumpGame(tester);
       await tester.pumpAndSettle();
       if (flipped) {
-        await tester.tap(find.byTooltip('Inverter tabuleiro'));
+        await tester.tap(find.text('Mais'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Girar tabuleiro'));
         await tester.pumpAndSettle();
       }
       for (final file in 'abcdefgh'.split('')) {
@@ -106,7 +108,7 @@ void main() {
       expect(tester.getSemantics(square('e4')).label, 'e4, Peão branco');
       expect(find.bySemanticsLabel('Peão branco'), findsNothing);
       await tester.pumpAndSettle();
-      expect(find.text('e4'), findsOneWidget);
+      expect(find.text('1. e4'), findsOneWidget);
       final status = tester.getSemantics(find.byKey(const Key('turn-status')));
       expect(status.flagsCollection.isLiveRegion, isTrue);
       expect(status.label, contains('Peão branco de e2 para e4.'));
@@ -118,7 +120,7 @@ void main() {
       await activate(tester, 'e4');
       await activate(tester, 'd5');
       await tester.pumpAndSettle();
-      expect(find.text('exd5'), findsOneWidget);
+      expect(find.textContaining('2. exd5'), findsOneWidget);
       expect(
         tester.getSemantics(find.byKey(const Key('turn-status'))).label,
         contains('Peão branco de e4 para d5, captura.'),

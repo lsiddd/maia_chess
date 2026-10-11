@@ -2207,6 +2207,35 @@ class $AppSettingsTable extends AppSettings
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _showAttackedPiecesMeta =
+      const VerificationMeta('showAttackedPieces');
+  @override
+  late final GeneratedColumn<bool> showAttackedPieces = GeneratedColumn<bool>(
+    'show_attacked_pieces',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("show_attacked_pieces" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _ownAttackedPiecesOnlyMeta =
+      const VerificationMeta('ownAttackedPiecesOnly');
+  @override
+  late final GeneratedColumn<bool> ownAttackedPiecesOnly =
+      GeneratedColumn<bool>(
+        'own_attacked_pieces_only',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("own_attacked_pieces_only" IN (0, 1))',
+        ),
+        defaultValue: const Constant(false),
+      );
   static const VerificationMeta _pieceSetMeta = const VerificationMeta(
     'pieceSet',
   );
@@ -2282,6 +2311,8 @@ class $AppSettingsTable extends AppSettings
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    showAttackedPieces,
+    ownAttackedPiecesOnly,
     pieceSet,
     boardTheme,
     themeMode,
@@ -2303,6 +2334,24 @@ class $AppSettingsTable extends AppSettings
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('show_attacked_pieces')) {
+      context.handle(
+        _showAttackedPiecesMeta,
+        showAttackedPieces.isAcceptableOrUnknown(
+          data['show_attacked_pieces']!,
+          _showAttackedPiecesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('own_attacked_pieces_only')) {
+      context.handle(
+        _ownAttackedPiecesOnlyMeta,
+        ownAttackedPiecesOnly.isAcceptableOrUnknown(
+          data['own_attacked_pieces_only']!,
+          _ownAttackedPiecesOnlyMeta,
+        ),
+      );
     }
     if (data.containsKey('piece_set')) {
       context.handle(
@@ -2364,6 +2413,14 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      showAttackedPieces: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}show_attacked_pieces'],
+      )!,
+      ownAttackedPiecesOnly: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}own_attacked_pieces_only'],
+      )!,
       pieceSet: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}piece_set'],
@@ -2399,6 +2456,8 @@ class $AppSettingsTable extends AppSettings
 
 class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   final int id;
+  final bool showAttackedPieces;
+  final bool ownAttackedPiecesOnly;
   final String pieceSet;
   final String boardTheme;
   final String themeMode;
@@ -2407,6 +2466,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   final DateTime updatedAtUtc;
   const AppSettingsRow({
     required this.id,
+    required this.showAttackedPieces,
+    required this.ownAttackedPiecesOnly,
     required this.pieceSet,
     required this.boardTheme,
     required this.themeMode,
@@ -2418,6 +2479,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['show_attacked_pieces'] = Variable<bool>(showAttackedPieces);
+    map['own_attacked_pieces_only'] = Variable<bool>(ownAttackedPiecesOnly);
     map['piece_set'] = Variable<String>(pieceSet);
     map['board_theme'] = Variable<String>(boardTheme);
     map['theme_mode'] = Variable<String>(themeMode);
@@ -2430,6 +2493,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   AppSettingsCompanion toCompanion(bool nullToAbsent) {
     return AppSettingsCompanion(
       id: Value(id),
+      showAttackedPieces: Value(showAttackedPieces),
+      ownAttackedPiecesOnly: Value(ownAttackedPiecesOnly),
       pieceSet: Value(pieceSet),
       boardTheme: Value(boardTheme),
       themeMode: Value(themeMode),
@@ -2446,6 +2511,10 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return AppSettingsRow(
       id: serializer.fromJson<int>(json['id']),
+      showAttackedPieces: serializer.fromJson<bool>(json['showAttackedPieces']),
+      ownAttackedPiecesOnly: serializer.fromJson<bool>(
+        json['ownAttackedPiecesOnly'],
+      ),
       pieceSet: serializer.fromJson<String>(json['pieceSet']),
       boardTheme: serializer.fromJson<String>(json['boardTheme']),
       themeMode: serializer.fromJson<String>(json['themeMode']),
@@ -2461,6 +2530,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'showAttackedPieces': serializer.toJson<bool>(showAttackedPieces),
+      'ownAttackedPiecesOnly': serializer.toJson<bool>(ownAttackedPiecesOnly),
       'pieceSet': serializer.toJson<String>(pieceSet),
       'boardTheme': serializer.toJson<String>(boardTheme),
       'themeMode': serializer.toJson<String>(themeMode),
@@ -2472,6 +2543,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
 
   AppSettingsRow copyWith({
     int? id,
+    bool? showAttackedPieces,
+    bool? ownAttackedPiecesOnly,
     String? pieceSet,
     String? boardTheme,
     String? themeMode,
@@ -2480,6 +2553,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     DateTime? updatedAtUtc,
   }) => AppSettingsRow(
     id: id ?? this.id,
+    showAttackedPieces: showAttackedPieces ?? this.showAttackedPieces,
+    ownAttackedPiecesOnly: ownAttackedPiecesOnly ?? this.ownAttackedPiecesOnly,
     pieceSet: pieceSet ?? this.pieceSet,
     boardTheme: boardTheme ?? this.boardTheme,
     themeMode: themeMode ?? this.themeMode,
@@ -2490,6 +2565,12 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   AppSettingsRow copyWithCompanion(AppSettingsCompanion data) {
     return AppSettingsRow(
       id: data.id.present ? data.id.value : this.id,
+      showAttackedPieces: data.showAttackedPieces.present
+          ? data.showAttackedPieces.value
+          : this.showAttackedPieces,
+      ownAttackedPiecesOnly: data.ownAttackedPiecesOnly.present
+          ? data.ownAttackedPiecesOnly.value
+          : this.ownAttackedPiecesOnly,
       pieceSet: data.pieceSet.present ? data.pieceSet.value : this.pieceSet,
       boardTheme: data.boardTheme.present
           ? data.boardTheme.value
@@ -2511,6 +2592,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   String toString() {
     return (StringBuffer('AppSettingsRow(')
           ..write('id: $id, ')
+          ..write('showAttackedPieces: $showAttackedPieces, ')
+          ..write('ownAttackedPiecesOnly: $ownAttackedPiecesOnly, ')
           ..write('pieceSet: $pieceSet, ')
           ..write('boardTheme: $boardTheme, ')
           ..write('themeMode: $themeMode, ')
@@ -2524,6 +2607,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   @override
   int get hashCode => Object.hash(
     id,
+    showAttackedPieces,
+    ownAttackedPiecesOnly,
     pieceSet,
     boardTheme,
     themeMode,
@@ -2536,6 +2621,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       identical(this, other) ||
       (other is AppSettingsRow &&
           other.id == this.id &&
+          other.showAttackedPieces == this.showAttackedPieces &&
+          other.ownAttackedPiecesOnly == this.ownAttackedPiecesOnly &&
           other.pieceSet == this.pieceSet &&
           other.boardTheme == this.boardTheme &&
           other.themeMode == this.themeMode &&
@@ -2546,6 +2633,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
 
 class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   final Value<int> id;
+  final Value<bool> showAttackedPieces;
+  final Value<bool> ownAttackedPiecesOnly;
   final Value<String> pieceSet;
   final Value<String> boardTheme;
   final Value<String> themeMode;
@@ -2554,6 +2643,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   final Value<DateTime> updatedAtUtc;
   const AppSettingsCompanion({
     this.id = const Value.absent(),
+    this.showAttackedPieces = const Value.absent(),
+    this.ownAttackedPiecesOnly = const Value.absent(),
     this.pieceSet = const Value.absent(),
     this.boardTheme = const Value.absent(),
     this.themeMode = const Value.absent(),
@@ -2563,6 +2654,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   });
   AppSettingsCompanion.insert({
     this.id = const Value.absent(),
+    this.showAttackedPieces = const Value.absent(),
+    this.ownAttackedPiecesOnly = const Value.absent(),
     this.pieceSet = const Value.absent(),
     this.boardTheme = const Value.absent(),
     this.themeMode = const Value.absent(),
@@ -2572,6 +2665,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   }) : updatedAtUtc = Value(updatedAtUtc);
   static Insertable<AppSettingsRow> custom({
     Expression<int>? id,
+    Expression<bool>? showAttackedPieces,
+    Expression<bool>? ownAttackedPiecesOnly,
     Expression<String>? pieceSet,
     Expression<String>? boardTheme,
     Expression<String>? themeMode,
@@ -2581,6 +2676,10 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (showAttackedPieces != null)
+        'show_attacked_pieces': showAttackedPieces,
+      if (ownAttackedPiecesOnly != null)
+        'own_attacked_pieces_only': ownAttackedPiecesOnly,
       if (pieceSet != null) 'piece_set': pieceSet,
       if (boardTheme != null) 'board_theme': boardTheme,
       if (themeMode != null) 'theme_mode': themeMode,
@@ -2594,6 +2693,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
 
   AppSettingsCompanion copyWith({
     Value<int>? id,
+    Value<bool>? showAttackedPieces,
+    Value<bool>? ownAttackedPiecesOnly,
     Value<String>? pieceSet,
     Value<String>? boardTheme,
     Value<String>? themeMode,
@@ -2603,6 +2704,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   }) {
     return AppSettingsCompanion(
       id: id ?? this.id,
+      showAttackedPieces: showAttackedPieces ?? this.showAttackedPieces,
+      ownAttackedPiecesOnly:
+          ownAttackedPiecesOnly ?? this.ownAttackedPiecesOnly,
       pieceSet: pieceSet ?? this.pieceSet,
       boardTheme: boardTheme ?? this.boardTheme,
       themeMode: themeMode ?? this.themeMode,
@@ -2617,6 +2721,14 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (showAttackedPieces.present) {
+      map['show_attacked_pieces'] = Variable<bool>(showAttackedPieces.value);
+    }
+    if (ownAttackedPiecesOnly.present) {
+      map['own_attacked_pieces_only'] = Variable<bool>(
+        ownAttackedPiecesOnly.value,
+      );
     }
     if (pieceSet.present) {
       map['piece_set'] = Variable<String>(pieceSet.value);
@@ -2643,6 +2755,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   String toString() {
     return (StringBuffer('AppSettingsCompanion(')
           ..write('id: $id, ')
+          ..write('showAttackedPieces: $showAttackedPieces, ')
+          ..write('ownAttackedPiecesOnly: $ownAttackedPiecesOnly, ')
           ..write('pieceSet: $pieceSet, ')
           ..write('boardTheme: $boardTheme, ')
           ..write('themeMode: $themeMode, ')
@@ -4250,6 +4364,8 @@ typedef $$RatingHistoryTableProcessedTableManager =
 typedef $$AppSettingsTableCreateCompanionBuilder =
     AppSettingsCompanion Function({
       Value<int> id,
+      Value<bool> showAttackedPieces,
+      Value<bool> ownAttackedPiecesOnly,
       Value<String> pieceSet,
       Value<String> boardTheme,
       Value<String> themeMode,
@@ -4260,6 +4376,8 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
 typedef $$AppSettingsTableUpdateCompanionBuilder =
     AppSettingsCompanion Function({
       Value<int> id,
+      Value<bool> showAttackedPieces,
+      Value<bool> ownAttackedPiecesOnly,
       Value<String> pieceSet,
       Value<String> boardTheme,
       Value<String> themeMode,
@@ -4279,6 +4397,16 @@ class $$AppSettingsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showAttackedPieces => $composableBuilder(
+    column: $table.showAttackedPieces,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get ownAttackedPiecesOnly => $composableBuilder(
+    column: $table.ownAttackedPiecesOnly,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4327,6 +4455,16 @@ class $$AppSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get showAttackedPieces => $composableBuilder(
+    column: $table.showAttackedPieces,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get ownAttackedPiecesOnly => $composableBuilder(
+    column: $table.ownAttackedPiecesOnly,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get pieceSet => $composableBuilder(
     column: $table.pieceSet,
     builder: (column) => ColumnOrderings(column),
@@ -4369,6 +4507,16 @@ class $$AppSettingsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get showAttackedPieces => $composableBuilder(
+    column: $table.showAttackedPieces,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get ownAttackedPiecesOnly => $composableBuilder(
+    column: $table.ownAttackedPiecesOnly,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get pieceSet =>
       $composableBuilder(column: $table.pieceSet, builder: (column) => column);
@@ -4429,6 +4577,8 @@ class $$AppSettingsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<bool> showAttackedPieces = const Value.absent(),
+                Value<bool> ownAttackedPiecesOnly = const Value.absent(),
                 Value<String> pieceSet = const Value.absent(),
                 Value<String> boardTheme = const Value.absent(),
                 Value<String> themeMode = const Value.absent(),
@@ -4437,6 +4587,8 @@ class $$AppSettingsTableTableManager
                 Value<DateTime> updatedAtUtc = const Value.absent(),
               }) => AppSettingsCompanion(
                 id: id,
+                showAttackedPieces: showAttackedPieces,
+                ownAttackedPiecesOnly: ownAttackedPiecesOnly,
                 pieceSet: pieceSet,
                 boardTheme: boardTheme,
                 themeMode: themeMode,
@@ -4447,6 +4599,8 @@ class $$AppSettingsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<bool> showAttackedPieces = const Value.absent(),
+                Value<bool> ownAttackedPiecesOnly = const Value.absent(),
                 Value<String> pieceSet = const Value.absent(),
                 Value<String> boardTheme = const Value.absent(),
                 Value<String> themeMode = const Value.absent(),
@@ -4455,6 +4609,8 @@ class $$AppSettingsTableTableManager
                 required DateTime updatedAtUtc,
               }) => AppSettingsCompanion.insert(
                 id: id,
+                showAttackedPieces: showAttackedPieces,
+                ownAttackedPiecesOnly: ownAttackedPiecesOnly,
                 pieceSet: pieceSet,
                 boardTheme: boardTheme,
                 themeMode: themeMode,

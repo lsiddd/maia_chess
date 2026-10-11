@@ -1,11 +1,9 @@
 import 'dart:async';
-
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
-
 import 'game_controller_test.dart'
     show FakeGameRepository, FakeLc0Engine, FakeStockfishEngine;
 
@@ -78,267 +76,155 @@ void main() {
     },
   );
 
-  test(
-    'Maia e Stockfish calculam em paralelo com busca padrão de 500ms',
-    () async {
-      final maiaStarted = Completer<void>();
-      final stockfishStarted = Completer<void>();
-      final maiaReply = Completer<String>();
-      final stockfishReply = Completer<String>();
-      final maia = FakeLc0Engine(
-        onMove: (_, nodes) {
-          expect(nodes, 1);
-          maiaStarted.complete();
-          return maiaReply.future;
-        },
-      );
-      final stockfish = FakeStockfishEngine(
-        onMove: (_, movetimeMs) {
-          expect(movetimeMs, 500);
-          stockfishStarted.complete();
-          return stockfishReply.future;
-        },
-      );
-      final container = _container(
-        maiaFactory: () => maia,
-        stockfishFactory: () => stockfish,
-      );
-      final controller = container.read(gameControllerProvider.notifier);
-      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+  late FakeLc0Engine maia;
+  late List<FakeStockfishEngine> engines;
+  late ProviderContainer container;
+  late GameController game;
+  void setup(
+    Future<String> Function(String, int) move, {
+    Duration timeout = const Duration(seconds: 2),
+  }) {
+    maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
+    engines = [];
+    container = ProviderContainer(
+      overrides: [
+        gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
+        maiaWeightsResolverProvider.overrideWithValue(
+          (level) async => level.weightsAsset,
+        ),
+        lc0EngineFactoryProvider.overrideWithValue(() => maia),
+        stockfishWarmupEnabledProvider.overrideWithValue(false),
+        stockfishEngineFactoryProvider.overrideWithValue(() {
+          final engine = FakeStockfishEngine(onMove: move);
+          engines.add(engine);
+          return engine;
+        }),
+        hintTotalTimeoutProvider.overrideWithValue(timeout),
+      ],
+    );
+    game = container.read(gameControllerProvider.notifier);
+    addTearDown(() async {
+      await game.shutdownEngines();
+      container.dispose();
+    });
+  }
 
-      final hint = controller.getHint();
-      // Nenhum motor responde antes de ambos iniciarem: uma implementação
-      // sequencial não consegue passar por esta barreira.
-      await Future.wait([maiaStarted.future, stockfishStarted.future]);
-      expect(maia.requestedFens.single, stockfish.requestedFens.single);
-      stockfishReply.complete('d2d4');
+  test(
+    'dica usa somente Stockfish, valida origem e compartilha busca',
+    () async {
+      final reply = Completer<String>();
+      setup((_, budget) {
+        expect(budget, 500);
+        return reply.future;
+      });
+      await game.startVsAi(humanSide: Side.white, levelRating: 1100);
+      final first = game.getHint();
+      expect(identical(first, game.getHint()), isTrue);
       await Future<void>.delayed(Duration.zero);
-      expect(container.read(gameControllerProvider).hintThinking, isTrue);
-      maiaReply.complete('e2e4');
-
-      final result = await hint;
-      expect(result.maiaSan, 'e4');
-      expect(result.stockfishSan, 'd4');
-      expect(container.read(gameControllerProvider).hintThinking, isFalse);
-    },
-  );
-
-  test(
-    'reabrir dica reutiliza resultado e respeita o tempo de análise',
-    () async {
-      final budgets = <int>[];
-      final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
-      final stockfish = FakeStockfishEngine(
-        onMove: (_, movetimeMs) async {
-          budgets.add(movetimeMs);
-          return 'd2d4';
-        },
-      );
-      final container = _container(
-        maiaFactory: () => maia,
-        stockfishFactory: () => stockfish,
-      );
-      final controller = container.read(gameControllerProvider.notifier);
-      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-
-      final first = await controller.getHint();
-      await controller.cancelHint(); // fechar uma dica concluída mantém o cache
-      final repeated = await controller.getHint();
-      expect(identical(first, repeated), isTrue);
-      expect(maia.requestedFens, hasLength(1));
-      expect(stockfish.requestedFens, hasLength(1));
-      expect(container.read(gameControllerProvider).evaluated, isFalse);
-
-      final longer = await controller.getHint(stockfishMovetimeMs: 1500);
-      expect(identical(first, longer), isFalse);
-      expect(
-        identical(longer, await controller.getHint(stockfishMovetimeMs: 1500)),
-        isTrue,
-      );
-      expect(budgets, [500, 1500]);
-      expect(maia.requestedFens, hasLength(2));
-      expect(maia.initPaths, hasLength(1));
-    },
-  );
-
-  test('uma posição diferente recebe uma dica nova', () async {
-    final maia = FakeLc0Engine(
-      onMove: (fen, _) async {
-        final position = Chess.fromSetup(Setup.parseFen(fen));
-        return position.turn == Side.black ? 'e7e5' : 'd2d4';
-      },
-    );
-    final stockfish = FakeStockfishEngine(
-      onMove: (fen, _) async {
-        final position = Chess.fromSetup(Setup.parseFen(fen));
-        return position.board.pieceAt(Square.e4) == null ? 'e2e4' : 'g1f3';
-      },
-    );
-    final container = _container(
-      maiaFactory: () => maia,
-      stockfishFactory: () => stockfish,
-    );
-    final controller = container.read(gameControllerProvider.notifier);
-    await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-    expect((await controller.getHint()).stockfishSan, 'e4');
-
-    await controller.attemptDragMove(
-      Square.e2,
-      Square.e4,
-      onPromotion: () async => null,
-    );
-    expect((await controller.getHint()).stockfishSan, 'Nf3');
-    expect(stockfish.requestedFens.toSet(), hasLength(2));
-    expect(maia.requestedFens, hasLength(3)); // duas dicas e a resposta da IA
-  });
-
-  test('nova partida e novo nível não reutilizam uma dica antiga', () async {
-    final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
-    final stockfish = FakeStockfishEngine(onMove: (_, _) async => 'd2d4');
-    final container = _container(
-      maiaFactory: () => maia,
-      stockfishFactory: () => stockfish,
-    );
-    final controller = container.read(gameControllerProvider.notifier);
-
-    for (final level in [1100, 1100, 1900]) {
-      await controller.startVsAi(humanSide: Side.white, levelRating: level);
-      expect(container.read(gameControllerProvider).evaluated, isTrue);
-      expect((await controller.getHint()).levelRating, level);
+      expect(maia.requestedFens, isEmpty);
+      reply.complete('d2d4');
+      final hint = await first;
+      expect(hint.move.from, Square.d2);
+      expect(hint.stockfishSan, 'd4');
+      expect(hint.fen, Chess.initial.fen);
       expect(container.read(gameControllerProvider).evaluated, isFalse);
       expect(
         (await container.read(gameRepositoryProvider).getActiveGame())!
             .evaluated,
         isFalse,
       );
-    }
-    expect(stockfish.requestedFens, hasLength(3));
-    expect(stockfish.requestedFens.toSet(), hasLength(1));
-    expect(maia.requestedFens, hasLength(3));
-  });
-
-  test('falha do Stockfish encerra dica sem esperar um Maia preso', () async {
-    final lateReply = Completer<String>();
-    final maiaEngines = <FakeLc0Engine>[];
-    final stockfishEngines = <FakeStockfishEngine>[];
-    final container = _container(
-      maiaFactory: () {
-        final first = maiaEngines.isEmpty;
-        final engine = FakeLc0Engine(
-          onMove: (_, _) => first ? lateReply.future : Future.value('e2e4'),
-        );
-        maiaEngines.add(engine);
-        return engine;
-      },
-      stockfishFactory: () {
-        final first = stockfishEngines.isEmpty;
-        final engine = FakeStockfishEngine(
-          onMove: (_, _) async {
-            if (first) throw StateError('busca Stockfish falhou');
-            return 'd2d4';
-          },
-        );
-        stockfishEngines.add(engine);
-        return engine;
-      },
+      expect(identical(await game.getHint(), hint), isTrue);
+      expect(engines.single.requestedFens, hasLength(1));
+    },
+  );
+  test('cache distingue orçamento, posição e nova partida', () async {
+    final budgets = <int>[];
+    setup((fen, budget) async {
+      budgets.add(budget);
+      return fen == Chess.initial.fen ? 'd2d4' : 'g1f3';
+    });
+    await game.startVsAi(humanSide: Side.white, levelRating: 1100);
+    await game.getHint();
+    await game.getHint(stockfishMovetimeMs: 1500);
+    await game.attemptDragMove(
+      Square.e2,
+      Square.e4,
+      onPromotion: () async => null,
     );
-    final controller = container.read(gameControllerProvider.notifier);
-    await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-
-    await expectLater(controller.getHint(), throwsA(isA<StateError>()));
-    expect(lateReply.isCompleted, isFalse);
-    expect(maiaEngines.first.disposeCount, 1);
-    expect(stockfishEngines.first.disposeCount, 1);
-    lateReply.completeError(StateError('falha Maia atrasada'));
-    await Future<void>.delayed(Duration.zero);
-
-    final recovered = await controller.getHint();
-    expect(recovered.maiaSan, 'e4');
-    expect(recovered.stockfishSan, 'd4');
-    expect(maiaEngines, hasLength(2));
-    expect(stockfishEngines, hasLength(2));
+    expect((await game.getHint()).move.from, Square.g1);
+    await game.reset();
+    await game.getHint();
+    expect(budgets, [500, 1500, 500, 500]);
+    expect(maia.requestedFens, hasLength(1));
   });
-
-  test('lance Maia ilegal falha sem esperar um Stockfish preso', () async {
-    final stockfishReply = Completer<String>();
-    final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e5');
-    final stockfish = FakeStockfishEngine(
-      onMove: (_, _) => stockfishReply.future,
-    );
-    final container = _container(
-      maiaFactory: () => maia,
-      stockfishFactory: () => stockfish,
-    );
-    final controller = container.read(gameControllerProvider.notifier);
-    await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-
-    await expectLater(controller.getHint(), throwsA(isA<StateError>()));
-    expect(stockfishReply.isCompleted, isFalse);
-    expect(maia.disposeCount, 1);
-    expect(stockfish.disposeCount, 1);
-    stockfishReply.complete('d2d4');
-    await Future<void>.delayed(Duration.zero);
-    expect(container.read(gameControllerProvider).hintThinking, isFalse);
-  });
-
   test(
-    'cancelar ambas as buscas ignora erros tardios e permite nova dica',
+    'jogar cancela dica e ignora resposta atrasada sem descartar Maia',
     () async {
-      final maiaStarted = Completer<void>();
-      final stockfishStarted = Completer<void>();
-      final maiaReply = Completer<String>();
-      final stockfishReply = Completer<String>();
-      final maiaEngines = <FakeLc0Engine>[];
-      final stockfishEngines = <FakeStockfishEngine>[];
-      final container = _container(
-        maiaFactory: () {
-          final first = maiaEngines.isEmpty;
-          final engine = FakeLc0Engine(
-            onMove: (_, _) {
-              if (!first) return Future.value('d2d4');
-              maiaStarted.complete();
-              return maiaReply.future;
-            },
-          );
-          maiaEngines.add(engine);
-          return engine;
-        },
-        stockfishFactory: () {
-          final first = stockfishEngines.isEmpty;
-          final engine = FakeStockfishEngine(
-            onMove: (_, _) {
-              if (!first) return Future.value('g1f3');
-              stockfishStarted.complete();
-              return stockfishReply.future;
-            },
-          );
-          stockfishEngines.add(engine);
-          return engine;
-        },
-      );
-      final controller = container.read(gameControllerProvider.notifier);
-      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-      final pending = controller.getHint();
+      final reply = Completer<String>();
+      setup((_, _) => reply.future);
+      await game.startVsAi(humanSide: Side.white, levelRating: 1100);
+      final pending = game.getHint();
       final cancelled = expectLater(
         pending,
         throwsA(isA<HintCancelledException>()),
       );
-      await Future.wait([maiaStarted.future, stockfishStarted.future]);
-      await controller.cancelHint();
-      await cancelled;
-      expect(maiaEngines.first.disposeCount, 1);
-      expect(stockfishEngines.first.disposeCount, 1);
-      maiaReply.completeError(StateError('Maia cancelado'));
-      stockfishReply.completeError(StateError('Stockfish cancelado'));
       await Future<void>.delayed(Duration.zero);
-
-      final recovered = await controller.getHint();
-      expect(recovered.maiaSan, 'd4');
-      expect(recovered.stockfishSan, 'Nf3');
-      expect(container.read(gameControllerProvider).uciHistory, isEmpty);
-      expect(container.read(gameControllerProvider).hintThinking, isFalse);
+      await game.attemptDragMove(
+        Square.e2,
+        Square.e4,
+        onPromotion: () async => null,
+      );
+      await cancelled;
+      reply.complete('d2d4');
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(gameControllerProvider).uciHistory, [
+        'e2e4',
+        'e7e5',
+      ]);
+      expect(maia.disposeCount, 0);
+      expect(engines.single.disposeCount, 1);
     },
   );
+  test(
+    'timeout descarta só Stockfish e nova busca recupera sem esperar a antiga',
+    () async {
+      final stuck = Completer<String>();
+      var calls = 0;
+      setup(
+        (_, _) => ++calls == 1 ? stuck.future : Future.value('e2e4'),
+        timeout: const Duration(milliseconds: 30),
+      );
+      await game.startVsAi(humanSide: Side.white, levelRating: 1100);
+      await expectLater(game.getHint(), throwsA(isA<TimeoutException>()));
+      expect((await game.getHint()).move.from, Square.e2);
+      expect(maia.disposeCount, 0);
+      expect(engines, hasLength(2));
+      stuck.complete('d2d4');
+    },
+  );
+  for (final invalid in ['invalid', 'e2e5']) {
+    test('rejeita lance inválido $invalid e permite repetir', () async {
+      var calls = 0;
+      setup((_, _) async => ++calls == 1 ? invalid : 'e2e4');
+      await expectLater(game.getHint(), throwsA(isA<StateError>()));
+      expect((await game.getHint()).move.from, Square.e2);
+      expect(maia.requestedFens, isEmpty);
+    });
+  }
+  test('local e pretas recebem dica na posição e turno corretos', () async {
+    setup(
+      (fen, _) async => Chess.fromSetup(Setup.parseFen(fen)).turn == Side.white
+          ? 'e2e4'
+          : 'd7d5',
+    );
+    expect((await game.getHint()).move.from, Square.e2);
+    await game.attemptDragMove(
+      Square.e2,
+      Square.e4,
+      onPromotion: () async => null,
+    );
+    expect((await game.getHint()).move.from, Square.d7);
+  });
 }
 
 ProviderContainer _container({

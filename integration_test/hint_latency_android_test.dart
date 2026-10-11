@@ -77,7 +77,6 @@ void main() {
 
       Future<void> optimizedHint() async {
         final hint = await controller.getHint();
-        expect(hint.maiaSan, isNotEmpty);
         expect(hint.stockfishSan, isNotEmpty);
       }
 

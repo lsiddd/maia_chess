@@ -38,6 +38,8 @@ class DriftSettingsRepository implements SettingsRepository {
         .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             id: const Value(1),
+            showAttackedPieces: Value(settings.showAttackedPieces),
+            ownAttackedPiecesOnly: Value(settings.ownAttackedPiecesOnly),
             pieceSet: Value(settings.pieceSet.name),
             boardTheme: Value(settings.boardTheme.name),
             themeMode: Value(settings.themeMode.name),
@@ -50,6 +52,8 @@ class DriftSettingsRepository implements SettingsRepository {
 
   StoredAppSettings _map(AppSettingsRow row) {
     return StoredAppSettings(
+      showAttackedPieces: row.showAttackedPieces,
+      ownAttackedPiecesOnly: row.ownAttackedPiecesOnly,
       pieceSet: StoredPieceSet.values.byName(row.pieceSet),
       boardTheme: BoardTheme.values.byName(row.boardTheme),
       themeMode: StoredThemeMode.values.byName(row.themeMode),

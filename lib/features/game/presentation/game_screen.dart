@@ -1,26 +1,23 @@
 import 'dart:async';
-
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-
-import '../../../core/theming/app_theme.dart';
 import '../../../core/theming/app_page_route.dart';
-import '../../../core/widgets/error_state_card.dart';
-import '../../hints/presentation/hint_dialog.dart';
-import '../../tactics/application/live_threat_controller.dart';
-import '../../tactics/presentation/live_threat_status.dart';
+import '../../../data/providers.dart';
+import '../../../data/repositories/settings_repository.dart';
+import '../../hints/application/visual_hint_controller.dart';
 import '../../settings/presentation/appearance_screen.dart';
+import '../../tactics/application/live_threat_controller.dart';
 import '../application/game_controller.dart';
 import '../application/game_state.dart';
-import 'chess_board_widget.dart';
 import 'board_accessibility.dart';
+import 'chess_board_widget.dart';
+import 'game_move_history.dart';
+import 'game_toolbar.dart';
 
-/// Tela de uma partida local ou contra a IA Maia.
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
-
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
 }
@@ -28,135 +25,282 @@ class GameScreen extends ConsumerStatefulWidget {
 class _GameScreenState extends ConsumerState<GameScreen>
     with WidgetsBindingObserver {
   late final GameController _controller;
-  late final LiveThreatController _threatController;
-  // Inverte a orientação padrão (perspectiva do jogador humano) quando o
-  // jogador pede manualmente — útil sobretudo em partida local, onde o
-  // segundo jogador no mesmo aparelho não tem lado "padrão" nenhum.
-  bool _manualFlip = false;
-  bool _showAttackedPieces = false;
+  late final LiveThreatController _plans;
+  bool _flipped = false;
+  int _planIndex = 0;
+  String? _noticeText;
+  Timer? _noticeTimer;
 
   @override
   void initState() {
     super.initState();
     _controller = ref.read(gameControllerProvider.notifier);
-    _threatController = ref.read(liveThreatControllerProvider.notifier);
+    _plans = ref.read(liveThreatControllerProvider.notifier);
     WidgetsBinding.instance.addObserver(this);
-    // Mantém a tela acesa durante a partida — sem isso, o bloqueio de tela
-    // do aparelho pode interromper a espera pelo lance da IA ou a leitura
-    // do tabuleiro em qualquer momento.
     unawaited(WakelockPlus.enable());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _threatController.setPaused(state != AppLifecycleState.resumed);
-    if (state != AppLifecycleState.resumed) unawaited(_controller.cancelHint());
+    _plans.setPaused(state != AppLifecycleState.resumed);
+    if (state != AppLifecycleState.resumed) {
+      ref.read(visualHintProvider.notifier).clear();
+      unawaited(_controller.cancelHint());
+      unawaited(_controller.flushPersistence());
+    }
   }
 
   @override
   void dispose() {
+    _noticeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_controller.cancelHint());
     unawaited(WakelockPlus.disable());
     super.dispose();
   }
 
+  void _notice(String message) {
+    if (!mounted) return;
+    _noticeTimer?.cancel();
+    setState(() => _noticeText = message);
+    _noticeTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _noticeText = null);
+    });
+  }
+
+  Future<void> _hint() async {
+    if (ref.read(gameControllerProvider).isGameOver) {
+      _notice('Partida encerrada: não há lance disponível.');
+      return;
+    }
+    try {
+      await ref.read(visualHintProvider.notifier).toggle();
+    } on HintCancelledException {
+      /* A posição ou a interação mudou. */
+    } catch (_) {
+      _notice(
+        'Não foi possível calcular a dica. Toque em Dica para tentar novamente.',
+      );
+    }
+  }
+
+  Future<void> _settings({bool? attacks, bool? ownOnly}) async {
+    try {
+      final repository = ref.read(settingsRepositoryProvider);
+      final current = await repository.get();
+      await repository.save(
+        current.copyWith(
+          showAttackedPieces: attacks,
+          ownAttackedPiecesOnly: ownOnly,
+        ),
+      );
+    } catch (_) {
+      _notice('Não foi possível salvar a preferência.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(gameControllerProvider);
-    final threats = ref.watch(liveThreatControllerProvider);
-    final controller = ref.read(gameControllerProvider.notifier);
-    final vsAi = state.aiSide != null;
-
-    ref.listen<GameState>(gameControllerProvider, (previous, next) {
-      if (previous?.gameId != next.gameId && _showAttackedPieces) {
-        setState(() => _showAttackedPieces = false);
-      }
-      final wasOver = previous?.isGameOver ?? false;
-      if (!wasOver && next.isGameOver) {
-        unawaited(controller.cancelHint());
-        _showGameOverDialog(context, next);
+    ref.listen(appSettingsProvider, (previous, next) {
+      if (next.valueOrNull?.showAttackedPieces == true &&
+          !ref.read(gameControllerProvider).isGameOver) {
+        scheduleMicrotask(_controller.markAsNotEvaluated);
       }
     });
-
-    final busy = state.aiThinking || state.hintThinking;
-    final canHint = vsAi && !busy && !state.isAiTurn && !state.isGameOver;
-    final canUndo = state.canUndo && !busy && !state.isGameOver;
-
-    final baseOrientation = state.aiSide == null
-        ? Side.white
-        : state.aiSide!.opposite;
-    final orientation = _manualFlip
-        ? baseOrientation.opposite
-        : baseOrientation;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          vsAi
-              ? state.campaignMode
-                    ? 'Campanha • Maia ${state.levelRating}'
-                    : 'Contra Maia ${state.levelRating}'
-              : 'Partida local',
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Aparência',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(AppPageRoute(builder: (_) => const AppearanceScreen())),
-            icon: const Icon(Icons.palette_outlined),
+    final game = ref.watch(gameControllerProvider);
+    final plans = ref.watch(liveThreatControllerProvider);
+    final hint = ref.watch(visualHintProvider);
+    final settings =
+        ref.watch(appSettingsProvider).valueOrNull ?? const StoredAppSettings();
+    final base = game.aiSide?.opposite ?? Side.white;
+    final orientation = _flipped ? base.opposite : base;
+    final candidates = plans.result?.threats ?? const [];
+    final selectedPlan = candidates.isEmpty
+        ? null
+        : candidates[_planIndex % candidates.length];
+    ref.listen<GameState>(gameControllerProvider, (previous, next) {
+      if (_noticeText != null &&
+          (previous?.position.fen != next.position.fen ||
+              previous?.aiThinking != next.aiThinking)) {
+        _noticeTimer?.cancel();
+        setState(() => _noticeText = null);
+      }
+      if (previous?.position.fen != next.position.fen) _planIndex = 0;
+      if (previous?.engineError != next.engineError &&
+          next.engineError != null) {
+        _notice(next.engineError!);
+      }
+      if (previous?.persistenceError != next.persistenceError &&
+          next.persistenceError != null) {
+        _notice(next.persistenceError!);
+      }
+      if (!(previous?.isGameOver ?? false) && next.isGameOver) {
+        _notice(gameResultDescription(next));
+      }
+      if (previous?.gameId != next.gameId &&
+          settings.showAttackedPieces &&
+          !next.isGameOver) {
+        scheduleMicrotask(_controller.markAsNotEvaluated);
+      }
+    });
+    ref.listen<LiveThreatState>(liveThreatControllerProvider, (previous, next) {
+      if (next.error != null && previous?.error != next.error) {
+        _notice(
+          'Análise indisponível. Desative e ative Planos para tentar novamente.',
+        );
+      }
+    });
+    final busy = game.aiThinking;
+    final toolbar = SizedBox(
+      height: 64,
+      child: Row(
+        key: const Key('game-actions'),
+        children: [
+          GameToolButton(
+            label: 'Desfazer',
+            icon: Icons.undo,
+            tooltip: game.campaignMode
+                ? 'Desfazer: esta partida deixa de contar para a campanha'
+                : 'Desfazer',
+            onPressed: game.canUndo && !busy && !game.isGameOver
+                ? _controller.undo
+                : null,
           ),
-          IconButton(
-            tooltip: 'Inverter tabuleiro',
-            onPressed: () => setState(() => _manualFlip = !_manualFlip),
-            icon: const Icon(Icons.swap_vert),
+          GameToolButton(
+            key: const Key('hint-button'),
+            label: 'Dica',
+            icon: Icons.lightbulb_outline,
+            active: hint != null,
+            loading: game.hintThinking,
+            tooltip:
+                'Dica Stockfish: destaca apenas a peça; retira a avaliação',
+            onPressed: game.isGameOver || (!busy && !game.isAiTurn)
+                ? _hint
+                : null,
+          ),
+          GameToolButton(
+            key: const Key('toggle-attacked-pieces'),
+            label: 'Ataques',
+            icon: Icons.crop_free,
+            active: settings.showAttackedPieces,
+            onPressed: () {
+              unawaited(_settings(attacks: !settings.showAttackedPieces));
+              if (!settings.showAttackedPieces && !game.isGameOver) {
+                unawaited(_controller.markAsNotEvaluated());
+              }
+            },
+          ),
+          GameToolButton(
+            key: const Key('show-opponent-threats'),
+            label: 'Planos',
+            icon: Icons.trending_up,
+            tooltip: 'Planos do adversário',
+            active: plans.enabled,
+            loading: plans.loading,
+            onPressed: () {
+              _planIndex = 0;
+              _plans.setEnabled(!plans.enabled);
+              if (!plans.enabled && game.position.isCheck) {
+                _notice(
+                  'Saia do xeque antes de consultar os planos do adversário.',
+                );
+              }
+            },
+          ),
+          GameToolButton(
+            label: 'Mais',
+            icon: Icons.more_horiz,
+            onPressed: _more,
           ),
         ],
       ),
+    );
+    final board = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 640),
+        child: ChessBoardWidget(
+          orientation: orientation,
+          showAttackedPieces: settings.showAttackedPieces,
+          attackedSide: settings.ownAttackedPiecesOnly
+              ? game.aiSide?.opposite ?? game.position.turn
+              : null,
+          hintSquare: hint,
+          threats: selectedPlan == null ? const [] : [selectedPlan],
+        ),
+      ),
+    );
+    final status = Row(
+      children: [
+        Expanded(
+          child: _TurnStatus(
+            game: game,
+            onRetry: _controller.retryAiMove,
+            notice: _noticeText,
+          ),
+        ),
+        SizedBox(
+          width: 48,
+          height: 48,
+          child: candidates.length > 1
+              ? IconButton(
+                  key: const Key('next-opponent-plan'),
+                  tooltip: 'Próximo plano do adversário',
+                  onPressed: () => setState(
+                    () => _planIndex = (_planIndex + 1) % candidates.length,
+                  ),
+                  icon: FittedBox(
+                    child: Text(
+                      '${_planIndex % candidates.length + 1}/${candidates.length}',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ),
+                )
+              : null,
+        ),
+      ],
+    );
+    final history = GameMoveHistory(game: game, orientation: orientation);
+    return Scaffold(
+      appBar: AppBar(
+        toolbarHeight: 48,
+        title: Text(
+          game.aiSide == null ? 'Partida local' : 'Maia ${game.levelRating}',
+        ),
+      ),
       body: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              return _ResponsiveGameLayout(
-                constraints: constraints,
-                board: ChessBoardWidget(
-                  orientation: orientation,
-                  showAttackedPieces: _showAttackedPieces,
-                  threats: threats.result?.threats ?? const [],
-                ),
-                status: _StatusBar(state: state),
-                actions: _GameActions(
-                  showHint: vsAi,
-                  threats: threats,
-                  threatStatus: LiveThreatStatus(
-                    analysis: threats,
-                    game: state,
-                    onRetry: _threatController.retry,
-                  ),
-                  showAttackedPieces: _showAttackedPieces,
-                  onAttackedPieces: () {
-                    setState(() => _showAttackedPieces = !_showAttackedPieces);
-                    if (_showAttackedPieces && !state.isGameOver) {
-                      unawaited(controller.markAsNotEvaluated());
-                    }
-                  },
-                  onThreats: () =>
-                      _threatController.setEnabled(!threats.enabled),
-                  onHint: canHint
-                      ? () => showHintDialog(
-                          context,
-                          controller.getHint(),
-                          onClosed: controller.cancelHint,
-                        )
-                      : null,
-                  onUndo: canUndo ? controller.undo : null,
-                  onReset: busy
-                      ? null
-                      : () => _confirmReset(context, controller),
-                ),
-                moveList: _MoveList(sanHistory: state.sanHistory),
+              if (constraints.maxWidth >= 620 &&
+                  constraints.maxWidth > constraints.maxHeight) {
+                return Row(
+                  children: [
+                    Expanded(child: board),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 300,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          status,
+                          const SizedBox(height: 12),
+                          toolbar,
+                          history,
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return Column(
+                children: [
+                  status,
+                  Expanded(child: board),
+                  toolbar,
+                  history,
+                ],
               );
             },
           ),
@@ -165,609 +309,204 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
-  Future<void> _confirmReset(
-    BuildContext context,
-    GameController controller,
-  ) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _more() async {
+    final game = ref.read(gameControllerProvider);
+    final settings =
+        ref.read(appSettingsProvider).valueOrNull ?? const StoredAppSettings();
+    final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reiniciar partida?'),
-        content: const Text('O progresso atual desta partida será perdido.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in [
+                ('flip', Icons.swap_vert, 'Girar tabuleiro'),
+                ('save', Icons.save_outlined, 'Salvar partida'),
+                ('settings', Icons.tune, 'Configurações'),
+                (
+                  'filter',
+                  Icons.filter_alt_outlined,
+                  settings.ownAttackedPiecesOnly
+                      ? 'Ataques: mostrar todas as peças'
+                      : 'Ataques: somente minhas peças',
+                ),
+                ('help', Icons.help_outline, 'Ajuda das ferramentas'),
+                ('reset', Icons.restart_alt, 'Reiniciar'),
+              ])
+                ListTile(
+                  leading: Icon(item.$2),
+                  title: Text(item.$3),
+                  onTap: () => Navigator.pop(context, item.$1),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  game.campaignMode
+                      ? 'Dicas, ataques, planos e desfazer tornam a partida não avaliada: ela não conta para avançar na campanha.'
+                      : 'A partida é salva automaticamente a cada lance. Ajudas e desfazer retiram a avaliação.',
+                ),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Reiniciar'),
-          ),
-        ],
+        ),
       ),
     );
-    if (confirmed == true) {
-      await controller.reset();
+    if (!mounted) return;
+    switch (action) {
+      case 'flip':
+        setState(() => _flipped = !_flipped);
+      case 'save':
+        await _controller.saveGame();
+        final error = ref.read(gameControllerProvider).persistenceError;
+        _notice(error ?? 'Partida salva.');
+      case 'settings':
+        await Navigator.of(
+          context,
+        ).push(AppPageRoute(builder: (_) => const AppearanceScreen()));
+      case 'filter':
+        await _settings(ownOnly: !settings.ownAttackedPiecesOnly);
+      case 'help':
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Ferramentas de partida'),
+            content: const SingleChildScrollView(
+              child: Text(
+                'Dica: o contorno âmbar indica somente a peça sugerida pelo Stockfish. Toque novamente para ocultar.\n\n'
+                'Ataques: borda laranja contínua indica peça atacada sem defesa geométrica; borda azul dupla indica atacada e defendida. Isso não garante ganho ou perda de material: cravadas e trocas exigem análise tática.\n\n'
+                'Planos do adversário: uma seta mostra uma opção do Stockfish caso o adversário pudesse jogar agora. Não é uma ameaça comprovada. Use o contador para alternar.\n\n'
+                'Desfazer: contra Maia, volta à sua decisão anterior; no modo local, volta um lance. Ajudas e desfazer retiram a avaliação e a validade na campanha.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Entendi'),
+              ),
+            ],
+          ),
+        );
+      case 'reset':
+        await _reset();
     }
   }
 
-  void _showGameOverDialog(BuildContext context, GameState state) {
-    final message = gameResultDescription(state);
-    unawaited(
-      showDialog<void>(
+  Future<void> _reset() async {
+    if (ref.read(gameControllerProvider).sanHistory.isNotEmpty) {
+      final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Fim de jogo'),
-          content: Text(message),
+          title: const Text('Reiniciar partida?'),
+          content: const Text('O progresso atual desta partida será perdido.'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Fechar'),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Reiniciar'),
             ),
           ],
         ),
-      ),
-    );
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    await _controller.reset();
   }
 }
 
-class _ResponsiveGameLayout extends StatelessWidget {
-  const _ResponsiveGameLayout({
-    required this.constraints,
-    required this.board,
-    required this.status,
-    required this.actions,
-    required this.moveList,
-  });
-
-  final BoxConstraints constraints;
-  final Widget board;
-  final Widget status;
-  final Widget actions;
-  final Widget moveList;
-
+class _TurnStatus extends StatelessWidget {
+  const _TurnStatus({required this.game, required this.onRetry, this.notice});
+  final String? notice;
+  final GameState game;
+  final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) {
-    final landscape = constraints.maxWidth > constraints.maxHeight;
-    final useSidePanel = landscape && constraints.maxWidth >= 620;
-
-    if (useSidePanel) {
-      final panelWidth = (constraints.maxWidth * 0.42)
-          .clamp(280.0, 420.0)
-          .toDouble();
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: board),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: panelWidth,
-            child: Scrollbar(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    status,
-                    const SizedBox(height: 8),
-                    actions,
-                    const SizedBox(height: 12),
-                    moveList,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Em retrato a largura normalmente limita o tabuleiro. A lista é também
-    // a contenção de emergência para aparelhos baixos e fontes ampliadas.
-    return Scrollbar(
-      child: ListView(
-        children: [
-          status,
-          const SizedBox(height: 8),
-          actions,
-          const SizedBox(height: 12),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 640),
-              child: board,
-            ),
-          ),
-          const SizedBox(height: 12),
-          moveList,
-        ],
-      ),
-    );
-  }
-}
-
-/// Cores do indicador circular de "vez de quem joga": preto/branco fixos,
-/// como as peças do tabuleiro, não seguem o tema claro/escuro do app.
-abstract final class _TurnDotColors {
-  static const whiteFill = Colors.white;
-  static const whiteBorder = Color(0xFF424242);
-  static const blackFill = Color(0xFF202124);
-  static const blackBorder = Colors.white70;
-}
-
-class _StatusBar extends ConsumerWidget {
-  const _StatusBar({required this.state});
-
-  final GameState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-
-    if (state.isGameOver) {
-      final result = gameResultDescription(state);
-      return Semantics(
+    final turn =
+        notice ??
+        (game.isGameOver
+            ? gameResultDescription(game)
+            : game.engineError != null
+            ? 'Maia indisponível'
+            : game.position.isCheck
+            ? 'Xeque'
+            : game.aiSide == null
+            ? (game.position.turn == Side.white
+                  ? 'Brancas jogam'
+                  : 'Pretas jogam')
+            : game.isAiTurn
+            ? 'Vez da Maia'
+            : 'Sua vez');
+    final mode = game.campaignMode
+        ? 'Campanha'
+        : game.aiSide == null
+        ? 'Local'
+        : 'Treino';
+    return SizedBox(
+      height: 52,
+      child: Semantics(
         key: const Key('turn-status'),
         liveRegion: true,
-        label: result,
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              result,
-              key: const Key('game-result'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (state.engineError != null) {
-      return ErrorStateCard(
-        message: state.engineError!,
-        onRetry: () => ref.read(gameControllerProvider.notifier).retryAiMove(),
-      );
-    }
-
-    final whiteToMove = state.position.turn == Side.white;
-    final turnLabel = whiteToMove ? 'Brancas jogam' : 'Pretas jogam';
-    final activity = state.aiThinking
-        ? 'Maia está pensando…'
-        : state.hintThinking
-        ? 'Calculando análise…'
-        : 'Sua vez de escolher um lance';
-
-    return Semantics(
-      key: const Key('turn-status'),
-      liveRegion: true,
-      label: [
-        lastMoveAnnouncement(state),
-        '$turnLabel${state.position.isCheck ? ', xeque' : ''}',
-      ].where((part) => part.isNotEmpty).join(' '),
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.62),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: whiteToMove
-                          ? _TurnDotColors.whiteFill
-                          : _TurnDotColors.blackFill,
-                      border: Border.all(
-                        color: whiteToMove
-                            ? _TurnDotColors.whiteBorder
-                            : _TurnDotColors.blackBorder,
-                        width: 1.5,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 3,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          turnLabel,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        AnimatedSwitcher(
-                          duration: AppMotion.fast,
-                          switchInCurve: AppMotion.curve,
-                          switchOutCurve: AppMotion.curve,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(opacity: animation, child: child),
-                          child: Text(
-                            activity,
-                            key: ValueKey(activity),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colors.onSurfaceVariant),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (state.aiThinking || state.hintThinking)
-                    const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
-                ],
-              ),
-              if (state.position.isCheck || !state.evaluated) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (state.position.isCheck)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          'Xeque',
-                          style: TextStyle(color: colors.onErrorContainer),
-                        ),
-                        backgroundColor: colors.errorContainer,
-                        side: BorderSide.none,
-                      ),
-                    if (!state.evaluated)
-                      const Tooltip(
-                        message:
-                            'Ajudas ou desfazer retiram a partida do rating',
-                        child: Chip(
-                          visualDensity: VisualDensity.compact,
-                          label: Text('Não avaliada'),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-              if (state.persistenceError != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.cloud_off_outlined,
-                      size: 18,
-                      color: colors.error,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        state.persistenceError!,
-                        style: TextStyle(color: colors.error),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GameActions extends StatelessWidget {
-  const _GameActions({
-    required this.showHint,
-    required this.showAttackedPieces,
-    required this.onAttackedPieces,
-    required this.onThreats,
-    required this.threats,
-    required this.threatStatus,
-    required this.onHint,
-    required this.onUndo,
-    required this.onReset,
-  });
-
-  final bool showHint;
-  final bool showAttackedPieces;
-  final LiveThreatState threats;
-  final Widget threatStatus;
-  final VoidCallback onAttackedPieces;
-  final VoidCallback onThreats;
-  final VoidCallback? onHint;
-  final VoidCallback? onUndo;
-  final VoidCallback? onReset;
-
-  @override
-  Widget build(BuildContext context) {
-    final actions = <Widget>[
-      Semantics(
-        toggled: showAttackedPieces,
-        child: FilledButton.tonalIcon(
-          key: const Key('toggle-attacked-pieces'),
-          onPressed: onAttackedPieces,
-          icon: Icon(
-            showAttackedPieces ? Icons.visibility : Icons.visibility_outlined,
-            size: 21,
-          ),
-          label: Text(
-            showAttackedPieces ? 'Ocultar ataques' : 'Peças atacadas',
-          ),
-        ),
-      ),
-      Semantics(
-        toggled: threats.enabled,
-        child: Tooltip(
-          message:
-              'As 3 melhores opções do adversário se você passasse a vez. '
-              'Atualiza automaticamente após cada lance.',
-          child: FilledButton.tonalIcon(
-            key: const Key('show-opponent-threats'),
-            onPressed: onThreats,
-            icon: const Icon(Icons.trending_up, size: 21),
-            label: Text(
-              threats.enabled ? 'Ocultar ameaças' : 'Setas de ameaças',
-            ),
-          ),
-        ),
-      ),
-      if (showHint)
-        FilledButton.tonalIcon(
-          onPressed: onHint,
-          icon: const Icon(Icons.lightbulb_outline, size: 21),
-          label: const Text('Dica'),
-        ),
-      OutlinedButton.icon(
-        onPressed: onUndo,
-        icon: const Icon(Icons.undo, size: 21),
-        label: const Text('Desfazer'),
-      ),
-      TextButton.icon(
-        style: TextButton.styleFrom(
-          foregroundColor: Theme.of(context).colorScheme.error,
-        ),
-        onPressed: onReset,
-        icon: const Icon(Icons.restart_alt, size: 21),
-        label: const Text('Reiniciar'),
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        final availablePerButton =
-            (constraints.maxWidth - (actions.length - 1) * spacing) /
-            actions.length;
-        final buttonWidth = availablePerButton >= 180
-            ? availablePerButton
-            : (constraints.maxWidth >= 232
-                  ? (constraints.maxWidth - spacing) / 2
-                  : constraints.maxWidth);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        label:
+            '${lastMoveAnnouncement(game)} $turn. $mode. ${game.evaluated ? 'Avaliada' : 'Não avaliada'}',
+        child: Row(
           children: [
-            Wrap(
-              key: const Key('game-actions'),
-              spacing: spacing,
-              runSpacing: spacing,
-              children: actions
-                  .map(
-                    (action) => SizedBox(
-                      width: buttonWidth,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 48),
-                        child: action,
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            if (threats.enabled) ...[const SizedBox(height: 8), threatStatus],
-            if (showAttackedPieces) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Peças atacadas: laranja = brancas; roxo = pretas. '
-                'Inclui peças defendidas e ataques de peças cravadas.',
-                key: Key('attacked-pieces-legend'),
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MoveList extends StatelessWidget {
-  const _MoveList({required this.sanHistory});
-
-  final List<String> sanHistory;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final lastIndex = sanHistory.length - 1;
-    final pairs =
-        <
-          ({
-            int number,
-            String white,
-            String black,
-            bool whiteIsLast,
-            bool blackIsLast,
-          })
-        >[];
-    for (var i = 0; i < sanHistory.length; i += 2) {
-      final hasBlack = i + 1 < sanHistory.length;
-      pairs.add((
-        number: (i ~/ 2) + 1,
-        white: sanHistory[i],
-        black: hasBlack ? sanHistory[i + 1] : '—',
-        whiteIsLast: i == lastIndex,
-        blackIsLast: hasBlack && i + 1 == lastIndex,
-      ));
-    }
-
-    return Semantics(
-      key: const Key('move-list-panel'),
-      container: true,
-      label: 'Histórico de jogadas',
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: colors.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.format_list_numbered,
-                    size: 20,
-                    color: colors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Jogadas',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${sanHistory.length} ${sanHistory.length == 1 ? 'lance' : 'lances'}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: game.position.isCheck ? colors.error : colors.primary,
               ),
             ),
-            const Divider(height: 1),
-            if (pairs.isEmpty)
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 108),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.sports_esports_outlined,
-                          color: colors.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Ainda não houve nenhum lance.',
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Tooltip(
+                message: turn,
+                child: Text(
+                  turn,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
+              ),
+            ),
+            if (game.engineError != null)
+              IconButton(
+                tooltip: 'Tentar novamente',
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
               )
-            else ...[
-              ColoredBox(
-                color: colors.surfaceContainerHighest.withValues(alpha: 0.45),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  child: Row(
-                    children: [
-                      SizedBox(width: 36, child: Text('Nº')),
-                      Expanded(child: Text('Brancas')),
-                      Expanded(child: Text('Pretas')),
-                    ],
+            else if (game.aiThinking)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            Flexible(
+              child: Tooltip(
+                message:
+                    'Ajudas e desfazer retiram a avaliação e a validade na campanha.',
+                child: Text(
+                  '$mode${game.evaluated ? '' : ' · Não avaliada'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ),
-              for (final pair in pairs)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 9,
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 36,
-                        child: Text(
-                          '${pair.number}.',
-                          style: TextStyle(color: colors.onSurfaceVariant),
-                        ),
-                      ),
-                      Expanded(
-                        child: _MoveCell(
-                          san: pair.white,
-                          isCurrent: pair.whiteIsLast,
-                        ),
-                      ),
-                      Expanded(
-                        child: _MoveCell(
-                          san: pair.black,
-                          isCurrent: pair.blackIsLast,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Uma jogada na lista. O lance mais recente ganha um realce para o jogador
-/// localizar num relance onde a partida está, em vez de ter que contar as
-/// linhas até o fim.
-class _MoveCell extends StatelessWidget {
-  const _MoveCell({required this.san, required this.isCurrent});
-
-  final String san;
-  final bool isCurrent;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final text = Text(
-      san,
-      style: TextStyle(
-        fontWeight: FontWeight.w600,
-        color: isCurrent ? colors.onPrimaryContainer : null,
-      ),
-    );
-    if (!isCurrent) return text;
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: colors.primaryContainer,
-          borderRadius: BorderRadius.circular(AppRadius.small),
-        ),
-        child: text,
       ),
     );
   }
