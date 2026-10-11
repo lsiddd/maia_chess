@@ -209,18 +209,48 @@ class DriftGameRepository implements GameRepository {
     if (changed != 1) {
       throw StateError('Falha ao atualizar a partida ${game.id}.');
     }
-    await (_db.delete(
-      _db.gameMoves,
-    )..where((row) => row.gameId.equals(game.id))).go();
-    await _insertMoves(game);
+    final existing =
+        await (_db.select(_db.gameMoves)
+              ..where((row) => row.gameId.equals(game.id))
+              ..orderBy([(row) => OrderingTerm.asc(row.ply)]))
+            .get();
+    var common = 0;
+    while (common < existing.length &&
+        common < game.moves.length &&
+        _sameMove(existing[common], game.moves[common])) {
+      common++;
+    }
+    // Preserve the unchanged prefix, including row identity. Undo deletes
+    // only the old suffix; append and metadata-only saves delete nothing.
+    if (common < existing.length) {
+      await (_db.delete(_db.gameMoves)..where(
+            (row) =>
+                row.gameId.equals(game.id) &
+                row.ply.isBiggerOrEqualValue(existing[common].ply),
+          ))
+          .go();
+    }
+    await _insertMoves(game, startIndex: common);
   }
 
-  Future<void> _insertMoves(StoredGame game) async {
-    if (game.moves.isEmpty) return;
+  bool _sameMove(GameMoveRow saved, StoredGameMove incoming) =>
+      saved.ply == incoming.ply &&
+      saved.uci == incoming.uci &&
+      saved.san == incoming.san &&
+      saved.fenAfter == incoming.fenAfter &&
+      saved.actor == incoming.actor.name &&
+      // Compare at the database's actual timestamp precision. SQLite's
+      // default DateTime storage truncates subsecond values.
+      _db.typeMapping.mapToSqlVariable(saved.playedAtUtc.toUtc()) ==
+          _db.typeMapping.mapToSqlVariable(incoming.playedAtUtc.toUtc());
+
+  Future<void> _insertMoves(StoredGame game, {int startIndex = 0}) async {
+    if (startIndex == game.moves.length) return;
     await _db.batch((batch) {
       batch.insertAll(
         _db.gameMoves,
         game.moves
+            .skip(startIndex)
             .map(
               (move) => GameMovesCompanion.insert(
                 gameId: game.id,
