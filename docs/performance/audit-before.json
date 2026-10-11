@@ -1,0 +1,37 @@
+{
+  "audit_performance": {
+    "state_plies": 80,
+    "selection_iterations": 500,
+    "pgn_plies": 1000,
+    "mode": "profile",
+    "selection_ms": [
+      220.811,
+      231.028,
+      268.876,
+      250.529,
+      315.845
+    ],
+    "pgn": [
+      {
+        "elapsed_ms": 120.875,
+        "max_event_loop_gap_ms": 122.816
+      },
+      {
+        "elapsed_ms": 72.928,
+        "max_event_loop_gap_ms": 73.361
+      },
+      {
+        "elapsed_ms": 59.99,
+        "max_event_loop_gap_ms": 61.934
+      },
+      {
+        "elapsed_ms": 46.27,
+        "max_event_loop_gap_ms": 46.369
+      },
+      {
+        "elapsed_ms": 44.081,
+        "max_event_loop_gap_ms": 45.975
+      }
+    ]
+  }
+}
