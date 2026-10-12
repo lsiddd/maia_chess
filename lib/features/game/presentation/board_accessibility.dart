@@ -5,10 +5,10 @@ import '../application/game_state.dart';
 import '../../../data/repositories/game_repository.dart';
 
 String boardSquareLabel(Square square, Piece? piece) =>
-    '${square.name}, ${piece == null ? 'vazia' : pieceLabelPt(piece)}';
+    '${square.name}, ${piece == null ? 'empty' : pieceLabelPt(piece)}';
 
-/// Descreve o último lance por extenso para a região viva da barra de estado.
-/// Usa a posição anterior para identificar também o peão que promoveu.
+/// Describe the last move for the status live region. Use the previous
+/// position to identify a pawn that has just promoted.
 String lastMoveAnnouncement(GameState state) {
   if (state.uciHistory.isEmpty || state.positionHistory.isEmpty) return '';
   final move = Move.parse(state.uciHistory.last);
@@ -20,25 +20,25 @@ String lastMoveAnnouncement(GameState state) {
   if (san.startsWith('O-O')) {
     description =
         '${pieceLabelPt(piece)}, '
-        '${san.startsWith('O-O-O') ? 'roque grande' : 'roque pequeno'}';
+        '${san.startsWith('O-O-O') ? 'queenside castling' : 'kingside castling'}';
   } else {
     description =
-        '${pieceLabelPt(piece)} de ${move.from.name} para ${move.to.name}'
-        '${san.contains('x') ? ', captura' : ''}'
-        '${move.promotion == null ? '' : ', promove a ${roleLabelPt(move.promotion!)}'}';
+        '${pieceLabelPt(piece)} from ${move.from.name} to ${move.to.name}'
+        '${san.contains('x') ? ', captures' : ''}'
+        '${move.promotion == null ? '' : ', promotes to ${roleLabelPt(move.promotion!)}'}';
   }
-  return '$description${san.endsWith('#') ? ', xeque-mate' : ''}.';
+  return '$description${san.endsWith('#') ? ', checkmate' : ''}.';
 }
 
-/// Resultado persistente, também usado no diálogo de encerramento.
+/// Persistent human-readable result and draw reason.
 String gameResultDescription(GameState state) => switch (state.termination) {
   GameTermination.checkmate =>
     state.result == GameResult.vitoriaBrancas
-        ? 'Xeque-mate! Brancas vencem.'
-        : 'Xeque-mate! Pretas vencem.',
-  GameTermination.stalemate => 'Empate por afogamento.',
-  GameTermination.insufficientMaterial => 'Empate por material insuficiente.',
-  GameTermination.threefoldRepetition => 'Empate por repetição tripla.',
-  GameTermination.fiftyMoveRule => 'Empate pela regra dos 50 lances.',
-  _ => state.isGameOver ? 'Partida encerrada: empate.' : '',
+        ? 'Checkmate! White wins.'
+        : 'Checkmate! Black wins.',
+  GameTermination.stalemate => 'Draw by stalemate.',
+  GameTermination.insufficientMaterial => 'Draw by insufficient material.',
+  GameTermination.threefoldRepetition => 'Draw by threefold repetition.',
+  GameTermination.fiftyMoveRule => 'Draw by the fifty-move rule.',
+  _ => state.isGameOver ? 'Game over: draw.' : '',
 };

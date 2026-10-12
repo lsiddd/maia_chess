@@ -28,7 +28,7 @@ Set<Square> attackedPieces(Chess position) {
 /// right, preserve castling rights, and keep this copy out of game history.
 Chess opponentThreatPosition(Chess position) {
   if (position.isCheck) {
-    throw StateError('Saia do xeque antes de analisar as ameaças.');
+    throw StateError('Get out of check before analysing opponent plans.');
   }
   return Chess.fromSetup(
     Setup.parseFen(
@@ -51,7 +51,7 @@ class OpponentThreat {
   String get scoreLabel {
     final mate = line.mate;
     if (mate != null) {
-      return mate > 0 ? 'Mate em $mate' : 'Sofre mate em ${mate.abs()}';
+      return mate > 0 ? 'Mate in $mate' : 'Mated in ${mate.abs()}';
     }
     final score = line.centipawns! / 100;
     return '${score >= 0 ? '+' : ''}${score.toStringAsFixed(2)}';
@@ -71,14 +71,16 @@ class ThreatResult {
     for (final line in lines.take(3)) {
       final move = Move.parse(line.moves.first);
       if (move is! NormalMove || !seen.add(move.uci)) {
-        throw StateError('Stockfish devolveu uma ameaça inválida.');
+        throw StateError('Stockfish returned an invalid opponent plan.');
       }
       final (_, san) = position.makeSan(move);
       threats.add(OpponentThreat(san: san, move: move, line: line));
     }
     if (threats.isEmpty &&
         position.legalMoves.values.any((moves) => moves.isNotEmpty)) {
-      throw StateError('Stockfish não devolveu variantes para esta posição.');
+      throw StateError(
+        'Stockfish did not return variations for this position.',
+      );
     }
     return ThreatResult(position: position, threats: threats);
   }

@@ -6,8 +6,8 @@ import 'chess_piece_widget.dart';
 
 const _promotionChoices = [Role.queen, Role.rook, Role.bishop, Role.knight];
 
-/// Pergunta ao jogador qual peça um peão vira ao promover. Retorna `null`
-/// se o jogador cancelar (ex: toque fora do diálogo).
+/// Choose a promotion role, returning null when the player cancels, including
+/// by tapping outside.
 Future<Role?> showPromotionDialog(
   BuildContext context,
   Side side, {
@@ -16,7 +16,7 @@ Future<Role?> showPromotionDialog(
   final route = DialogRoute<Role>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Promover peão para'),
+      title: const Text('Promote pawn to'),
       content: Row(
         mainAxisSize: MainAxisSize.min,
         children: _promotionChoices.map((role) {

@@ -5,11 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/features/game/presentation/chess_piece_widget.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
 
-/// Cobre as microinterações do tabuleiro que não dependem de motor algum:
-/// destaque de lances legais ao selecionar uma peça, destaque do último
-/// lance, destaque de xeque e a animação de "voo" da peça até a casa de
-/// destino (em vez de ela simplesmente teletransportar). Tudo aqui é
-/// alcançável só com toques — dispensa lc0/Stockfish reais.
+/// Board interaction tests without native engines: legal destinations,
+/// last-move and check highlights, and piece flight animations.
 void main() {
   Future<void> pumpGame(
     WidgetTester tester, {
@@ -54,12 +51,12 @@ void main() {
         .opacity;
   }
 
-  testWidgets('selecionar uma peça mostra pontos nas casas de destino legais', (
+  testWidgets('selecting a piece shows dots on legal destination squares', (
     tester,
   ) async {
     await pumpGame(tester);
 
-    // Antes de selecionar nada, nenhuma casa mostra o indicador.
+    // Before selection, no square shows a legal-move indicator.
     expect(
       indicatorOpacity(tester, 'board-square-4-4', 'legal-target-indicator'),
       0,
@@ -68,7 +65,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
     await tester.pump();
 
-    // e4 e e3 são destinos legais do peão em e2; d4 não é.
+    // e4 and e3 are legal pawn destinations from e2; d4 is not.
     expect(
       indicatorOpacity(tester, 'board-square-4-4', 'legal-target-indicator'),
       1,
@@ -82,7 +79,7 @@ void main() {
       0,
     );
 
-    // Desselecionar (toque na própria peça) apaga os indicadores de novo.
+    // Tapping the selected piece again clears the indicators.
     await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
     await tester.pumpAndSettle();
     expect(
@@ -92,17 +89,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a origem e o destino do último lance ficam destacados', (
+  testWidgets('the origin and destination of the last move are highlighted', (
     tester,
   ) async {
     await pumpGame(tester);
 
     final untouchedBefore = squareColor(tester, 'board-square-6-0'); // a2
     final originBefore = squareColor(tester, 'board-square-6-4'); // e2
-    expect(
-      originBefore,
-      untouchedBefore,
-    ); // mesma cor de base (mesma "cor" de casa)
+    expect(originBefore, untouchedBefore); // Same underlying square colour.
 
     await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
     await tester.pump();
@@ -112,27 +106,26 @@ void main() {
     final untouchedAfter = squareColor(
       tester,
       'board-square-6-0',
-    ); // a2, não jogada
+    ); // a2, not played
     final originAfter = squareColor(
       tester,
       'board-square-6-4',
-    ); // e2, origem do lance
+    ); // e2, move origin
     final destinationAfter = squareColor(
       tester,
       'board-square-4-4',
-    ); // e4, destino
+    ); // e4, destination
 
     expect(originAfter, isNot(equals(untouchedAfter)));
     expect(destinationAfter, isNot(equals(untouchedAfter)));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('o rei em xeque recebe um destaque próprio', (tester) async {
+  testWidgets('the king in check receives its own highlight', (tester) async {
     await pumpGame(tester);
 
-    // 1. e4 f6 2. Qh5+ — abre a diagonal d1-h5-e8 e dá xeque sem ser mate
-    // (o negro ainda pode bloquear com g6), evitando o diálogo de fim de
-    // jogo dentro deste teste.
+    // 1. e4 f6 2. Qh5+ opens the d1-h5-e8 diagonal. Black can block with g6,
+    // avoiding the game-over dialog in this test.
     await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('board-square-4-4'))); // e4
@@ -148,7 +141,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('board-square-3-7'))); // h5
     await tester.pumpAndSettle();
 
-    expect(find.text('Xeque'), findsOneWidget);
+    expect(find.text('Check'), findsOneWidget);
     expect(
       indicatorOpacity(
         tester,
@@ -168,34 +161,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'o lance anima a peça deslizando até o destino em vez de teleportar',
-    (tester) async {
-      await pumpGame(tester);
+  testWidgets('the move animates the piece sliding to its destination', (
+    tester,
+  ) async {
+    await pumpGame(tester);
 
-      await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('board-square-4-4'))); // e4
-      await tester
-          .pump(); // um quadro: a animação de voo começou, ainda não terminou.
+    await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('board-square-4-4'))); // e4
+    await tester.pump(); // One frame: flight has started but not finished.
 
-      // A casa de destino ainda não expõe sua própria peça estática — quem
-      // está visível ali é a peça "voando" por cima, sem a key da casa. (A
-      // casa de origem não entra nesta checagem porque o AnimatedSwitcher
-      // mantém o filho anterior montado por mais um quadro mesmo com
-      // duração zero — um detalhe interno da troca, não do voo em si.)
-      expect(find.byKey(const ValueKey('board-piece-4-4')), findsNothing);
+    // The destination static piece stays hidden while flight draws it above
+    // the board without the square key. The origin is excluded because
+    // AnimatedSwitcher keeps its old child mounted for one frame even with
+    // zero duration.
+    expect(find.byKey(const ValueKey('board-piece-4-4')), findsNothing);
 
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
-      expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
-      expect(find.byType(ChessPieceWidget), findsNWidgets(32));
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
+    expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+    expect(tester.takeException(), isNull);
+  });
 
-  testWidgets('arraste vertical gradual vence a rolagem da tela', (
+  testWidgets('a gradual vertical drag takes priority over page scrolling', (
     tester,
   ) async {
     await pumpGame(tester);
@@ -215,7 +205,7 @@ void main() {
     expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
   });
 
-  testWidgets('arrastar uma peça até um destino legal joga o lance', (
+  testWidgets('dragging a piece to a legal destination plays the move', (
     tester,
   ) async {
     await pumpGame(tester);
@@ -241,13 +231,13 @@ void main() {
   });
 
   testWidgets(
-    'soltar o arraste num destino ilegal devolve a peça à própria casa',
+    'dropping on an illegal destination returns the piece to its square',
     (tester) async {
       await pumpGame(tester);
       final from = tester.getCenter(
         find.byKey(const ValueKey('board-square-6-4')), // e2
       );
-      // e5: 3 casas à frente, ilegal para o primeiro lance do peão.
+      // e5 is three squares ahead, illegal for the first pawn move.
       final illegalTo = tester.getCenter(
         find.byKey(const ValueKey('board-square-3-4')),
       );
@@ -259,7 +249,7 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
 
-      expect(find.text('Jogadas · Nenhum lance'), findsOneWidget);
+      expect(find.text('Moves · No moves yet'), findsOneWidget);
       expect(find.byKey(const ValueKey('board-piece-6-4')), findsOneWidget);
       expect(find.byKey(const ValueKey('board-piece-3-4')), findsNothing);
       expect(find.byType(ChessPieceWidget), findsNWidgets(32));
@@ -267,65 +257,59 @@ void main() {
     },
   );
 
-  testWidgets(
-    'arrastar uma nova peça funciona mesmo com o voo do lance anterior '
-    'ainda em animação',
-    (tester) async {
-      await pumpGame(tester);
+  testWidgets('dragging a new piece works while the previous move '
+      'is still animating', (tester) async {
+    await pumpGame(tester);
 
-      // Primeiro lance por toque: e2-e4. Não usa `pumpAndSettle` depois —
-      // fica com o voo de e2 até e4 ainda em andamento (dura AppMotion.slow,
-      // 350ms) para reproduzir a janela em que o arraste era ignorado.
-      await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('board-square-4-4'))); // e4
-      await tester.pump(); // um quadro: o voo começou, ainda não terminou.
+    // Play e2-e4 by tap without pumpAndSettle, leaving flight in progress
+    // for AppMotion.slow (350 ms) to reproduce the formerly blocked drag
+    // window.
+    await tester.tap(find.byKey(const ValueKey('board-square-6-4'))); // e2
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('board-square-4-4'))); // e4
+    await tester.pump(); // One frame: flight has started but not finished.
 
-      // Com o voo do primeiro lance ainda rodando, arrasta uma segunda peça
-      // (peão das pretas d7-d5). O arraste deve responder imediatamente: a
-      // peça precisa aparecer seguindo o dedo (overlay de arraste montado).
-      final from = tester.getCenter(
-        find.byKey(const ValueKey('board-square-1-3')), // d7
-      );
-      final to = tester.getCenter(
-        find.byKey(const ValueKey('board-square-3-3')), // d5
-      );
+    // Drag Black d7-d5 while the first flight is active. The drag layer
+    // must follow the finger immediately.
+    final from = tester.getCenter(
+      find.byKey(const ValueKey('board-square-1-3')), // d7
+    );
+    final to = tester.getCenter(
+      find.byKey(const ValueKey('board-square-3-3')), // d5
+    );
 
-      final gesture = await tester.startGesture(from);
-      await tester.pump();
-      await gesture.moveTo(to);
-      await tester.pump();
-      final dragLayer = find.byKey(const Key('board-drag-layer'));
-      final layers = tester
-          .widget<Stack>(
-            find.ancestor(of: dragLayer, matching: find.byType(Stack)).first,
-          )
-          .children;
-      expect(find.byKey(const Key('board-slide-layer')), findsOneWidget);
-      expect(layers.last.key, const Key('board-drag-layer'));
-      await gesture.up();
-      await tester.pumpAndSettle();
+    final gesture = await tester.startGesture(from);
+    await tester.pump();
+    await gesture.moveTo(to);
+    await tester.pump();
+    final dragLayer = find.byKey(const Key('board-drag-layer'));
+    final layers = tester
+        .widget<Stack>(
+          find.ancestor(of: dragLayer, matching: find.byType(Stack)).first,
+        )
+        .children;
+    expect(find.byKey(const Key('board-slide-layer')), findsOneWidget);
+    expect(layers.last.key, const Key('board-drag-layer'));
+    await gesture.up();
+    await tester.pumpAndSettle();
 
-      // Antes da correção, `onPanStart` via o voo de e2-e4 ainda em
-      // andamento e retornava sem nunca iniciar o arraste — d7 permaneceria
-      // parado e nenhum lance seria registrado. Chegar a d5 prova que o
-      // segundo arraste foi reconhecido e completado normalmente.
-      expect(find.byKey(const ValueKey('board-piece-1-3')), findsNothing);
-      expect(find.byKey(const ValueKey('board-piece-3-3')), findsOneWidget);
-      expect(find.byType(ChessPieceWidget), findsNWidgets(32));
-      expect(tester.takeException(), isNull);
-    },
-  );
+    // Completing d7-d5 proves a second drag is accepted before the previous
+    // flight finishes.
+    expect(find.byKey(const ValueKey('board-piece-1-3')), findsNothing);
+    expect(find.byKey(const ValueKey('board-piece-3-3')), findsOneWidget);
+    expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+    expect(tester.takeException(), isNull);
+  });
 
   for (final flipped in [false, true]) {
     testWidgets(
-      'arraste amplia peça e destaca a casa sob o dedo, invertido=$flipped',
+      'drag enlarges the piece and highlights the square under the finger, flipped=$flipped',
       (tester) async {
         await pumpGame(tester);
         if (flipped) {
-          await tester.tap(find.text('Mais'));
+          await tester.tap(find.text('More'));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Girar tabuleiro'));
+          await tester.tap(find.text('Rotate board'));
           await tester.pumpAndSettle();
         }
         Finder squareAt(int row, int col) => find.byKey(
@@ -340,7 +324,7 @@ void main() {
           find.descendant(of: origin, matching: find.byType(ChessPieceWidget)),
         );
         final targetRect = tester.getRect(target);
-        // Fora do centro para detectar qualquer desvio entre imagem e destino.
+        // Off-centre input detects any mismatch between artwork and target.
         final pointer = targetRect.topLeft + const Offset(6, 6);
         final gesture = await tester.startGesture(from);
         await tester.pump();
@@ -355,7 +339,7 @@ void main() {
         final invalid = squareAt(
           3,
           4,
-        ); // e5 é ilegal, mas ainda fica sob o dedo.
+        ); // e5 is illegal but still under the finger.
         await gesture.moveTo(tester.getCenter(invalid));
         await tester.pump();
         expect(tester.getRect(highlight), tester.getRect(invalid));
@@ -379,132 +363,145 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
-    for (final selection in ['nenhuma', 'mesma peça', 'outra peça']) {
-      testWidgets('arraste seleciona e mantém destinos ao voltar à origem: '
-          '$selection, invertido=$flipped', (tester) async {
-        await pumpGame(tester);
-        if (flipped) {
-          await tester.tap(find.text('Mais'));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Girar tabuleiro'));
-          await tester.pumpAndSettle();
-        }
-        String keyAt(int row, int col) =>
-            'board-square-${flipped ? 7 - row : row}-'
-            '${flipped ? 7 - col : col}';
-        final originKey = keyAt(6, 4); // e2
-        final targetKey = keyAt(4, 4); // e4
-        final oldTargetKey = keyAt(5, 0); // a3, destino do cavalo b1
-        if (selection != 'nenhuma') {
-          await tester.tap(
-            find.byKey(
-              ValueKey(selection == 'mesma peça' ? originKey : keyAt(7, 1)),
-            ),
-          );
-          await tester.pumpAndSettle();
-        }
-        final from = tester.getCenter(find.byKey(ValueKey(originKey)));
-        final to = tester.getCenter(find.byKey(ValueKey(targetKey)));
-        final gesture = await tester.startGesture(from);
-        await tester.pump();
-        await gesture.moveTo(to);
-        await tester.pump();
+    for (final selection in ['none', 'same piece', 'another piece']) {
+      testWidgets(
+        'drag selects and keeps destinations when returning to the origin: '
+        '$selection, flipped=$flipped',
+        (tester) async {
+          await pumpGame(tester);
+          if (flipped) {
+            await tester.tap(find.text('More'));
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Rotate board'));
+            await tester.pumpAndSettle();
+          }
+          String keyAt(int row, int col) =>
+              'board-square-${flipped ? 7 - row : row}-'
+              '${flipped ? 7 - col : col}';
+          final originKey = keyAt(6, 4); // e2
+          final targetKey = keyAt(4, 4); // e4
+          final oldTargetKey = keyAt(
+            5,
+            0,
+          ); // a3, destination of the knight on b1
+          if (selection != 'none') {
+            await tester.tap(
+              find.byKey(
+                ValueKey(selection == 'same piece' ? originKey : keyAt(7, 1)),
+              ),
+            );
+            await tester.pumpAndSettle();
+          }
+          final from = tester.getCenter(find.byKey(ValueKey(originKey)));
+          final to = tester.getCenter(find.byKey(ValueKey(targetKey)));
+          final gesture = await tester.startGesture(from);
+          await tester.pump();
+          await gesture.moveTo(to);
+          await tester.pump();
 
-        void expectPawnSelected() {
+          void expectPawnSelected() {
+            expect(
+              indicatorOpacity(tester, targetKey, 'legal-target-indicator'),
+              1,
+            );
+            expect(
+              indicatorOpacity(tester, oldTargetKey, 'legal-target-indicator'),
+              0,
+            );
+            expect(
+              squareColor(tester, originKey),
+              isNot(squareColor(tester, keyAt(6, 2))),
+            );
+          }
+
+          expectPawnSelected();
+          await gesture.moveTo(from);
+          await tester.pump();
+          await gesture.up();
+          await tester.pumpAndSettle();
+          expectPawnSelected();
+          expect(find.text('Moves · No moves yet'), findsOneWidget);
+
+          // After returning the piece, tapping the destination is enough to
+          // play.
+          await tester.tap(find.byKey(ValueKey(targetKey)));
+          await tester.pumpAndSettle();
+          expect(find.text('1. e4'), findsOneWidget);
           expect(
             indicatorOpacity(tester, targetKey, 'legal-target-indicator'),
-            1,
-          );
-          expect(
-            indicatorOpacity(tester, oldTargetKey, 'legal-target-indicator'),
             0,
           );
-          expect(
-            squareColor(tester, originKey),
-            isNot(squareColor(tester, keyAt(6, 2))),
-          );
-        }
-
-        expectPawnSelected();
-        await gesture.moveTo(from);
-        await tester.pump();
-        await gesture.up();
-        await tester.pumpAndSettle();
-        expectPawnSelected();
-        expect(find.text('Jogadas · Nenhum lance'), findsOneWidget);
-
-        // Depois de devolver a peça, basta tocar no destino para jogar.
-        await tester.tap(find.byKey(ValueKey(targetKey)));
-        await tester.pumpAndSettle();
-        expect(find.text('1. e4'), findsOneWidget);
-        expect(
-          indicatorOpacity(tester, targetKey, 'legal-target-indicator'),
-          0,
-        );
-        expect(find.byType(ChessPieceWidget), findsNWidgets(32));
-        expect(tester.takeException(), isNull);
-      });
+          expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
     for (final kingSide in [false, true]) {
-      testWidgets('soltar fora da borda ${kingSide ? 'h' : 'a'} não joga '
-          'com tabuleiro ${flipped ? 'invertido' : 'normal'}', (tester) async {
-        await pumpGame(tester);
-        if (flipped) {
-          await tester.tap(find.text('Mais'));
+      testWidgets(
+        'dropping beyond the ${kingSide ? 'h' : 'a'} edge does not play a move '
+        'with the board ${flipped ? 'invertido' : 'normal'}',
+        (tester) async {
+          await pumpGame(tester);
+          if (flipped) {
+            await tester.tap(find.text('More'));
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Rotate board'));
+            await tester.pumpAndSettle();
+          }
+
+          final fromRow = flipped ? 0 : 7;
+          final fromCol = flipped ? (kingSide ? 1 : 6) : (kingSide ? 6 : 1);
+          final toRow = flipped ? 2 : 5;
+          final toCol = flipped ? (kingSide ? 0 : 7) : (kingSide ? 7 : 0);
+          final from = tester.getCenter(
+            find.byKey(ValueKey('board-square-$fromRow-$fromCol')),
+          );
+          final legalTo = tester.getCenter(
+            find.byKey(ValueKey('board-square-$toRow-$toCol')),
+          );
+          final board = tester.getRect(find.byKey(const Key('chess-board')));
+          // The exact right edge and a point beyond the left edge are outside.
+          // Both were previously clamped to legal destinations.
+          final outside = Offset(
+            toCol == 0 ? board.left - 8 : board.right,
+            legalTo.dy,
+          );
+
+          final gesture = await tester.startGesture(from);
+          await gesture.moveTo(legalTo);
+          await tester.pump();
+          await gesture.moveTo(outside);
+          await tester.pump();
+          await gesture.up();
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Girar tabuleiro'));
+
+          expect(find.text('Moves · No moves yet'), findsOneWidget);
+          expect(
+            find.byKey(ValueKey('board-piece-$fromRow-$fromCol')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(ValueKey('board-piece-$toRow-$toCol')),
+            findsNothing,
+          );
+          expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+          expect(tester.takeException(), isNull);
+
+          // Cancellation must still allow moving the same piece later.
+          final nextGesture = await tester.startGesture(from);
+          await tester.pump();
+          await nextGesture.moveTo(legalTo);
+          await tester.pump();
+          await nextGesture.up();
           await tester.pumpAndSettle();
-        }
-
-        final fromRow = flipped ? 0 : 7;
-        final fromCol = flipped ? (kingSide ? 1 : 6) : (kingSide ? 6 : 1);
-        final toRow = flipped ? 2 : 5;
-        final toCol = flipped ? (kingSide ? 0 : 7) : (kingSide ? 7 : 0);
-        final from = tester.getCenter(
-          find.byKey(ValueKey('board-square-$fromRow-$fromCol')),
-        );
-        final legalTo = tester.getCenter(
-          find.byKey(ValueKey('board-square-$toRow-$toCol')),
-        );
-        final board = tester.getRect(find.byKey(const Key('chess-board')));
-        // A borda direita exata já está fora; à esquerda, testa um ponto
-        // externo. Ambos antes eram convertidos em um destino legal.
-        final outside = Offset(
-          toCol == 0 ? board.left - 8 : board.right,
-          legalTo.dy,
-        );
-
-        final gesture = await tester.startGesture(from);
-        await gesture.moveTo(legalTo);
-        await tester.pump();
-        await gesture.moveTo(outside);
-        await tester.pump();
-        await gesture.up();
-        await tester.pumpAndSettle();
-
-        expect(find.text('Jogadas · Nenhum lance'), findsOneWidget);
-        expect(
-          find.byKey(ValueKey('board-piece-$fromRow-$fromCol')),
-          findsOneWidget,
-        );
-        expect(find.byKey(ValueKey('board-piece-$toRow-$toCol')), findsNothing);
-        expect(find.byType(ChessPieceWidget), findsNWidgets(32));
-        expect(tester.takeException(), isNull);
-
-        // O cancelamento não impede que a mesma peça seja movida depois.
-        final nextGesture = await tester.startGesture(from);
-        await tester.pump();
-        await nextGesture.moveTo(legalTo);
-        await tester.pump();
-        await nextGesture.up();
-        await tester.pumpAndSettle();
-        expect(find.text(kingSide ? '1. Nh3' : '1. Na3'), findsOneWidget);
-        expect(
-          find.byKey(ValueKey('board-piece-$toRow-$toCol')),
-          findsOneWidget,
-        );
-        expect(tester.takeException(), isNull);
-      });
+          expect(find.text(kingSide ? '1. Nh3' : '1. Na3'), findsOneWidget);
+          expect(
+            find.byKey(ValueKey('board-piece-$toRow-$toCol')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
   }
 }

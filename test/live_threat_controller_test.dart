@@ -34,7 +34,7 @@ void main() {
     return container;
   }
 
-  test('mudanças rápidas calculam só a última posição da fila', () async {
+  test('rapid changes calculate only the latest queued position', () async {
     final started = Completer<void>();
     final reply = Completer<List<StockfishLine>>();
     var calls = 0;
@@ -82,7 +82,7 @@ void main() {
   });
 
   test(
-    'suspensão descarta resposta tardia e retoma na posição atual',
+    'suspension discards a late response and resumes at the current position',
     () async {
       final started = Completer<void>();
       final reply = Completer<List<StockfishLine>>();
@@ -116,7 +116,7 @@ void main() {
     },
   );
 
-  test('reinício desativa as setas e invalida respostas anteriores', () async {
+  test('restart disables arrows and invalidates earlier responses', () async {
     final engine = MultiPvEngine();
     final container = containerFor(engine);
     final game = container.read(gameControllerProvider.notifier);
@@ -131,23 +131,26 @@ void main() {
     expect(engine.analyses, hasLength(1));
   });
 
-  test('xeque pausa e sair do xeque atualiza automaticamente', () async {
-    final engine = MultiPvEngine(onAnalysis: (fen) async => lines(fen));
-    final container = containerFor(
-      engine,
-      fen: '4r1k1/8/8/8/8/8/8/4K3 w - - 0 1',
-    );
-    container.read(liveThreatControllerProvider.notifier).setEnabled(true);
-    await flush();
-    expect(container.read(liveThreatControllerProvider).loading, isFalse);
-    expect(engine.analyses, isEmpty);
-    await container
-        .read(gameControllerProvider.notifier)
-        .attemptDragMove(Square.e1, Square.d1, onPromotion: () async => null);
-    await flush();
-    expect(container.read(liveThreatControllerProvider).result, isNotNull);
-    expect(engine.analyses, hasLength(1));
-  });
+  test(
+    'check pauses analysis and escaping check updates it automatically',
+    () async {
+      final engine = MultiPvEngine(onAnalysis: (fen) async => lines(fen));
+      final container = containerFor(
+        engine,
+        fen: '4r1k1/8/8/8/8/8/8/4K3 w - - 0 1',
+      );
+      container.read(liveThreatControllerProvider.notifier).setEnabled(true);
+      await flush();
+      expect(container.read(liveThreatControllerProvider).loading, isFalse);
+      expect(engine.analyses, isEmpty);
+      await container
+          .read(gameControllerProvider.notifier)
+          .attemptDragMove(Square.e1, Square.d1, onPromotion: () async => null);
+      await flush();
+      expect(container.read(liveThreatControllerProvider).result, isNotNull);
+      expect(engine.analyses, hasLength(1));
+    },
+  );
 }
 
 Future<void> flush() => Future<void>.delayed(Duration.zero);

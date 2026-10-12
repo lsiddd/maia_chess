@@ -18,7 +18,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Android real: Fase 5 persiste, desbloqueia, renderiza e reconstrói',
+    'native Android: persist, unlock, render, and rebuild statistics',
     (tester) async {
       final temporaryDirectory = await getTemporaryDirectory();
       final databaseFile = io.File(
@@ -47,7 +47,7 @@ void main() {
         expect(
           await games.completeGame(first.completed),
           isFalse,
-          reason: 'Concluir novamente não pode duplicar as projeções.',
+          reason: 'Completing a game again must not duplicate derived state.',
         );
 
         var snapshot = await stats.get();
@@ -90,9 +90,9 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('A escalada dos nove Maias'), findsOneWidget);
-        expect(find.text('Etapa concluída'), findsOneWidget);
-        expect(find.text('Jogar novamente'), findsOneWidget);
+        expect(find.text('Climb through all nine Maia levels'), findsOneWidget);
+        expect(find.text('Level completed'), findsOneWidget);
+        expect(find.text('Play again'), findsOneWidget);
         expect(find.text('Maia 1200'), findsOneWidget);
 
         await tester.pumpWidget(
@@ -102,20 +102,20 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('3 partidas avaliadas'), findsOneWidget);
-        expect(find.text('Sequência atual'), findsOneWidget);
+        expect(find.text('3 rated games'), findsOneWidget);
+        expect(find.text('Current streak'), findsOneWidget);
         expect(
           find.bySemanticsLabel(
-            RegExp(r'Gráfico de evolução com 3 pontos; rating atual'),
+            RegExp(r'Rating chart with 3 points; current rating'),
           ),
           findsOneWidget,
         );
         await tester.scrollUntilVisible(
-          find.text('2V  0E  1D'),
+          find.text('2W  0D  1L'),
           250,
           scrollable: find.byType(Scrollable),
         );
-        expect(find.text('2V  0E  1D'), findsOneWidget);
+        expect(find.text('2W  0D  1L'), findsOneWidget);
 
         await games.deleteGame(third.ongoing.id);
         snapshot = await stats.get();
@@ -135,8 +135,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('1/2 vitórias • 2/3 partidas'), findsOneWidget);
-        expect(find.text('Bloqueado'), findsWidgets);
+        expect(find.text('1/2 wins • 2/3 games'), findsOneWidget);
+        expect(find.text('Locked'), findsWidgets);
 
         await games.deleteGame(first.ongoing.id);
         await games.deleteGame(second.ongoing.id);

@@ -6,11 +6,9 @@ import 'package:stockfish/stockfish.dart';
 import '../uci_wait.dart';
 import 'stockfish_analysis.dart';
 
-/// Serviço de alto nível para o motor Stockfish, usado para a dica de lance
-/// objetivamente melhor (independente do nível de dificuldade escolhido).
-///
-/// Mesma arquitetura do [Lc0Service]: FFI in-process via o pacote
-/// `stockfish`, sem subprocess, com o laço UCI rodando em Isolate dedicado.
+/// High-level Stockfish contract for hints and opponent plans, independent of
+/// the selected Maia level. The `stockfish` package runs UCI in-process
+/// through Dart FFI on background isolates.
 abstract interface class StockfishEngine {
   static const defaultMovetimeMs = 500;
 
@@ -36,18 +34,16 @@ class StockfishService implements StockfishEngine {
   bool _handshakeDone = false;
   bool _searchInProgress = false;
 
-  /// `true` só depois do handshake `isready`/`readyok` (ver [init]) —
-  /// diferente de `_engine.state == StockfishState.ready`, que só indica
-  /// que o isolate nativo subiu, não que a NNUE embutida já foi carregada
-  /// (mesma pegadinha documentada em [Lc0Service.isReady]).
+  /// True after the `isready`/`readyok` handshake, rather than merely native
+  /// isolate startup.
   @override
   bool get isReady =>
       _engine != null &&
       _engine!.state.value == StockfishState.ready &&
       _handshakeDone;
 
-  /// Inicializa o motor. O Stockfish embute a rede de avaliação (NNUE) no
-  /// binário compilado, então não recebe um caminho de peso como o lc0.
+  /// Initialise Stockfish. Its NNUE evaluation network is embedded in the
+  /// compiled binary, so no weights path is needed.
   @override
   Future<void> init() async {
     if (_engine != null) {
@@ -55,7 +51,7 @@ class StockfishService implements StockfishEngine {
     }
 
     _handshakeDone = false;
-    developer.log('Criando engine', name: 'StockfishService');
+    developer.log('Creating engine', name: 'StockfishService');
     final engine = Stockfish();
     _engine = engine;
 
@@ -68,27 +64,25 @@ class StockfishService implements StockfishEngine {
       final state = await startup.future.timeout(
         _startupTimeout,
         onTimeout: () =>
-            throw TimeoutException('Stockfish não inicializou a tempo'),
+            throw TimeoutException('Stockfish did not start in time'),
       );
-      developer.log('Estado nativo: $state', name: 'StockfishService');
+      developer.log('Native state: $state', name: 'StockfishService');
       if (state == StockfishState.error) {
-        throw StateError('Stockfish falhou ao iniciar');
+        throw StateError('Stockfish failed to start');
       }
 
-      // Ver o comentário equivalente em Lc0Service.init: `ready` só significa
-      // que o isolate subiu, não que a NNUE terminou de carregar. Confirmamos
-      // com o handshake padrão isready/readyok antes de liberar o motor para
-      // buscas (ADR-001, observação de robustez, Fase 3).
-      developer.log('Enviando isready', name: 'StockfishService');
+      // Native ready does not confirm NNUE loading. Wait for the UCI
+      // handshake before allowing searches.
+      developer.log('Sending isready', name: 'StockfishService');
       await _waitReadyOk(engine);
       if (!identical(_engine, engine)) {
-        throw StateError('Stockfish foi descartado durante a inicialização');
+        throw StateError('Stockfish was disposed during startup');
       }
       _handshakeDone = true;
-      developer.log('Handshake readyok concluído', name: 'StockfishService');
+      developer.log('readyok handshake completed', name: 'StockfishService');
     } catch (error, stackTrace) {
       developer.log(
-        'Falha na inicialização',
+        'Startup failed',
         name: 'StockfishService',
         error: error,
         stackTrace: stackTrace,
@@ -105,14 +99,14 @@ class StockfishService implements StockfishEngine {
       stdout: engine.stdout,
       predicate: (line) => line.trim() == 'readyok',
       onStreamDone: () =>
-          StateError('Stockfish encerrou antes de responder readyok'),
+          StateError('Stockfish exited before responding with readyok'),
     );
     try {
       engine.stdin = 'isready';
       await waiter.future.timeout(
         _readyTimeout,
         onTimeout: () => throw TimeoutException(
-          'Stockfish não respondeu isready/readyok em '
+          'Stockfish did not respond to isready/readyok within '
           '${_readyTimeout.inSeconds}s',
         ),
       );
@@ -121,10 +115,8 @@ class StockfishService implements StockfishEngine {
     }
   }
 
-  /// Envia a posição [fen] e retorna o lance sugerido em notação UCI,
-  /// buscando por [movetimeMs] milissegundos. O padrão de 500ms prioriza
-  /// a resposta rápida da dica; chamadas explícitas podem analisar por mais
-  /// tempo em posições difíceis.
+  /// Return a UCI move for [fen] using a [movetimeMs] search budget. The
+  /// default is 500 ms; callers may request a longer search.
   @override
   Future<String> getBestMove(
     String fen, {
@@ -140,7 +132,7 @@ class StockfishService implements StockfishEngine {
     int movetimeMs = 1000,
   }) async {
     if (count < 1 || count > 3) {
-      throw ArgumentError.value(count, 'count', 'deve estar entre 1 e 3');
+      throw ArgumentError.value(count, 'count', 'must be between 1 and 3');
     }
     return (await _search(fen, movetimeMs: movetimeMs, count: count)).lines;
   }
@@ -151,13 +143,13 @@ class StockfishService implements StockfishEngine {
     int count = 1,
   }) async {
     if (!isReady) {
-      throw StateError('Stockfish não está pronto. Chame init() primeiro.');
+      throw StateError('Stockfish is not ready. Call init() first.');
     }
     if (movetimeMs <= 0) {
-      throw ArgumentError.value(movetimeMs, 'movetimeMs', 'deve ser positivo');
+      throw ArgumentError.value(movetimeMs, 'movetimeMs', 'must be positive');
     }
     if (_searchInProgress) {
-      throw StateError('Stockfish já está calculando outro lance');
+      throw StateError('Stockfish is already calculating another move');
     }
 
     final engine = _engine!;
@@ -169,13 +161,13 @@ class StockfishService implements StockfishEngine {
         return line.startsWith('bestmove');
       },
       onStreamDone: () =>
-          StateError('Stockfish encerrou antes de devolver bestmove'),
+          StateError('Stockfish exited before returning bestmove'),
     );
 
     _searchInProgress = true;
     try {
       developer.log(
-        'Iniciando busca movetime=${movetimeMs}ms',
+        'Starting search movetime=${movetimeMs}ms',
         name: 'StockfishService',
       );
       engine.stdin = 'setoption name MultiPV value $count';
@@ -188,15 +180,15 @@ class StockfishService implements StockfishEngine {
         );
         final move = parseBestMove(line);
         if (move.isEmpty || move == '(none)') {
-          throw StateError('Stockfish não devolveu um lance válido');
+          throw StateError('Stockfish did not return a valid move');
         }
-        developer.log('Bestmove recebido: $move', name: 'StockfishService');
+        developer.log('Received bestmove: $move', name: 'StockfishService');
         return (bestMove: move, lines: analysis.lines);
       } on TimeoutException {
-        // Interrompe uma busca atrasada para ela não deixar um `bestmove`
-        // órfão no stream e contaminar a próxima solicitação.
+        // Stop a delayed search so an orphaned `bestmove` cannot contaminate
+        // the next request.
         developer.log(
-          'Busca excedeu o limite; enviando stop',
+          'Search timed out; sending stop',
           name: 'StockfishService',
         );
         try {
@@ -207,11 +199,11 @@ class StockfishService implements StockfishEngine {
             return (bestMove: move, lines: analysis.lines);
           }
         } on Object {
-          // O descarte abaixo é o caminho de recuperação.
+          // Disposal below is the recovery path.
         }
         await _disposeAfterFailure(engine);
         throw TimeoutException(
-          'Stockfish não respondeu à busca nem ao comando stop',
+          'Stockfish did not respond to the search or stop command',
         );
       }
     } finally {
@@ -224,11 +216,9 @@ class StockfishService implements StockfishEngine {
     }
   }
 
-  /// Encerra o motor e só retorna depois que o singleton nativo do pacote
-  /// (`Stockfish`) terminou de verdade — ver o comentário equivalente em
-  /// [Lc0Service.dispose] (mesmo pacote-padrão, mesma limitação: chamar
-  /// [init] de novo cedo demais lança `Bad state: Multiple instances are
-  /// not supported, yet.`).
+  /// Request shutdown and wait for singleton release within bounded timeouts.
+  /// Shutdown is best effort: the package has no force-kill API, and a later
+  /// [init] can still fail if the native loop has not exited.
   @override
   Future<void> dispose() async {
     final engine = _engine;
@@ -254,10 +244,9 @@ class StockfishService implements StockfishEngine {
       return;
     }
 
-    // `Stockfish.dispose()` escreve "quit" e por isso lança enquanto o
-    // wrapper ainda está em `starting`. Aguarda a transição para que um
-    // timeout de inicialização não transforme a própria limpeza em outro
-    // erro e deixe o singleton preso.
+    // `Stockfish.dispose()` writes `quit` and throws while the wrapper is
+    // still starting. Wait for that transition so cleanup after a startup
+    // timeout does not itself fail.
     if (state == StockfishState.starting) {
       final startup = awaitListenableValue(
         engine.state,
@@ -283,7 +272,7 @@ class StockfishService implements StockfishEngine {
       await terminated.future.timeout(_terminateStepTimeout);
     } on Object catch (error, stackTrace) {
       developer.log(
-        'Não foi possível encerrar o engine após a falha',
+        'Could not shut down the engine after failure',
         name: 'StockfishService',
         error: error,
         stackTrace: stackTrace,

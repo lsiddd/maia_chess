@@ -1,6 +1,5 @@
-/// Um dos 9 níveis de dificuldade do Maia (seção 3 da especificação),
-/// cada um correspondendo a um peso `.pb.gz` oficial do repositório
-/// `CSSLab/maia-chess` (ver ADR-007).
+/// One of nine Maia levels, each backed by an official `.pb.gz` network from
+/// `CSSLab/maia-chess`.
 class DifficultyLevel {
   const DifficultyLevel({
     required this.rating,
@@ -10,22 +9,23 @@ class DifficultyLevel {
   }) : assert(winsRequired > 0),
        assert(windowSize >= winsRequired);
 
-  /// Rating aproximado do estilo de jogo imitado (1100-1900).
+  /// Rating band of the human playing style modelled by the network
+  /// (1100–1900).
   final int rating;
 
-  /// Caminho do asset do peso `.pb.gz` correspondente.
+  /// Asset path of the corresponding `.pb.gz` network.
   final String weightsAsset;
 
-  /// Vitórias necessárias para concluir este nível no modo campanha.
+  /// Wins required to complete this campaign level.
   final int winsRequired;
 
-  /// Tamanho máximo da janela móvel considerada na campanha.
+  /// Maximum size of the rolling campaign window.
   final int windowSize;
 
   @override
   String toString() => 'Maia $rating';
 
-  /// Todos os 9 níveis, em ordem crescente de rating.
+  /// All nine levels in ascending rating order.
   static const all = [
     DifficultyLevel(
       rating: 1100,

@@ -1,6 +1,6 @@
 #
 # To learn more about a Podspec see http://guides.cocoapods.org/syntax/podspec.html.
-# Run `pod lib lint lc0.podspec' to validate before publishing.
+# Run `pod lib lint leela_chess_zero.podspec' to validate before publishing.
 #
 require 'yaml'
 
@@ -33,7 +33,7 @@ Pod::Spec.new do |s|
   # Header files
   s.public_header_files = 'Classes/**/*.h'
 
-  # Exclude GPU backends, tests, and files that aren't needed for iOS
+  # Exclude non-iOS backends, tests, and other unused entry points
   s.exclude_files = [
     'lc0/src/**/*_test.cc',
     'lc0/src/neural/backends/cuda/**/*',

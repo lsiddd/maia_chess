@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 project(lc0)
 
-# Enable 16KB page size support for Android (required for Google Play)
+# Align ELF segments for Android devices using 16 KB memory pages
 add_link_options(-Wl,-z,max-page-size=16384)
 add_link_options(-Wl,-z,common-page-size=16384)
 

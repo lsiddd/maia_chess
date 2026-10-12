@@ -11,9 +11,8 @@ import '../../../core/widgets/max_width_body.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 
-/// Tela de configuração de uma partida contra a IA Maia: escolha de lado
-/// (seção 5.1 da especificação) e nível de dificuldade em modo livre
-/// (seção 4 — modo campanha fica para a Fase 5).
+/// Configure the human side and Maia level for free play. Campaign selection
+/// lives in `CampaignScreen`.
 class NewGameVsAiScreen extends ConsumerStatefulWidget {
   const NewGameVsAiScreen({super.key});
 
@@ -40,7 +39,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
         final error =
             ref.read(gameControllerProvider).engineError ??
             ref.read(gameControllerProvider).persistenceError ??
-            'Não foi possível iniciar o motor Maia.';
+            'Could not start the Maia engine.';
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error)));
@@ -59,7 +58,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Jogar contra a IA Maia')),
+      appBar: AppBar(title: const Text('Play against Maia')),
       body: MaxWidthBody(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.l),
@@ -73,16 +72,13 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                   children: [
                     const _SectionLabel(
                       icon: Icons.swap_horiz,
-                      label: 'Seu lado',
+                      label: 'Your side',
                     ),
                     const SizedBox(height: AppSpacing.m),
                     SegmentedButton<Side>(
                       segments: const [
-                        ButtonSegment(
-                          value: Side.white,
-                          label: Text('Brancas'),
-                        ),
-                        ButtonSegment(value: Side.black, label: Text('Pretas')),
+                        ButtonSegment(value: Side.white, label: Text('White')),
+                        ButtonSegment(value: Side.black, label: Text('Black')),
                       ],
                       selected: {_humanSide},
                       onSelectionChanged: (selection) =>
@@ -102,7 +98,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                   children: [
                     const _SectionLabel(
                       icon: Icons.psychology_outlined,
-                      label: 'Nível (estilo Maia)',
+                      label: 'Level (Maia style)',
                     ),
                     const SizedBox(height: AppSpacing.m),
                     Wrap(
@@ -136,17 +132,14 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text(
-                        'Começar partida',
-                        key: ValueKey('starting-label'),
-                      ),
+                    : const Text('Start game', key: ValueKey('starting-label')),
               ),
             ),
             if (_starting) ...[
               const SizedBox(height: AppSpacing.m),
               Text(
-                'Carregando o peso do Maia $_levelRating... '
-                'pode levar alguns segundos na primeira vez.',
+                'Loading Maia $_levelRating weights... '
+                'This may take a few seconds the first time.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,
               ),

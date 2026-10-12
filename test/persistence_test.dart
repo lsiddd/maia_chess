@@ -25,60 +25,63 @@ void main() {
 
   tearDown(() => database.close());
 
-  group('schema e migração inicial', () {
-    test('cria tabelas, versão, defaults e chaves estrangeiras', () async {
-      final version = await database
-          .customSelect('PRAGMA user_version')
-          .map((row) => row.read<int>('user_version'))
-          .getSingle();
-      final tables = await database
-          .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
-          .map((row) => row.read<String>('name'))
-          .get();
-      final progress = await DriftProgressRepository(database).getAll();
-      final settings = await DriftSettingsRepository(database).get();
-      final foreignKeys = await database
-          .customSelect('PRAGMA foreign_keys')
-          .map((row) => row.read<int>('foreign_keys'))
-          .getSingle();
+  group('schema and initial migration', () {
+    test(
+      'creates tables, schema version, defaults, and foreign keys',
+      () async {
+        final version = await database
+            .customSelect('PRAGMA user_version')
+            .map((row) => row.read<int>('user_version'))
+            .getSingle();
+        final tables = await database
+            .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .map((row) => row.read<String>('name'))
+            .get();
+        final progress = await DriftProgressRepository(database).getAll();
+        final settings = await DriftSettingsRepository(database).get();
+        final foreignKeys = await database
+            .customSelect('PRAGMA foreign_keys')
+            .map((row) => row.read<int>('foreign_keys'))
+            .getSingle();
 
-      expect(version, 4);
-      expect(
-        tables,
-        containsAll([
-          'games',
-          'game_moves',
-          'difficulty_progress',
-          'rating_history',
-          'app_settings',
-        ]),
-      );
-      expect(progress.map((row) => row.rating), [
-        1100,
-        1200,
-        1300,
-        1400,
-        1500,
-        1600,
-        1700,
-        1800,
-        1900,
-      ]);
-      expect(progress.first.unlocked, isTrue);
-      expect(progress.skip(1).every((row) => !row.unlocked), isTrue);
-      expect(progress.every((row) => row.gamesInWindow == 0), isTrue);
-      expect(progress.every((row) => row.winsRequired == 2), isTrue);
-      expect(progress.every((row) => row.windowSize == 3), isTrue);
-      expect(settings.showAttackedPieces, isFalse);
-      expect(settings.ownAttackedPiecesOnly, isFalse);
-      expect(settings.defaultTimeMinutes, 10);
-      expect(settings.boardTheme, BoardTheme.brown);
-      expect(settings.pieceSet, StoredPieceSet.cburnett);
-      expect(foreignKeys, 1);
-    });
+        expect(version, 4);
+        expect(
+          tables,
+          containsAll([
+            'games',
+            'game_moves',
+            'difficulty_progress',
+            'rating_history',
+            'app_settings',
+          ]),
+        );
+        expect(progress.map((row) => row.rating), [
+          1100,
+          1200,
+          1300,
+          1400,
+          1500,
+          1600,
+          1700,
+          1800,
+          1900,
+        ]);
+        expect(progress.first.unlocked, isTrue);
+        expect(progress.skip(1).every((row) => !row.unlocked), isTrue);
+        expect(progress.every((row) => row.gamesInWindow == 0), isTrue);
+        expect(progress.every((row) => row.winsRequired == 2), isTrue);
+        expect(progress.every((row) => row.windowSize == 3), isTrue);
+        expect(settings.showAttackedPieces, isFalse);
+        expect(settings.ownAttackedPiecesOnly, isFalse);
+        expect(settings.defaultTimeMinutes, 10);
+        expect(settings.boardTheme, BoardTheme.brown);
+        expect(settings.pieceSet, StoredPieceSet.cburnett);
+        expect(foreignKeys, 1);
+      },
+    );
 
     test(
-      'migração v1 -> v4 acrescenta janela, aparência e reconstrói projeções',
+      'v1 -> v4 migration adds campaign windows and appearance and rebuilds derived state',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
@@ -158,7 +161,7 @@ void main() {
     );
 
     test(
-      'migração v2 -> v4 preserva preferências e adota Cburnett e Brown',
+      'v2 -> v4 migration preserves preferences and adopts Cburnett and Brown',
       () async {
         final migrated = AppDatabase.forTesting(
           NativeDatabase.memory(
@@ -192,7 +195,7 @@ void main() {
       },
     );
 
-    test('excluir a partida remove seus lances por cascade', () async {
+    test('deleting a game cascades to its moves', () async {
       final game = _ongoingGame('cascade', ['e2e4']);
       await games.beginGame(game);
       await games.deleteGame(game.id);
@@ -201,8 +204,8 @@ void main() {
     });
   });
 
-  group('repositório transacional', () {
-    test('autosave substitui snapshot e remove lances desfeitos', () async {
+  group('transactional repository', () {
+    test('autosave replaces snapshot and removes undone moves', () async {
       final first = _ongoingGame('autosave', ['e2e4', 'e7e5']);
       await games.beginGame(first);
       await games.saveOngoing(_ongoingGame('autosave', ['e2e4']));
@@ -214,7 +217,7 @@ void main() {
       expect(const GameReplayer().replay(restored).positions, hasLength(2));
     });
 
-    test('começar outra partida elimina apenas o autosave anterior', () async {
+    test('starting another game removes only the previous autosave', () async {
       await games.beginGame(_ongoingGame('old', ['d2d4']));
       await games.beginGame(_ongoingGame('new', const []));
 
@@ -222,7 +225,7 @@ void main() {
       expect(library.map((game) => game.id), ['new']);
     });
 
-    test('finalização e vitória de campanha são idempotentes', () async {
+    test('completion and campaign win are idempotent', () async {
       final ongoing = _ongoingGame(
         'campaign',
         ['e2e4'],
@@ -252,7 +255,7 @@ void main() {
       );
     });
 
-    test('partida não avaliada não incrementa campanha', () async {
+    test('an unrated game does not advance the campaign', () async {
       final ongoing = _ongoingGame(
         'not-evaluated',
         ['e2e4'],
@@ -276,119 +279,119 @@ void main() {
       expect(await database.select(database.ratingHistory).get(), isEmpty);
     });
 
-    test(
-      'rating e resultados usam somente partidas avaliadas contra IA',
-      () async {
-        await _complete(
-          games,
-          _ongoingGame(
-            'a-win',
-            ['e2e4'],
-            levelRating: 1100,
-            playerSide: Side.white,
-          ),
-          result: StoredGameResult.whiteWin,
-          endedAtUtc: DateTime.utc(2026, 8, 5, 13),
-        );
-        await _complete(
-          games,
-          _ongoingGame(
-            'b-loss',
-            ['d2d4'],
-            levelRating: 1100,
-            playerSide: Side.black,
-          ),
-          result: StoredGameResult.whiteWin,
-          endedAtUtc: DateTime.utc(2026, 8, 5, 14),
-        );
-        await _complete(
-          games,
-          _ongoingGame(
-            'c-draw',
-            ['c2c4'],
-            levelRating: 1500,
-            playerSide: Side.white,
-          ),
-          result: StoredGameResult.draw,
-          endedAtUtc: DateTime.utc(2026, 8, 5, 15),
-        );
-        await _complete(
-          games,
-          _ongoingGame(
-            'd-hint',
-            ['g1f3'],
-            levelRating: 1900,
-            playerSide: Side.white,
-            evaluated: false,
-          ),
-          result: StoredGameResult.whiteWin,
-          endedAtUtc: DateTime.utc(2026, 8, 5, 16),
-        );
-        await _complete(
-          games,
-          _ongoingGame('e-local', ['e2e4']),
-          result: StoredGameResult.whiteWin,
-          endedAtUtc: DateTime.utc(2026, 8, 5, 17),
-        );
+    test('rating and results use only rated AI games', () async {
+      await _complete(
+        games,
+        _ongoingGame(
+          'a-win',
+          ['e2e4'],
+          levelRating: 1100,
+          playerSide: Side.white,
+        ),
+        result: StoredGameResult.whiteWin,
+        endedAtUtc: DateTime.utc(2026, 8, 5, 13),
+      );
+      await _complete(
+        games,
+        _ongoingGame(
+          'b-loss',
+          ['d2d4'],
+          levelRating: 1100,
+          playerSide: Side.black,
+        ),
+        result: StoredGameResult.whiteWin,
+        endedAtUtc: DateTime.utc(2026, 8, 5, 14),
+      );
+      await _complete(
+        games,
+        _ongoingGame(
+          'c-draw',
+          ['c2c4'],
+          levelRating: 1500,
+          playerSide: Side.white,
+        ),
+        result: StoredGameResult.draw,
+        endedAtUtc: DateTime.utc(2026, 8, 5, 15),
+      );
+      await _complete(
+        games,
+        _ongoingGame(
+          'd-hint',
+          ['g1f3'],
+          levelRating: 1900,
+          playerSide: Side.white,
+          evaluated: false,
+        ),
+        result: StoredGameResult.whiteWin,
+        endedAtUtc: DateTime.utc(2026, 8, 5, 16),
+      );
+      await _complete(
+        games,
+        _ongoingGame('e-local', ['e2e4']),
+        result: StoredGameResult.whiteWin,
+        endedAtUtc: DateTime.utc(2026, 8, 5, 17),
+      );
 
-        final stats = await DriftStatsRepository(database).get();
-        expect(stats.evaluatedGames, 3);
-        expect(stats.ratingHistory, hasLength(3));
-        expect(stats.resultsByLevel[1100]?.wins, 1);
-        expect(stats.resultsByLevel[1100]?.losses, 1);
-        expect(stats.resultsByLevel[1500]?.draws, 1);
-        expect(stats.resultsByLevel[1900], isNull);
-        expect(stats.currentStreak, 0);
-        expect(stats.recordStreak, 1);
-        expect(
-          stats.estimatedRating,
-          closeTo(stats.ratingHistory.last.value, 0.000001),
+      final stats = await DriftStatsRepository(database).get();
+      expect(stats.evaluatedGames, 3);
+      expect(stats.ratingHistory, hasLength(3));
+      expect(stats.resultsByLevel[1100]?.wins, 1);
+      expect(stats.resultsByLevel[1100]?.losses, 1);
+      expect(stats.resultsByLevel[1500]?.draws, 1);
+      expect(stats.resultsByLevel[1900], isNull);
+      expect(stats.currentStreak, 0);
+      expect(stats.recordStreak, 1);
+      expect(
+        stats.estimatedRating,
+        closeTo(stats.ratingHistory.last.value, 0.000001),
+      );
+    });
+
+    test(
+      'campaign unlocks with 2 wins in 3 games and remains unlocked after later losses',
+      () async {
+        await _campaignResult(
+          games,
+          id: 'campaign-1-win',
+          result: StoredGameResult.whiteWin,
+          hour: 13,
         );
+        var progress = await DriftProgressRepository(database).getAll();
+        expect(progress.first.validWins, 1);
+        expect(progress.first.gamesInWindow, 1);
+        expect(progress[1].unlocked, isFalse);
+
+        await _campaignResult(
+          games,
+          id: 'campaign-2-loss',
+          result: StoredGameResult.blackWin,
+          hour: 14,
+        );
+        await _campaignResult(
+          games,
+          id: 'campaign-3-win',
+          result: StoredGameResult.whiteWin,
+          hour: 15,
+        );
+        progress = await DriftProgressRepository(database).getAll();
+        expect(progress.first.validWins, 2);
+        expect(progress.first.gamesInWindow, 3);
+        expect(progress.first.levelCompleted, isTrue);
+        expect(progress[1].unlocked, isTrue);
+
+        await _campaignResult(
+          games,
+          id: 'campaign-4-loss',
+          result: StoredGameResult.blackWin,
+          hour: 16,
+        );
+        progress = await DriftProgressRepository(database).getAll();
+        expect(progress.first.levelCompleted, isTrue);
+        expect(progress[1].unlocked, isTrue);
       },
     );
 
-    test('campanha desbloqueia com 2 de 3 e não regride depois', () async {
-      await _campaignResult(
-        games,
-        id: 'campaign-1-win',
-        result: StoredGameResult.whiteWin,
-        hour: 13,
-      );
-      var progress = await DriftProgressRepository(database).getAll();
-      expect(progress.first.validWins, 1);
-      expect(progress.first.gamesInWindow, 1);
-      expect(progress[1].unlocked, isFalse);
-
-      await _campaignResult(
-        games,
-        id: 'campaign-2-loss',
-        result: StoredGameResult.blackWin,
-        hour: 14,
-      );
-      await _campaignResult(
-        games,
-        id: 'campaign-3-win',
-        result: StoredGameResult.whiteWin,
-        hour: 15,
-      );
-      progress = await DriftProgressRepository(database).getAll();
-      expect(progress.first.validWins, 2);
-      expect(progress.first.gamesInWindow, 3);
-      expect(progress.first.levelCompleted, isTrue);
-      expect(progress[1].unlocked, isTrue);
-
-      await _campaignResult(
-        games,
-        id: 'campaign-4-loss',
-        result: StoredGameResult.blackWin,
-        hour: 16,
-      );
-      progress = await DriftProgressRepository(database).getAll();
-      expect(progress.first.levelCompleted, isTrue);
-      expect(progress[1].unlocked, isTrue);
-    });
-
-    test('exclusão reconstrói rating, placar e desbloqueios', () async {
+    test('deletion rebuilds rating, results, and unlocks', () async {
       await _campaignResult(
         games,
         id: 'rebuild-a-win',
@@ -447,7 +450,7 @@ void main() {
       expect(progress[1].unlocked, isFalse);
     });
 
-    test('configurações são tipadas e persistidas', () async {
+    test('settings are typed and persisted', () async {
       final repository = DriftSettingsRepository(database);
       const settings = StoredAppSettings(
         showAttackedPieces: true,
@@ -471,13 +474,13 @@ void main() {
   });
 
   group('PGN', () {
-    test('importa comentários e tags desconhecidas e valida os lances', () {
+    test('imports comments and unknown tags and validates moves', () {
       const source = '''
-[Event "Teste"]
-[X-Custom "preservada"]
+[Event "Test"]
+[X-Custom "preserved"]
 [Result "*"]
 
-1. e4 {comentário livre} e5 2. Nf3 (2. Bc4 Nc6) Nc6 *
+1. e4 {free-form comment} e5 2. Nf3 (2. Bc4 Nc6) Nc6 *
 ''';
       final imported = const PgnService().parseImport(
         pgn: source,
@@ -491,13 +494,13 @@ void main() {
         'g1f3',
         'b8c6',
       ]);
-      expect(imported.pgn, contains('[X-Custom "preservada"]'));
-      expect(imported.pgn, contains('comentário livre'));
+      expect(imported.pgn, contains('[X-Custom "preserved"]'));
+      expect(imported.pgn, contains('free-form comment'));
       expect(imported.evaluated, isFalse);
       expect(const GameReplayer().replay(imported).positions, hasLength(5));
     });
 
-    test('rejeita PGN ilegal sem gravar parcialmente', () async {
+    test('rejects illegal PGN without partial writes', () async {
       expect(
         () => const PgnService().parseImport(
           pgn: '1. e4 e5 2. Bh6 *',
@@ -509,10 +512,10 @@ void main() {
       expect(await games.watchLibrary().first, isEmpty);
     });
 
-    test('rejeita texto de lance ignorado pelo parser dentro de variante', () {
+    test('rejects move text ignored by the parser inside a variation', () {
       expect(
         () => const PgnService().parseImport(
-          pgn: '1. e4 e5 2. Nf3 (2. Bc4 lixo Nc6) Nc6 *',
+          pgn: '1. e4 e5 2. Nf3 (2. Bc4 garbage Nc6) Nc6 *',
           id: 'invalid-variation',
           importedAtUtc: DateTime.utc(2026, 8, 5),
         ),
@@ -520,13 +523,13 @@ void main() {
           isA<PgnFormatException>().having(
             (error) => error.message,
             'message',
-            contains('variante'),
+            contains('variation'),
           ),
         ),
       );
     });
 
-    test('PGN exportado pode ser importado com a mesma sequência', () {
+    test('exported PGN can be imported with the same move sequence', () {
       final original = _ongoingGame(
         'roundtrip',
         ['e2e4', 'e7e5', 'g1f3', 'b8c6'],

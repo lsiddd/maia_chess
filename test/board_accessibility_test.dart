@@ -15,20 +15,20 @@ void main() {
     (
       fen: 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1',
       uci: 'e1g1',
-      text: 'Rei branco, roque pequeno.',
+      text: 'White king, kingside castling.',
     ),
     (
       fen: 'r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1',
       uci: 'e8c8',
-      text: 'Rei preto, roque grande.',
+      text: 'Black king, queenside castling.',
     ),
     (
       fen: '7k/P7/8/8/8/8/8/7K w - - 0 1',
       uci: 'a7a8n',
-      text: 'Peão branco de a7 para a8, promove a Cavalo.',
+      text: 'White pawn from a7 to a8, promotes to Knight.',
     ),
   ]) {
-    test('anúncio descreve ${example.uci}', () {
+    test('announcement describes ${example.uci}', () {
       final before = Chess.fromSetup(Setup.parseFen(example.fen));
       final move = NormalMove.fromUci(example.uci);
       final (after, san) = before.makeSan(move);
@@ -68,15 +68,15 @@ void main() {
   }
 
   for (final flipped in [false, true]) {
-    testWidgets('joga por ações semânticas, invertido=$flipped', (
+    testWidgets('plays through semantic actions, flipped=$flipped', (
       tester,
     ) async {
       await pumpGame(tester);
       await tester.pumpAndSettle();
       if (flipped) {
-        await tester.tap(find.text('Mais'));
+        await tester.tap(find.text('More'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Girar tabuleiro'));
+        await tester.tap(find.text('Rotate board'));
         await tester.pumpAndSettle();
       }
       for (final file in 'abcdefgh'.split('')) {
@@ -90,8 +90,8 @@ void main() {
           );
         }
       }
-      expect(tester.getSemantics(square('e2')).label, 'e2, Peão branco');
-      expect(tester.getSemantics(square('e4')).label, 'e4, vazia');
+      expect(tester.getSemantics(square('e2')).label, 'e2, White pawn');
+      expect(tester.getSemantics(square('e4')).label, 'e4, empty');
       await activate(tester, 'e2');
       expect(
         tester.getSemantics(square('e2')).flagsCollection.isSelected,
@@ -99,20 +99,20 @@ void main() {
       );
       expect(
         tester.getSemantics(square('e4')).value,
-        contains('Destino legal'),
+        contains('Legal destination'),
       );
       await activate(tester, 'e4');
 
-      // A semântica usa a posição real, inclusive durante o voo visual.
-      expect(tester.getSemantics(square('e2')).label, 'e2, vazia');
-      expect(tester.getSemantics(square('e4')).label, 'e4, Peão branco');
-      expect(find.bySemanticsLabel('Peão branco'), findsNothing);
+      // Semantics use the actual position even during visual flight.
+      expect(tester.getSemantics(square('e2')).label, 'e2, empty');
+      expect(tester.getSemantics(square('e4')).label, 'e4, White pawn');
+      expect(find.bySemanticsLabel('White pawn'), findsNothing);
       await tester.pumpAndSettle();
       expect(find.text('1. e4'), findsOneWidget);
       final status = tester.getSemantics(find.byKey(const Key('turn-status')));
       expect(status.flagsCollection.isLiveRegion, isTrue);
-      expect(status.label, contains('Peão branco de e2 para e4.'));
-      expect(status.label, contains('Pretas jogam'));
+      expect(status.label, contains('White pawn from e2 to e4.'));
+      expect(status.label, contains('Black to move'));
 
       await activate(tester, 'd7');
       await activate(tester, 'd5');
@@ -123,20 +123,20 @@ void main() {
       expect(find.textContaining('2. exd5'), findsOneWidget);
       expect(
         tester.getSemantics(find.byKey(const Key('turn-status'))).label,
-        contains('Peão branco de e4 para d5, captura.'),
+        contains('White pawn from e4 to d5, captures.'),
       );
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('casas não oferecem ação durante pensamento da IA', (
+  testWidgets('squares offer no action while the AI is thinking', (
     tester,
   ) async {
     await pumpGame(tester, busy: true);
     final node = tester.getSemantics(square('e2'));
     expect(node.flagsCollection.isEnabled, Tristate.isFalse);
     expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
-    expect(node.label, 'e2, Peão branco');
+    expect(node.label, 'e2, White pawn');
     await tester.pumpWidget(const SizedBox.shrink());
     expect(tester.takeException(), isNull);
   });

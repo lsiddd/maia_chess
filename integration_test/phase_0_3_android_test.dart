@@ -12,7 +12,7 @@ import 'package:maia_chess/features/game/application/game_controller.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Android real: 1100 -> dica -> jogar -> 1900 -> dica', (
+  testWidgets('native Android: 1100 -> hint -> play -> 1900 -> hint', (
     tester,
   ) async {
     final container = ProviderContainer();
@@ -28,9 +28,9 @@ void main() {
       final hint1100 = await controller.getHint(stockfishMovetimeMs: 1000);
       expect(hint1100.stockfishSan, isNotEmpty);
 
-      // Fechar uma dica pendente precisa liberar os motores e permitir
-      // que o lance seguinte recarregue o Maia normalmente.
-      // Um tempo diferente evita reutilizar a dica já armazenada acima.
+      // Cancelling a pending hint must allow the next move to proceed with
+      // Maia. A different time budget prevents reuse of the cached hint
+      // above.
       final pendingHint = controller.getHint(stockfishMovetimeMs: 1500);
       final cancellation = expectLater(
         pendingHint,
@@ -64,7 +64,7 @@ void main() {
     }
   }, timeout: const Timeout(Duration(minutes: 8)));
 
-  testWidgets('Android real: lc0 recupera após falha nativa de peso', (
+  testWidgets('native Android: lc0 recovers after a native weights failure', (
     tester,
   ) async {
     final engine = Lc0Service();

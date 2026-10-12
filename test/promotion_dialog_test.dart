@@ -1,5 +1,4 @@
-// Cobre AUDITORIA_TECNICA.md, AUD-005: promotion_dialog.dart estava em 0%
-// de cobertura.
+// Test promotion selection and cancellation.
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/features/game/presentation/promotion_dialog.dart';
 
 void main() {
-  testWidgets('mostra as quatro peças de promoção e retorna a escolhida', (
+  testWidgets('shows all four promotion pieces and returns the selected role', (
     tester,
   ) async {
     Role? result;
@@ -20,26 +19,27 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('abrir'));
+    await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Promover peão para'), findsOneWidget);
-    expect(find.byTooltip('Dama'), findsOneWidget);
-    expect(find.byTooltip('Torre'), findsOneWidget);
-    expect(find.byTooltip('Bispo'), findsOneWidget);
-    expect(find.byTooltip('Cavalo'), findsOneWidget);
+    expect(find.text('Promote pawn to'), findsOneWidget);
+    expect(find.byTooltip('Queen'), findsOneWidget);
+    expect(find.byTooltip('Rook'), findsOneWidget);
+    expect(find.byTooltip('Bishop'), findsOneWidget);
+    expect(find.byTooltip('Knight'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Dama'));
+    await tester.tap(find.byTooltip('Queen'));
     await tester.pumpAndSettle();
 
     expect(result, Role.queen);
-    expect(find.text('Promover peão para'), findsNothing);
+    expect(find.text('Promote pawn to'), findsNothing);
   });
 
-  testWidgets('retorna null quando o jogador cancela tocando fora', (
+  testWidgets('returns null when the player cancels by tapping outside', (
     tester,
   ) async {
-    Role? result = Role.pawn; // sentinela: deve virar null, não continuar pawn
+    Role? result = Role
+        .pawn; // Sentinel: cancellation must produce null rather than leave pawn.
     var completed = false;
     await tester.pumpWidget(
       _Harness(
@@ -50,10 +50,10 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('abrir'));
+    await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    // Toque fora do AlertDialog, na barreira do modal.
+    // Tap the modal barrier outside the AlertDialog.
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
 
@@ -74,7 +74,7 @@ class _Harness extends StatelessWidget {
         body: Builder(
           builder: (context) => ElevatedButton(
             onPressed: () => onPressed(context),
-            child: const Text('abrir'),
+            child: const Text('open'),
           ),
         ),
       ),

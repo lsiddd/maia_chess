@@ -13,12 +13,12 @@ import 'package:maia_chess/features/hints/application/visual_hint_controller.dar
 import 'package:maia_chess/features/tactics/application/live_threat_controller.dart';
 import 'package:maia_chess/features/tactics/presentation/threat_arrows.dart';
 
-/// Fluxo de aceitação em Android com SQLite, Stockfish e Maia reais.
-/// Não substitui motores ou repositórios por mocks.
+/// Android acceptance flow using real SQLite, Stockfish, and Maia
+/// implementations.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('seção 2: ferramentas, histórico, menus, autosave e reinício', (
+  testWidgets('game screen: tools, history, menus, autosave, and restart', (
     tester,
   ) async {
     final container = ProviderContainer();
@@ -93,7 +93,7 @@ void main() {
             .turn,
         Side.black,
       );
-      await tester.tap(find.byTooltip('Fechar histórico'));
+      await tester.tap(find.byTooltip('Close history'));
       await tester.pumpAndSettle();
       expect(_rect(tester), board);
       await tester.tap(find.byKey(const Key('move-list-panel')));
@@ -105,7 +105,7 @@ void main() {
             .turn,
         Side.black,
       );
-      await tester.tap(find.text('Posição atual'));
+      await tester.tap(find.text('Current position'));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -114,10 +114,10 @@ void main() {
             .fen,
         container.read(gameControllerProvider).position.fen,
       );
-      await tester.tap(find.byTooltip('Fechar histórico'));
+      await tester.tap(find.byTooltip('Close history'));
       await tester.pumpAndSettle();
 
-      await _menu(tester, 'Girar tabuleiro');
+      await _menu(tester, 'Rotate board');
       expect(
         tester
             .widget<ChessBoardWidget>(find.byType(ChessBoardWidget))
@@ -125,29 +125,29 @@ void main() {
         Side.black,
       );
       expect(_rect(tester), board);
-      await _menu(tester, 'Ataques: somente minhas peças');
+      await _menu(tester, 'Attacks: my pieces only');
       expect(
         (await container.read(settingsRepositoryProvider).get())
             .ownAttackedPiecesOnly,
         isTrue,
       );
-      await _menu(tester, 'Salvar partida');
+      await _menu(tester, 'Save game');
       await game.flushPersistence();
       final saved = await container
           .read(gameRepositoryProvider)
           .getActiveGame();
       expect(saved!.moves.map((m) => m.uci), ['e2e4', 'e7e5']);
       expect(saved.evaluated, isFalse);
-      await _menu(tester, 'Reiniciar');
-      expect(find.text('Reiniciar partida?'), findsOneWidget);
-      await tester.tap(find.text('Cancelar'));
+      await _menu(tester, 'Restart');
+      expect(find.text('Restart game?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(container.read(gameControllerProvider).uciHistory, hasLength(2));
-      await tester.tap(find.text('Desfazer'));
+      await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
       expect(container.read(gameControllerProvider).uciHistory, ['e2e4']);
-      await _menu(tester, 'Reiniciar');
-      await tester.tap(find.widgetWithText(FilledButton, 'Reiniciar'));
+      await _menu(tester, 'Restart');
+      await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
       await tester.pumpAndSettle();
       expect(container.read(gameControllerProvider).uciHistory, isEmpty);
       expect(
@@ -165,7 +165,7 @@ void main() {
   }, timeout: const Timeout(Duration(minutes: 5)));
 
   testWidgets(
-    'seção 2: Maia real, dica Stockfish, desfazer em pares e retomada',
+    'game screen: real Maia, Stockfish hint, paired undo, and resume',
     (tester) async {
       var container = ProviderContainer();
       try {
@@ -214,7 +214,7 @@ void main() {
         expect(container.read(gameControllerProvider).evaluated, isFalse);
         expect(container.read(gameControllerProvider).campaignMode, isTrue);
         await _showGame(tester, container);
-        await tester.tap(find.text('Desfazer'));
+        await tester.tap(find.text('Undo'));
         await tester.pumpAndSettle();
         expect(container.read(gameControllerProvider).uciHistory, isEmpty);
         expect(
@@ -262,7 +262,7 @@ Future<void> _until(WidgetTester tester, bool Function() done) async {
   do {
     await tester.pump(const Duration(milliseconds: 100));
     if (clock.elapsed > const Duration(minutes: 2)) {
-      fail('Estado esperado não chegou em 2 minutos.');
+      fail('Expected state was not reached within 2 minutes.');
     }
   } while (!done());
   await tester.pump(const Duration(milliseconds: 400));
@@ -276,7 +276,7 @@ Future<void> _move(WidgetTester tester, String from, String to) async {
 }
 
 Future<void> _menu(WidgetTester tester, String option) async {
-  await tester.tap(find.text('Mais'));
+  await tester.tap(find.text('More'));
   await tester.pumpAndSettle();
   final target = find.text(option);
   await tester.ensureVisible(target);

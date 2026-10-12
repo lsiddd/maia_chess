@@ -17,18 +17,14 @@ import 'chess_piece_widget.dart';
 import 'promotion_dialog.dart';
 import 'board_accessibility.dart';
 
-/// Tabuleiro interativo: lances por toque (seleciona origem, toca destino)
-/// ou por arrastar a peça até a casa de destino.
+/// Interactive board supporting taps and drags.
 ///
-/// Usa um único `GestureDetector` cobrindo o tabuleiro inteiro (em vez de
-/// `Draggable`/`DragTarget` por casa) — mais simples e evita conflitos de
-/// arena de gestos entre 64 reconhecedores de toque/arraste aninhados. A
-/// peça "flutuante" durante o arraste é só um widget posicionado dentro do
-/// próprio `Stack` do tabuleiro, sem depender do `Overlay` global.
+/// Board-level gesture recognisers avoid competing drag targets on all 64
+/// squares. Moving pieces use local Stack layers rather than the global
+/// overlay.
 ///
-/// A validação de legalidade nunca é feita aqui — este widget só lê o
-/// estado exposto por [GameController] (que consulta `dartchess`) e envia
-/// intenções de lance de volta a ele.
+/// Read legal destinations from [GameController] and send move intentions
+/// back to it; final legality remains in the rules layer.
 class ChessBoardWidget extends ConsumerStatefulWidget {
   const ChessBoardWidget({
     super.key,
@@ -44,7 +40,7 @@ class ChessBoardWidget extends ConsumerStatefulWidget {
   final bool showAttackedPieces;
   final List<OpponentThreat> threats;
 
-  /// Lado exibido na parte inferior do tabuleiro (perspectiva do jogador).
+  /// Side displayed at the bottom of the board.
   final Side orientation;
 
   @override
@@ -58,26 +54,19 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   Square? _draggingFrom;
   final _dragPosition = ValueNotifier<Offset?>(null);
 
-  // Casa tocada em `onDragDown`, antes do gesto ser reconhecido como
-  // arraste — ver o comentário em `onDragDown` mais abaixo.
+  // Square touched before the drag crosses the gesture-recognition threshold.
   Square? _panDownSquare;
 
-  // Casa de origem do arraste que acabou de ser solto, guardada em unidades
-  // de célula (não em pixels) para sobreviver a um relayout: se o lance for
-  // aceito, o "voo" da peça (abaixo) parte exatamente de onde o dedo soltou
-  // em vez de saltar de volta para o centro da casa de origem antes de
-  // animar. Consumida (e zerada) assim que usada, seja pelo `ref.listen`
-  // abaixo (lance aceito) ou pelo retorno de `attemptDragMove` (rejeitado).
+  // Keep the release position in cell units so it survives relayout. Accepted
+  // moves animate from the finger release point; rejected moves return from
+  // it. Consume the pending position once, either in the state listener or
+  // after the move attempt.
   Square? _pendingDragReleaseSquare;
   Offset? _pendingDragReleaseFractional;
 
-  // Anima a peça deslizando da casa de origem até a de destino sempre que
-  // um lance é aplicado — do jogador (toque ou arraste) ou da engine —, em
-  // vez de a peça só desaparecer de um lugar e aparecer no outro. Um único
-  // `AnimationController` é suficiente porque só existe um voo por vez: se
-  // um novo lance é aplicado (ou a peça em voo é agarrada de novo) antes do
-  // voo anterior terminar, ele é interrompido/reiniciado na hora — o
-  // jogador pode continuar jogando livremente sem esperar a animação.
+  // A single controller animates the current piece flight. A new move or
+  // grabbing the flying piece interrupts it immediately, so play need not
+  // wait for visual completion.
   late final AnimationController _slideController;
   late final Animation<double> _slideCurve;
   Square? _slideFromSquare;
@@ -182,10 +171,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     return _squareAt(row, col, widget.orientation);
   }
 
-  /// Inicia (ou reinicia) o voo visual de [piece] até [to]. Se [fromSquare]
-  /// for nulo, a origem é [fromFractional] (posição em unidades de célula,
-  /// usada para o retorno suave de um arraste solto num destino ilegal);
-  /// caso contrário a origem é o centro de [fromSquare].
+  /// Start a visual flight of [piece] to [to]. Use [fromSquare] when present,
+  /// otherwise [fromFractional] in cell units, including returns from illegal
+  /// drops.
   void _startSlide({
     Square? fromSquare,
     Offset? fromFractional,
@@ -219,11 +207,8 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
       _attackedSquares = attackedPieces(state.position);
     }
 
-    // Sempre que um novo lance entra no histórico — jogado por toque,
-    // arraste ou pela engine —, dispara a animação de deslizamento da peça
-    // até a casa de destino. `ref.listen` (em vez de comparar em `build`)
-    // garante que isto rode como efeito colateral, uma vez por lance, e não
-    // durante a fase de build em si.
+    // Listen for newly appended moves to animate once per move as a side
+    // effect, outside the build phase.
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
       final previousLength = previous?.uciHistory.length ?? 0;
       if (previous?.gameId != next.gameId) {
@@ -237,7 +222,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
           identical(next.positionHistory.last, previous?.position);
       if (!isNewMove) {
         setState(_cancelInteraction);
-        return; // reinício, undo ou restauração: não é "um lance novo".
+        return; // Restart, undo, or restore is not a new move.
       }
       if (next.sanHistory.isNotEmpty) {
         unawaited(playMoveHaptic(classifyMoveFeedback(next.sanHistory.last)));
@@ -283,9 +268,8 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
         ? state.legalDestinationsFrom(selected).toSet()
         : const <Square>{};
 
-    // Casas do último lance (origem e destino) recebem um destaque suave e
-    // persistente, independente da animação de voo — inclusive depois que
-    // ela termina, até o próximo lance ser jogado.
+    // Last-move squares stay highlighted after flight completion until the
+    // next move.
     Square? lastMoveFrom;
     Square? lastMoveTo;
     if (state.uciHistory.isNotEmpty) {
@@ -359,25 +343,19 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
             if (_gestureCancelled) return;
             final downSquare = _panDownSquare;
             _panDownSquare = null;
-            // Não bloqueia por um voo de outro lance ainda em animação: o
-            // voo é só visual (a posição em `state` já está atualizada
-            // desde que o lance foi aplicado) e o jogador não deve sentir
-            // o arraste seguinte "não funcionar" nos ~350ms depois de
-            // qualquer lance, inclusive o da IA.
+            // An earlier flight is purely visual: state already holds its
+            // final position, so it must not block another drag.
             final square =
                 downSquare ??
                 _squareAtLocalPosition(details.localPosition, cellSize);
             if (!controller.selectForDrag(square)) return;
-            // Confirma no tato que a peça foi "pega" — sem isso o começo
-            // do arraste só se percebe pelo olho.
+            // Haptic feedback confirms that the piece has been picked up.
             unawaited(HapticFeedback.selectionClick());
             setState(() {
               _draggingFrom = square;
               _dragPosition.value = details.localPosition;
-              // Se a peça agarrada é a que ainda está "aterrissando" de um
-              // voo em andamento, encerra o voo na hora: senão o overlay
-              // de voo e o overlay de arraste desenhariam a mesma peça
-              // sobreposta nesta casa até a animação acabar sozinha.
+              // Stop flight when grabbing its piece so flight and drag layers
+              // do not draw duplicates.
               if (_slideToSquare == square || _rookTo == square) {
                 _clearSlide();
               }
@@ -398,8 +376,8 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
             });
             if (from == null || pos == null) return;
             final releaseTopLeft = pos - Offset(cellSize / 2, cellSize / 2);
-            // Soltar fora cancela: limitar as coordenadas à borda poderia
-            // transformar essa soltura em um lance legal não desejado.
+            // Dropping outside cancels; clamping to the edge could turn it
+            // into an unintended legal move.
             final boardBounds = Offset.zero & Size.square(cellSize * 8);
             if (!boardBounds.contains(pos)) {
               final piece = ref
@@ -440,11 +418,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                     },
                   )
                   .then((_) {
-                    // Se o lance foi aceito, `ref.listen` acima já
-                    // consumiu os campos pendentes e iniciou o voo até o
-                    // destino — nada a fazer aqui. Se não (lance ilegal
-                    // ou promoção cancelada), solta a peça de volta para
-                    // a própria casa em vez de ela só reaparecer ali.
+                    // Accepted moves have already consumed the pending
+                    // release point in the state listener. Return a rejected
+                    // move or cancelled promotion smoothly to its origin.
                     if (!mounted ||
                         generation != _interactionGeneration ||
                         _pendingDragReleaseSquare != from) {
@@ -471,9 +447,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
             _dragPosition.value = null;
           });
 
-          // Recognizers por eixo usam o mesmo limiar da ListView. Como o
-          // tabuleiro é descendente, ganha a disputa antes da rolagem.
-          // Pan exige mais deslocamento e perdia em movimentos graduais.
+          // Axis recognisers share the ListView threshold. The descendant
+          // board wins before scrolling; a pan recogniser required more
+          // movement and lost gradual drags.
           return Listener(
             onPointerCancel: (_) => setState(_cancelInteraction),
             child: GestureDetector(
@@ -486,13 +462,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                 );
                 unawaited(tapSquare(square));
               },
-              // `onDragStart` só dispara depois que o movimento já superou o
-              // limiar de reconhecimento do gesto (slop) — em casas pequenas
-              // esse limiar pode corresponder a quase uma célula inteira, e
-              // por essa altura `details.localPosition` já pode estar sobre a
-              // casa vizinha. `onDragDown` fixa a casa de fato tocada, antes de
-              // qualquer deslocamento, para o arraste sempre pegar a peça
-              // correta mesmo que o gesto só seja "aceito" mais adiante.
+              // Gesture recognition can occur after the pointer has reached a
+              // neighbouring square. Capture the original square on drag-down
+              // so small squares do not select the wrong piece.
               onVerticalDragDown: handleDragDown,
               onVerticalDragStart: handleDragStart,
               onVerticalDragUpdate: handleDragUpdate,
@@ -530,14 +502,12 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           square == _draggingFrom ||
                           square == _promotionFrom ||
                           square == _promotionTo;
-                      // Enquanto a peça está "voando" para esta casa, a
-                      // versão estática dela fica oculta (a peça visível é só
-                      // a que está no overlay de voo, abaixo).
+                      // Hide the static destination piece while its flight
+                      // layer is visible.
                       final isFlightDestination =
                           _slideToSquare == square || _rookTo == square;
-                      // A casa de onde a peça acabou de sair não deve
-                      // esmaecer sozinha: o voo já cobre esse efeito, então a
-                      // troca para "vazia" aqui é instantânea.
+                      // Do not fade the origin separately: the flight already
+                      // covers its departure.
                       final isFlightOrigin =
                           (_slideFromSquare == square &&
                               _slideToSquare != null) ||
@@ -553,16 +523,16 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                         enabled: canInteract,
                         value: [
                           if (square == widget.hintSquare)
-                            'Peça sugerida pelo Stockfish',
-                          if (isLegalTarget) 'Destino legal',
+                            'Piece suggested by Stockfish',
+                          if (isLegalTarget) 'Legal destination',
                           if (square == lastMoveFrom || square == lastMoveTo)
-                            'Último lance',
-                          if (square == checkSquare) 'Xeque',
+                            'Last move',
+                          if (square == checkSquare) 'Check',
                           if (widget.showAttackedPieces &&
                               _attackedSquares.contains(square) &&
                               (widget.attackedSide == null ||
                                   piece?.color == widget.attackedSide))
-                            'Peça atacada${piece != null && state.position.board.attacksTo(square, piece.color).isNotEmpty ? ', defendida' : ', sem defesa geométrica'}',
+                            'Attacked piece${piece != null && state.position.board.attacksTo(square, piece.color).isNotEmpty ? ', defended' : ', without geometric defence'}',
                         ].join(', '),
                         onTap: canInteract
                             ? () => unawaited(tapSquare(square))
@@ -752,8 +722,9 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           ),
                         ),
                       ),
-                      // A peça ampliada fica acima de todas as camadas. O destino
-                      // continua sendo a casa sob o dedo, sem compensação visual.
+                      // Draw the enlarged piece above all layers. The
+                      // destination stays under the finger without visual
+                      // offset compensation.
                       if (_draggingFrom != null && dragPosition != null)
                         Positioned(
                           key: const Key('board-drag-layer'),
@@ -785,7 +756,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
   }
 }
 
-// Os SVGs Cburnett já incluem a margem interna usada pelo Lichess.
+// Cburnett SVGs already contain the internal margin used by Lichess.
 const _pieceScale = 1.0;
 const _dragPieceScale = 1.15;
 
@@ -808,11 +779,9 @@ class _BoardBackground extends StatelessWidget {
   );
 }
 
-/// Ajusta o tabuleiro ao menor eixo finito recebido pelo pai.
-///
-/// Em uma lista vertical a altura é ilimitada e a largura define o quadrado;
-/// em paisagem os dois eixos são limitados e a altura disponível passa a
-/// impedir que o tabuleiro estoure a tela.
+/// Fit the board to the smallest finite parent axis. In a vertical list,
+/// width determines the square; in landscape, finite height also limits it to
+/// the screen.
 class _FittedSquare extends StatelessWidget {
   const _FittedSquare({required this.child});
 
@@ -843,7 +812,7 @@ class _FittedSquare extends StatelessWidget {
   }
 }
 
-/// Versão somente leitura usada pela biblioteca de partidas.
+/// Read-only board used by game replay.
 class StaticChessBoardWidget extends StatelessWidget {
   const StaticChessBoardWidget({
     required this.position,
@@ -912,17 +881,16 @@ class StaticChessBoardWidget extends StatelessWidget {
   }
 }
 
-/// Converte a posição visual (linha/coluna exibidas, começando no topo do
-/// widget) para a [Square] correspondente, respeitando [orientation].
+/// Map visual row/column coordinates from the widget top to [Square],
+/// respecting [orientation].
 Square _squareAt(int displayRow, int displayCol, Side orientation) {
   final rank = orientation == Side.white ? 7 - displayRow : displayRow;
   final file = orientation == Side.white ? displayCol : 7 - displayCol;
   return Square.fromCoords(File(file), Rank(rank));
 }
 
-/// Inverso de [_squareAt]: o canto superior esquerdo (em pixels) de
-/// [square] dentro do tabuleiro, dada a orientação e o tamanho de célula
-/// atuais. Usado para posicionar a peça "voando" de uma casa a outra.
+/// Inverse of [_squareAt]: the pixel origin of [square] for the current
+/// orientation and cell size, used to position a flying piece.
 Offset _squareTopLeft(Square square, Side orientation, double cellSize) {
   final displayRow = orientation == Side.white
       ? 7 - square.rank.value
@@ -933,16 +901,16 @@ Offset _squareTopLeft(Square square, Side orientation, double cellSize) {
   return Offset(displayCol * cellSize, displayRow * cellSize);
 }
 
-/// Destaques sobre os assets do tabuleiro, seguindo as cores do Lichess.
+/// Highlights over board assets using Lichess-style colours.
 abstract final class _BoardColors {
   static const selectionTint = Color(0x8014551E);
 
-  // Verde amarelado para marcar a origem e o destino do último lance.
+  // Yellow-green highlight for the last move origin and destination.
   static const lastMoveTint = Color(0x699BC700);
   static const greenBoardLastMoveTint = Color(0x69009BC7);
 
-  // Brilho radial vermelho por trás do rei em xeque, com o mesmo padrão de
-  // fade implícito (AnimatedOpacity) usado no indicador de lance legal.
+  // Red radial glow behind a king in check, fading with AnimatedOpacity like
+  // legal-move indicators.
   static const checkGlowCenter = Color(0xB3F44336);
   static const checkGlowEdge = Color(0x00F44336);
 }
@@ -970,14 +938,14 @@ class _SquareVisual extends StatelessWidget {
   final bool isSelected;
   final bool isLegalTarget;
 
-  /// Se esta casa é a origem ou o destino do último lance jogado.
+  /// Whether this square is the origin or destination of the last move.
   final bool isLastMove;
 
-  /// Se esta casa tem o rei do lado que está em xeque agora.
+  /// Whether this square holds the king currently in check.
   final bool isCheck;
 
-  /// Se a peça que está saindo desta casa não deve esmaecer sozinha: um voo
-  /// (ver [_ChessBoardWidgetState]) já está cobrindo essa transição.
+  /// Skip a separate exit fade when a piece flight already covers the
+  /// transition.
   final bool instantExit;
 
   @override
@@ -993,9 +961,8 @@ class _SquareVisual extends StatelessWidget {
     }
 
     return SizedBox.expand(
-      // AnimatedContainer em vez de ColoredBox: a troca de cor ao
-      // selecionar/desselecionar uma casa (ou marcar o último lance) passa
-      // a interpolar suavemente em vez de trocar de uma vez.
+      // Interpolate selection and last-move colours instead of switching
+      // abruptly.
       child: AnimatedContainer(
         duration: AppMotion.fast,
         curve: AppMotion.curve,
@@ -1025,12 +992,9 @@ class _SquareVisual extends StatelessWidget {
               child: FractionallySizedBox(
                 widthFactor: _pieceScale,
                 heightFactor: _pieceScale,
-                // A peça troca (aparece/some) com um fade + scale em vez de
-                // saltar instantaneamente entre "presente"/"ausente"; o
-                // slot fica sempre montado para o AnimatedSwitcher poder
-                // animar a saída, não só a entrada. Quando a saída já está
-                // coberta por um voo (`instantExit`), a transição de saída
-                // é instantânea para não duplicar a animação.
+                // Keep the piece slot mounted so AnimatedSwitcher can animate
+                // both entry and exit. When flight covers the exit, make that
+                // transition immediate to avoid duplication.
                 child: AnimatedSwitcher(
                   layoutBuilder: (currentChild, previousChildren) => Stack(
                     fit: StackFit.expand,

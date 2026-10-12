@@ -37,7 +37,7 @@ class _AppearanceScreenState extends ConsumerState<AppearanceScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível salvar a aparência.')),
+          const SnackBar(content: Text('Could not save appearance settings.')),
         );
       }
     } finally {
@@ -49,14 +49,14 @@ class _AppearanceScreenState extends ConsumerState<AppearanceScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Aparência')),
+      appBar: AppBar(title: const Text('Appearance')),
       body: MaxWidthBody(
         child: settings.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stack) => Padding(
             padding: const EdgeInsets.all(AppSpacing.l),
             child: ErrorStateCard(
-              message: 'Não foi possível carregar a aparência.',
+              message: 'Could not load appearance settings.',
               onRetry: () => ref.invalidate(appSettingsProvider),
             ),
           ),
@@ -73,12 +73,9 @@ class _AppearanceScreenState extends ConsumerState<AppearanceScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.m),
-              const Text('Peças Cburnett', textAlign: TextAlign.center),
+              const Text('Cburnett pieces', textAlign: TextAlign.center),
               const SizedBox(height: AppSpacing.xl),
-              Text(
-                'Tema do app',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('App theme', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpacing.s),
               DropdownButtonFormField<StoredThemeMode>(
                 isExpanded: true,
@@ -86,23 +83,23 @@ class _AppearanceScreenState extends ConsumerState<AppearanceScreen> {
                 initialValue: settings.themeMode,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
-                  labelText: 'Aparência do app',
+                  labelText: 'App appearance',
                 ),
                 items: const [
                   DropdownMenuItem(
                     value: StoredThemeMode.system,
                     child: Text(
-                      'Seguir o sistema',
+                      'Follow system',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   DropdownMenuItem(
                     value: StoredThemeMode.light,
-                    child: Text('Claro', overflow: TextOverflow.ellipsis),
+                    child: Text('Light', overflow: TextOverflow.ellipsis),
                   ),
                   DropdownMenuItem(
                     value: StoredThemeMode.dark,
-                    child: Text('Escuro', overflow: TextOverflow.ellipsis),
+                    child: Text('Dark', overflow: TextOverflow.ellipsis),
                   ),
                 ],
                 onChanged: _saving
@@ -112,9 +109,9 @@ class _AppearanceScreenState extends ConsumerState<AppearanceScreen> {
                       },
               ),
               const SizedBox(height: AppSpacing.xl),
-              Text('Tabuleiro', style: Theme.of(context).textTheme.titleMedium),
+              Text('Board', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpacing.xs),
-              const Text('Temas originais do Lichess. Brown é o padrão.'),
+              const Text('Original Lichess themes. Brown is the default.'),
               const SizedBox(height: AppSpacing.m),
               LayoutBuilder(
                 builder: (context, constraints) => Wrap(
@@ -139,14 +136,14 @@ class _AppearanceScreenState extends ConsumerState<AppearanceScreen> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.info_outline),
-                title: const Text('Créditos e licenças'),
-                subtitle: const Text('Cburnett e Lichess'),
+                title: const Text('Credits and licences'),
+                subtitle: const Text('Cburnett and Lichess'),
                 onTap: () => showLicensePage(
                   context: context,
-                  applicationName: 'Xadrez Maia',
+                  applicationName: 'Maia Chess',
                   applicationLegalese:
-                      'Peças: Colin M. L. Burnett (GPL-2.0-or-later).\n'
-                      'Tabuleiros: autores do Lichess e pirouetti '
+                      'Pieces: Colin M. L. Burnett (GPL-2.0-or-later).\n'
+                      'Boards: Lichess authors and pirouetti '
                       '(AGPL-3.0-or-later).',
                 ),
               ),
@@ -175,7 +172,7 @@ class _BoardThemeOption extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: 'Tabuleiro ${theme.label}',
+      label: '${theme.label} board',
       child: Card(
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(

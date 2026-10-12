@@ -14,9 +14,7 @@ import 'package:maia_chess/data/repositories/drift_stats_repository.dart';
 // migration or an incremental rating algorithm.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('profile: reconstrução e leitura das estatísticas', (
-    tester,
-  ) async {
+  testWidgets('profile: rebuild and read statistics', (tester) async {
     final samples = <String, Object>{};
     const initialFen =
         'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';

@@ -36,7 +36,7 @@ class MaiaChessApp extends ConsumerWidget {
     final storedTheme = settings?.themeMode;
     final boardTheme = settings?.boardTheme ?? BoardTheme.brown;
     return MaterialApp(
-      title: 'Xadrez Maia',
+      title: 'Maia Chess',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightFor(boardTheme),
       darkTheme: AppTheme.darkFor(boardTheme),
@@ -50,7 +50,7 @@ class MaiaChessApp extends ConsumerWidget {
   }
 }
 
-/// Tela inicial com os modos livre/campanha e os dados locais do jogador.
+/// Home screen for free play, campaign, and local player data.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -70,7 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível abrir a partida: $error')),
+        SnackBar(content: Text('Could not open the game: $error')),
       );
     } finally {
       if (mounted) setState(() => _openingGame = false);
@@ -80,8 +80,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Aquece peças e tabuleiros no menu para que a decodificação não caia
-    // no primeiro quadro da partida ou no primeiro arraste.
+    // Precache pieces and boards on the menu so decoding does not fall on the
+    // first game frame or drag.
     if (_precachedChessAssets) return;
     _precachedChessAssets = true;
     unawaited(precachePieceSvgs(context));
@@ -94,10 +94,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Xadrez Maia'),
+        title: const Text('Maia Chess'),
         actions: [
           IconButton(
-            tooltip: 'Aparência',
+            tooltip: 'Appearance',
             icon: const Icon(Icons.palette_outlined),
             onPressed: () => Navigator.of(
               context,
@@ -117,7 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ? null
                     : () => _openGame(() => _resume(context, ref)),
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Continuar partida salva'),
+                label: const Text('Continue saved game'),
               ),
               const SizedBox(height: AppSpacing.m),
             ],
@@ -130,7 +130,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                     }),
               icon: const Icon(Icons.flag_outlined),
-              label: const Text('Campanha Maia'),
+              label: const Text('Maia campaign'),
             ),
             const SizedBox(height: AppSpacing.m),
             FilledButton.tonalIcon(
@@ -138,11 +138,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ? null
                   : () => _openGame(() => _openNewAiGame(context, ref)),
               icon: const Icon(Icons.psychology_outlined),
-              label: const Text('Modo livre contra a IA'),
+              label: const Text('Free play against Maia'),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
-              'Mais opções',
+              'More options',
               style: Theme.of(
                 context,
               ).textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant),
@@ -155,7 +155,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.sports_esports_outlined),
-                    title: const Text('Jogar (2 jogadores locais)'),
+                    title: const Text('Play (2 local players)'),
                     onTap: _openingGame
                         ? null
                         : () => _openGame(() => _startLocalGame(context, ref)),
@@ -163,7 +163,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.insights_outlined),
-                    title: const Text('Meu desempenho'),
+                    title: const Text('My performance'),
                     onTap: () => Navigator.of(
                       context,
                     ).push(AppPageRoute(builder: (_) => const StatsScreen())),
@@ -171,7 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.history),
-                    title: const Text('Partidas salvas e PGN'),
+                    title: const Text('Saved games and PGN'),
                     onTap: () => Navigator.of(
                       context,
                     ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
@@ -182,7 +182,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (activeGame.hasError) ...[
               const SizedBox(height: AppSpacing.m),
               ErrorStateCard(
-                message: 'Falha ao verificar autosave: ${activeGame.error}',
+                message: 'Failed to check autosave: ${activeGame.error}',
                 onRetry: () => ref.invalidate(activeGameProvider),
               ),
             ],
@@ -203,7 +203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           content: Text(
             state.persistenceError ??
                 state.engineError ??
-                'Não há partida para continuar.',
+                'There is no game to continue.',
           ),
         ),
       );
@@ -249,7 +249,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Falha ao verificar autosave: $error')),
+          SnackBar(content: Text('Failed to check autosave: $error')),
         );
       }
       return false;
@@ -258,19 +258,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Substituir partida em andamento?'),
+            title: const Text('Replace the ongoing game?'),
             content: const Text(
-              'Ao iniciar outra partida, o autosave atual será removido. '
-              'Você pode voltar e continuá-lo pela tela inicial.',
+              'Starting another game will remove the current autosave. '
+              'You can go back and continue it from the home screen.',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Voltar'),
+                child: const Text('Back'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Substituir'),
+                child: const Text('Replace'),
               ),
             ],
           ),
@@ -319,16 +319,14 @@ class _HomeHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Xadrez Maia',
+                  'Maia Chess',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontFamily: AppTypography.accentFontFamily,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                const Text(
-                  'Xadrez offline contra uma IA de estilo humano (Maia)',
-                ),
+                const Text('Offline chess against a human-style AI (Maia)'),
               ],
             ),
           ),

@@ -16,8 +16,8 @@ import 'package:maia_chess/features/game/application/game_state.dart';
 void main() {
   Future<Role?> noPromotion() async => null;
 
-  group('regras e estado da partida', () {
-    test('detecta xeque-mate do mate do pastor', () async {
+  group('game rules and state', () {
+    test('detects checkmate in Scholar\'s Mate', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final controller = container.read(gameControllerProvider.notifier);
@@ -45,7 +45,7 @@ void main() {
       expect(state.sanHistory.last, 'Qxf7#');
     });
 
-    test('detecta afogamento e material insuficiente', () {
+    test('detects stalemate and insufficient material', () {
       final stalemate = _stateFromFen('8/8/8/8/8/1pk5/p7/K7 w - - 0 70');
       expect(stalemate.position.isStalemate, isTrue);
       expect(stalemate.isGameOver, isTrue);
@@ -57,7 +57,7 @@ void main() {
       expect(insufficient.result, GameResult.empate);
     });
 
-    test('adjudica empate pela regra dos 50 lances', () {
+    test('adjudicates a draw by the fifty-move rule', () {
       final state = _stateFromFen('8/8/8/8/8/2k5/6R1/2K5 w - - 100 51');
 
       expect(state.position.isGameOver, isFalse);
@@ -66,7 +66,7 @@ void main() {
       expect(state.result, GameResult.empate);
     });
 
-    test('adjudica a terceira repetição da posição', () async {
+    test('adjudicates the third repetition of a position', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final controller = container.read(gameControllerProvider.notifier);
@@ -93,7 +93,7 @@ void main() {
       expect(state.isDrawByThreefoldRepetition, isTrue);
       expect(state.result, GameResult.empate);
 
-      // Uma partida encerrada não aceita lances adicionais pela interface.
+      // The interface does not accept additional moves after game over.
       await controller.attemptDragMove(
         Square.e2,
         Square.e4,
@@ -102,23 +102,26 @@ void main() {
       expect(container.read(gameControllerProvider).sanHistory.length, 8);
     });
 
-    test('roque usa destino convencional e move rei e torre', () {
-      final state = _stateFromFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
-      final destinations = state.legalDestinationsFrom(Square.e1).toSet();
+    test(
+      'castling uses the conventional destination and moves king and rook',
+      () {
+        final state = _stateFromFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+        final destinations = state.legalDestinationsFrom(Square.e1).toSet();
 
-      expect(destinations, containsAll([Square.g1, Square.c1]));
-      expect(destinations, isNot(contains(Square.h1)));
-      expect(destinations, isNot(contains(Square.a1)));
+        expect(destinations, containsAll([Square.g1, Square.c1]));
+        expect(destinations, isNot(contains(Square.h1)));
+        expect(destinations, isNot(contains(Square.a1)));
 
-      final (castled, san) = state.position.makeSan(
-        const NormalMove(from: Square.e1, to: Square.g1),
-      );
-      expect(san, 'O-O');
-      expect(castled.board.pieceAt(Square.g1)?.role, Role.king);
-      expect(castled.board.pieceAt(Square.f1)?.role, Role.rook);
-    });
+        final (castled, san) = state.position.makeSan(
+          const NormalMove(from: Square.e1, to: Square.g1),
+        );
+        expect(san, 'O-O');
+        expect(castled.board.pieceAt(Square.g1)?.role, Role.king);
+        expect(castled.board.pieceAt(Square.f1)?.role, Role.rook);
+      },
+    );
 
-    test('en passant remove o peão capturado', () {
+    test('en passant removes the captured pawn', () {
       final state = _stateFromFen('6bk/7b/8/3pP3/8/8/8/Q3K3 w - d6 0 2');
       const move = NormalMove(from: Square.e5, to: Square.d6);
 
@@ -129,7 +132,7 @@ void main() {
       expect(after.board.pieceAt(Square.d5), isNull);
     });
 
-    test('aceita promoção para dama, torre, bispo e cavalo', () {
+    test('accepts promotion to queen, rook, bishop, and knight', () {
       final state = _stateFromFen('7k/P7/8/8/8/8/8/7K w - - 0 1');
 
       for (final role in [Role.queen, Role.rook, Role.bishop, Role.knight]) {
@@ -144,7 +147,7 @@ void main() {
       }
     });
 
-    test('lance ilegal é ignorado silenciosamente', () async {
+    test('silently ignores an illegal move', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final controller = container.read(gameControllerProvider.notifier);
@@ -161,42 +164,47 @@ void main() {
     });
   });
 
-  group('fluxo real contra a IA com motores injetados', () {
-    test('undo desfaz o par humano + IA e marca evaluated=false', () async {
-      final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
-      final container = _engineContainer(lc0Factory: () => maia);
-      addTearDown(() async {
-        await container.read(gameControllerProvider.notifier).shutdownEngines();
-        container.dispose();
-      });
-      final controller = container.read(gameControllerProvider.notifier);
+  group('AI game flow with injected engines', () {
+    test(
+      'undo takes back the human and AI pair and sets evaluated=false',
+      () async {
+        final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
+        final container = _engineContainer(lc0Factory: () => maia);
+        addTearDown(() async {
+          await container
+              .read(gameControllerProvider.notifier)
+              .shutdownEngines();
+          container.dispose();
+        });
+        final controller = container.read(gameControllerProvider.notifier);
 
-      expect(
-        await controller.startVsAi(humanSide: Side.white, levelRating: 1100),
-        isTrue,
-      );
-      await controller.attemptDragMove(
-        Square.e2,
-        Square.e4,
-        onPromotion: noPromotion,
-      );
-      expect(container.read(gameControllerProvider).sanHistory, ['e4', 'e5']);
+        expect(
+          await controller.startVsAi(humanSide: Side.white, levelRating: 1100),
+          isTrue,
+        );
+        await controller.attemptDragMove(
+          Square.e2,
+          Square.e4,
+          onPromotion: noPromotion,
+        );
+        expect(container.read(gameControllerProvider).sanHistory, ['e4', 'e5']);
 
-      await controller.undo();
-      final afterUndo = container.read(gameControllerProvider);
-      final persisted = await container
-          .read(gameRepositoryProvider)
-          .getActiveGame();
-      expect(afterUndo.aiSide, Side.black);
-      expect(afterUndo.position, Chess.initial);
-      expect(afterUndo.sanHistory, isEmpty);
-      expect(afterUndo.evaluated, isFalse);
-      expect(persisted!.moves, isEmpty);
-      expect(persisted.evaluated, isFalse);
-    });
+        await controller.undo();
+        final afterUndo = container.read(gameControllerProvider);
+        final persisted = await container
+            .read(gameRepositoryProvider)
+            .getActiveGame();
+        expect(afterUndo.aiSide, Side.black);
+        expect(afterUndo.position, Chess.initial);
+        expect(afterUndo.sanHistory, isEmpty);
+        expect(afterUndo.evaluated, isFalse);
+        expect(persisted!.moves, isEmpty);
+        expect(persisted.evaluated, isFalse);
+      },
+    );
 
     test(
-      'jogador de pretas recebe o primeiro lance automático do Maia',
+      'a player choosing Black receives the automatic opening Maia move',
       () async {
         final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
         final container = _engineContainer(lc0Factory: () => maia);
@@ -226,7 +234,7 @@ void main() {
       },
     );
 
-    test('modo campanha é preservado no estado e no autosave', () async {
+    test('campaign mode is preserved in state and autosave', () async {
       final repository = FakeGameRepository();
       final container = _engineContainer(
         lc0Factory: () => FakeLc0Engine(onMove: (_, _) async => 'e2e4'),
@@ -253,7 +261,7 @@ void main() {
     });
 
     test(
-      'retomada reaplica autosave sem duplicar abertura automática',
+      'resume replays autosave without duplicating the automatic opening',
       () async {
         final repository = FakeGameRepository();
         final firstMaia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
@@ -300,10 +308,10 @@ void main() {
     );
 
     test(
-      'falha ao abrir autosave é exposta sem quebrar o controller',
+      'autosave read failure is exposed without breaking the controller',
       () async {
         final repository = FakeGameRepository(
-          activeError: StateError('banco indisponível'),
+          activeError: StateError('database unavailable'),
         );
         final container = _engineContainer(
           lc0Factory: () => FakeLc0Engine(onMove: (_, _) async => 'e2e4'),
@@ -317,48 +325,53 @@ void main() {
         final state = container.read(gameControllerProvider);
 
         expect(restored, isFalse);
-        expect(state.persistenceError, contains('banco indisponível'));
+        expect(state.persistenceError, contains('database unavailable'));
         expect(state.position, Chess.initial);
       },
     );
 
-    test('trocar 1100 -> 1900 -> 1100 descarta e recria o Maia', () async {
-      final engines = <FakeLc0Engine>[];
-      final container = _engineContainer(
-        lc0Factory: () {
-          final engine = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
-          engines.add(engine);
-          return engine;
-        },
-      );
-      addTearDown(() async {
-        await container.read(gameControllerProvider.notifier).shutdownEngines();
-        container.dispose();
-      });
-      final controller = container.read(gameControllerProvider.notifier);
-
-      for (final rating in [1100, 1900, 1100]) {
-        expect(
-          await controller.startVsAi(
-            humanSide: Side.white,
-            levelRating: rating,
-          ),
-          isTrue,
+    test(
+      'switching 1100 -> 1900 -> 1100 disposes and recreates Maia',
+      () async {
+        final engines = <FakeLc0Engine>[];
+        final container = _engineContainer(
+          lc0Factory: () {
+            final engine = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
+            engines.add(engine);
+            return engine;
+          },
         );
-      }
+        addTearDown(() async {
+          await container
+              .read(gameControllerProvider.notifier)
+              .shutdownEngines();
+          container.dispose();
+        });
+        final controller = container.read(gameControllerProvider.notifier);
 
-      expect(engines, hasLength(3));
-      expect(engines[0].disposeCount, 1);
-      expect(engines[1].disposeCount, 1);
-      expect(engines.map((engine) => engine.initPaths.single), [
-        'assets/maia_weights/maia-1100.pb.gz',
-        'assets/maia_weights/maia-1900.pb.gz',
-        'assets/maia_weights/maia-1100.pb.gz',
-      ]);
-    });
+        for (final rating in [1100, 1900, 1100]) {
+          expect(
+            await controller.startVsAi(
+              humanSide: Side.white,
+              levelRating: rating,
+            ),
+            isTrue,
+          );
+        }
+
+        expect(engines, hasLength(3));
+        expect(engines[0].disposeCount, 1);
+        expect(engines[1].disposeCount, 1);
+        expect(engines.map((engine) => engine.initPaths.single), [
+          'assets/maia_weights/maia-1100.pb.gz',
+          'assets/maia_weights/maia-1900.pb.gz',
+          'assets/maia_weights/maia-1100.pb.gz',
+        ]);
+      },
+    );
 
     test(
-      'nova partida cancela busca antiga sem aplicar resposta atrasada',
+      'a new game cancels the old search without applying a delayed response',
       () async {
         final oldMove = Completer<String>();
         final engines = <FakeLc0Engine>[];
@@ -404,12 +417,12 @@ void main() {
       },
     );
 
-    test('erro ao iniciar motor permite tentativa posterior', () async {
+    test('engine startup failure allows a later retry', () async {
       final engines = <FakeLc0Engine>[];
       final container = _engineContainer(
         lc0Factory: () {
           final engine = FakeLc0Engine(
-            initError: engines.isEmpty ? StateError('falha nativa') : null,
+            initError: engines.isEmpty ? StateError('native failure') : null,
             onMove: (_, _) async => 'e2e4',
           );
           engines.add(engine);
@@ -428,7 +441,7 @@ void main() {
       );
       expect(
         container.read(gameControllerProvider).engineError,
-        contains('falha nativa'),
+        contains('native failure'),
       );
       expect(engines.first.disposeCount, 1);
 
@@ -442,13 +455,13 @@ void main() {
   });
 
   group('DifficultyLevel', () {
-    test('tem exatamente 9 níveis, de 1100 a 1900', () {
+    test('has exactly 9 levels, from 1100 to 1900', () {
       expect(DifficultyLevel.all.length, 9);
       expect(DifficultyLevel.all.first.rating, 1100);
       expect(DifficultyLevel.all.last.rating, 1900);
     });
 
-    test('byRating encontra o nível certo pelo asset', () {
+    test('byRating finds the correct level and asset', () {
       final level = DifficultyLevel.byRating(1500);
       expect(level.weightsAsset, 'assets/maia_weights/maia-1500.pb.gz');
     });

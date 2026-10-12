@@ -10,7 +10,7 @@ import 'package:maia_chess/features/pgn/application/pgn_service.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Fase 4 etapa A: cria autosave durável', (tester) async {
+  testWidgets('persistence step A: create a durable autosave', (tester) async {
     final container = ProviderContainer();
     final controller = container.read(gameControllerProvider.notifier);
     try {
@@ -44,34 +44,35 @@ void main() {
     }
   });
 
-  testWidgets('Fase 4 etapa B: restaura autosave após recriar o container', (
-    tester,
-  ) async {
-    final container = ProviderContainer();
-    final controller = container.read(gameControllerProvider.notifier);
-    try {
-      expect(await controller.restoreActiveGame(), isTrue);
-      final restored = container.read(gameControllerProvider);
-      expect(restored.uciHistory, ['e2e4', 'e7e5']);
-      expect(restored.sanHistory, ['e4', 'e5']);
-      expect(restored.evaluated, isFalse);
-      expect(restored.position.turn, Side.white);
+  testWidgets(
+    'persistence step B: restore autosave after recreating the container',
+    (tester) async {
+      final container = ProviderContainer();
+      final controller = container.read(gameControllerProvider.notifier);
+      try {
+        expect(await controller.restoreActiveGame(), isTrue);
+        final restored = container.read(gameControllerProvider);
+        expect(restored.uciHistory, ['e2e4', 'e7e5']);
+        expect(restored.sanHistory, ['e4', 'e5']);
+        expect(restored.evaluated, isFalse);
+        expect(restored.position.turn, Side.white);
 
-      final repository = container.read(gameRepositoryProvider);
-      final game = await repository.getActiveGame();
-      expect(game, isNotNull);
-      final exported = const PgnService().export(game!);
-      final imported = const PgnService().parseImport(
-        pgn: exported,
-        id: 'android-roundtrip',
-        importedAtUtc: DateTime.now().toUtc(),
-      );
-      expect(imported.moves.map((move) => move.uci), ['e2e4', 'e7e5']);
+        final repository = container.read(gameRepositoryProvider);
+        final game = await repository.getActiveGame();
+        expect(game, isNotNull);
+        final exported = const PgnService().export(game!);
+        final imported = const PgnService().parseImport(
+          pgn: exported,
+          id: 'android-roundtrip',
+          importedAtUtc: DateTime.now().toUtc(),
+        );
+        expect(imported.moves.map((move) => move.uci), ['e2e4', 'e7e5']);
 
-      await repository.deleteGame(game.id);
-    } finally {
-      await controller.shutdownEngines();
-      container.dispose();
-    }
-  });
+        await repository.deleteGame(game.id);
+      } finally {
+        await controller.shutdownEngines();
+        container.dispose();
+      }
+    },
+  );
 }

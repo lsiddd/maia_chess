@@ -31,7 +31,7 @@ class GameReplayer {
     try {
       position = Chess.fromSetup(Setup.parseFen(game.initialFen));
     } catch (error) {
-      throw GameReplayException('FEN inicial persistida é inválida: $error');
+      throw GameReplayException('The stored initial FEN is invalid: $error');
     }
 
     final positions = <Chess>[position];
@@ -41,25 +41,25 @@ class GameReplayer {
       final stored = game.moves[index];
       if (stored.ply != index + 1) {
         throw GameReplayException(
-          'Sequência de lances corrompida na jogada ${index + 1}.',
+          'Corrupted move sequence at ply ${index + 1}.',
         );
       }
       final move = Move.parse(stored.uci);
       if (move == null || !position.isLegal(move)) {
         throw GameReplayException(
-          'Lance UCI inválido na jogada ${index + 1}: "${stored.uci}".',
+          'Invalid UCI move at ply ${index + 1}: "${stored.uci}".',
         );
       }
       final (after, canonicalSan) = position.makeSan(move);
       if (canonicalSan != stored.san) {
         throw GameReplayException(
-          'SAN divergente na jogada ${index + 1}: '
-          'salvo "${stored.san}", esperado "$canonicalSan".',
+          'SAN mismatch at ply ${index + 1}: '
+          'stored "${stored.san}", expected "$canonicalSan".',
         );
       }
       position = after as Chess;
       if (position.fen != stored.fenAfter) {
-        throw GameReplayException('FEN divergente após a jogada ${index + 1}.');
+        throw GameReplayException('FEN mismatch after ply ${index + 1}.');
       }
       positions.add(position);
       sans.add(canonicalSan);
@@ -67,7 +67,7 @@ class GameReplayer {
     }
     if (position.fen != game.currentFen) {
       throw const GameReplayException(
-        'A FEN final não confere com a sequência persistida.',
+        'The final FEN does not match the stored move sequence.',
       );
     }
     return ReplayedGame(

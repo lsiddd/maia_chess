@@ -8,14 +8,14 @@ void main() {
   final date = DateTime.utc(2026, 10, 11);
 
   test(
-    'worker preserva lances, variantes, comentários, FEN e metadados',
+    'worker preserves moves, variations, comments, FEN, and metadata',
     () async {
       const source = '''
 [Event "Worker"]
-[X-Custom "preservada"]
+[X-Custom "preserved"]
 [Result "*"]
 
-1. e4 {comentário livre} e5 2. Nf3 (2. Bc4 Nc6) Nc6 *
+1. e4 {free-form comment} e5 2. Nf3 (2. Bc4 Nc6) Nc6 *
 ''';
       final sync = service.parseImport(
         pgn: source,
@@ -45,7 +45,7 @@ void main() {
     '1. e4 e5 2. Bh6 *',
     '1. e4 e5 2. Nf3 (2. Bh6) *',
   ]) {
-    test('worker propaga erro de validação: $source', () async {
+    test('worker propagates validation errors: $source', () async {
       await expectLater(
         service.parseImportAsync(
           pgn: source,
@@ -57,7 +57,7 @@ void main() {
     });
   }
 
-  test('valida sequência longa sem recursão por lance', () async {
+  test('validates a long sequence without recursion per move', () async {
     final source = StringBuffer();
     for (var cycle = 0; cycle < 1000; cycle++) {
       source.write('${cycle * 2 + 1}. Nf3 Nf6 ${cycle * 2 + 2}. Ng1 Ng8 ');

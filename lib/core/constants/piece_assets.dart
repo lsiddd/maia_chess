@@ -2,20 +2,15 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-/// Todas as 12 peças possíveis (6 papéis × 2 cores).
+/// All twelve pieces: six roles in two colours.
 final _allPieces = [
   for (final color in Side.values)
     for (final role in Role.values) Piece(color: color, role: role),
 ];
 
-/// Decodifica e guarda em cache os SVGs das 12 peças.
-///
-/// Sem isto, cada peça só é lida e parseada na primeira vez que aparece na
-/// tela — o que cai justamente no primeiro quadro do tabuleiro e no
-/// primeiro arraste/animação, causando engasgo visível. O [context] precisa
-/// ser o mesmo tipo de contexto em que as peças serão desenhadas: a chave de
-/// cache do `flutter_svg` inclui o `SvgTheme` e o `AssetBundle` resolvidos a
-/// partir dele.
+/// Decode and cache all twelve piece SVGs before the first board frame or
+/// drag. The [context] must resolve the same `SvgTheme` and `AssetBundle` as
+/// the board, since both contribute to the `flutter_svg` cache key.
 Future<void> precachePieceSvgs(BuildContext context) {
   return Future.wait(
     _allPieces.map(
@@ -24,10 +19,8 @@ Future<void> precachePieceSvgs(BuildContext context) {
   );
 }
 
-/// Caminho do SVG empacotado para [piece].
-///
-/// Usar assets próprios evita diferenças de desenho, alinhamento e peso dos
-/// glifos Unicode entre versões do Android e fontes de fabricantes.
+/// Bundled SVG path for [piece]. Using assets avoids differences in Unicode
+/// glyph shape and alignment between Android fonts.
 String pieceAssetPath(Piece piece) {
   final role = switch (piece.role) {
     Role.king => 'K',
@@ -41,25 +34,26 @@ String pieceAssetPath(Piece piece) {
   return 'assets/chess_pieces/$side$role.svg';
 }
 
-/// Nome em português do papel da peça — usado no diálogo de promoção.
+/// English role label used by promotion and accessibility announcements. The
+/// legacy function name is retained for compatibility.
 String roleLabelPt(Role role) {
   switch (role) {
     case Role.queen:
-      return 'Dama';
+      return 'Queen';
     case Role.rook:
-      return 'Torre';
+      return 'Rook';
     case Role.bishop:
-      return 'Bispo';
+      return 'Bishop';
     case Role.knight:
-      return 'Cavalo';
+      return 'Knight';
     case Role.king:
-      return 'Rei';
+      return 'King';
     case Role.pawn:
-      return 'Peão';
+      return 'Pawn';
   }
 }
 
 String pieceLabelPt(Piece piece) {
-  final color = piece.color == Side.white ? 'branco' : 'preto';
-  return '${roleLabelPt(piece.role)} $color';
+  final color = piece.color == Side.white ? 'White' : 'Black';
+  return '$color ${roleLabelPt(piece.role).toLowerCase()}';
 }

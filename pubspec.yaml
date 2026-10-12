@@ -1,5 +1,5 @@
 name: maia_chess
-description: "Xadrez offline contra uma IA de estilo humano (pesos Maia via lc0), com dicas objetivas via Stockfish."
+description: "Offline chess against human-style Maia opponents via lc0, with Stockfish hints and local game history."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -14,12 +14,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^2.6.1
   flutter_svg: ^2.3.0
-  # Regras de xadrez (geração/validação de lances, FEN/SAN). Ver ADR-004.
+  # Chess rules, legal moves, and FEN/SAN notation.
   dartchess: ^0.13.1
-  # Fork local vendorizado, não a versão hospedada no pub.dev (ver ADR-001,
-  # addendum: o pacote publicado no pub.dev vem sem os headers .pb.h
-  # pré-gerados do protobuf do lc0, quebrando o build Android; regeneramos
-  # com scripts/compile_proto.py e vendorizamos a cópia corrigida aqui).
+  # Local fork with generated protobuf headers and private UCI pipes for
+  # coexistence with Stockfish. See native/leela_chess_zero/architecture.md.
   leela_chess_zero:
     path: native/leela_chess_zero
   stockfish: ^1.8.1
@@ -43,8 +41,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # 9 pesos oficiais do Maia (1100-1900, .pb.gz), baixados de
-  # github.com/CSSLab/maia-chess/releases/tag/v1.0. Ver ADR-007 (licença).
+  # Nine official Maia networks (1100–1900). Provenance and licensing are
+  # recorded in assets/maia_weights/NOTICE.md.
   assets:
     - assets/chess_pieces/
     - assets/chess_boards/

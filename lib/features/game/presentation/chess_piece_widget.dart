@@ -4,10 +4,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/constants/piece_assets.dart';
 
-/// Peça vetorial consistente em todas as plataformas.
-///
-/// O tamanho é sempre imposto pela casa que hospeda este widget; o SVG nunca
-/// participa do cálculo da geometria do tabuleiro.
+/// Vector piece with consistent artwork across platforms. Its parent square
+/// determines size; the SVG does not affect board geometry.
 class ChessPieceWidget extends StatelessWidget {
   const ChessPieceWidget({required this.piece, super.key});
 

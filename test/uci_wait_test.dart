@@ -1,8 +1,5 @@
-// Testa as primitivas de espera extraídas de Lc0Service/StockfishService
-// (ver AUDITORIA_TECNICA.md, AUD-003) isoladas de qualquer FFI real: são a
-// parte genérica (ValueListenable/Stream) responsável pelos dois bugs de
-// concorrência já documentados em ADR-001 (corrida no dispose, handshake
-// isready/readyok).
+// Test shared listenable and stream waiters without native FFI, including
+// disposal races and UCI readiness responses.
 
 import 'dart:async';
 
@@ -13,15 +10,15 @@ import 'package:maia_chess/engine_ffi/uci_wait.dart';
 
 void main() {
   group('awaitListenableValue', () {
-    test('resolve imediatamente se o predicado já é verdadeiro', () async {
+    test('resolves immediately when the predicate is already true', () async {
       final state = ValueNotifier<int>(5);
       final waiter = awaitListenableValue(state, predicate: (v) => v == 5);
 
       expect(await waiter.future, 5);
-      waiter.cancel(); // não deve lançar mesmo sem listener registrado
+      waiter.cancel(); // Must not throw even without a registered listener.
     });
 
-    test('resolve quando o valor muda para satisfazer o predicado', () async {
+    test('resolves when the value changes to satisfy the predicate', () async {
       final state = ValueNotifier<int>(0);
       final waiter = awaitListenableValue(state, predicate: (v) => v == 3);
 
@@ -34,7 +31,7 @@ void main() {
     });
 
     test(
-      'ignora mudanças intermediárias que não satisfazem o predicado',
+      'ignores intermediate changes that do not satisfy the predicate',
       () async {
         final state = ValueNotifier<int>(0);
         final waiter = awaitListenableValue(state, predicate: (v) => v == 3);
@@ -53,28 +50,32 @@ void main() {
       },
     );
 
-    test('cancel() remove o listener e o future nunca completa', () async {
-      final state = ValueNotifier<int>(0);
-      final waiter = awaitListenableValue(state, predicate: (v) => v == 3);
+    test(
+      'cancel() removes the listener and the future never completes',
+      () async {
+        final state = ValueNotifier<int>(0);
+        final waiter = awaitListenableValue(state, predicate: (v) => v == 3);
 
-      waiter.cancel();
-      state.value = 3; // não deve completar o future nem lançar
+        waiter.cancel();
+        state.value = 3; // Must neither complete the future nor throw.
 
-      final outcome = await waiter.future
-          .timeout(const Duration(milliseconds: 20))
-          .then<String>((_) => 'completou')
-          .catchError((_) => 'timeout');
-      expect(outcome, 'timeout');
-    });
+        final outcome = await waiter.future
+            .timeout(const Duration(milliseconds: 20))
+            .then<String>((_) => 'completed')
+            .catchError((_) => 'timeout');
+        expect(outcome, 'timeout');
+      },
+    );
 
-    test('não completa duas vezes com notificações repetidas', () async {
+    test('does not complete twice on repeated notifications', () async {
       final state = ValueNotifier<int>(0);
       final waiter = awaitListenableValue(state, predicate: (v) => v >= 3);
       var completions = 0;
       unawaited(waiter.future.then((_) => completions++));
 
       state.value = 3;
-      state.value = 4; // já satisfaz o predicado de novo, não deve recompletar
+      state.value =
+          4; // Still satisfies the predicate; must not complete again.
       await Future<void>.delayed(Duration.zero);
 
       expect(completions, 1);
@@ -83,41 +84,37 @@ void main() {
   });
 
   group('awaitStdoutLine', () {
-    test('resolve com a primeira linha que satisfaz o predicado', () async {
+    test('resolves with the first line satisfying the predicate', () async {
       final controller = StreamController<String>();
       final waiter = awaitStdoutLine(
         stdout: controller.stream,
         predicate: (line) => line.trim() == 'readyok',
-        onStreamDone: () => StateError('encerrou antes de responder'),
+        onStreamDone: () => StateError('exited before responding'),
       );
 
-      controller.add('info string carregando pesos');
+      controller.add('info string loading weights');
       controller.add('readyok');
-      controller.add('bestmove e2e4'); // não deveria mais importar
+      controller.add('bestmove e2e4'); // A later response must have no effect.
 
       expect(await waiter.future, 'readyok');
       await waiter.cancel();
       await controller.close();
     });
 
-    test('falha com o erro do stream se ele emitir antes de casar', () async {
+    test('fails with the stream error if emitted before a match', () async {
       final controller = StreamController<String>();
       final waiter = awaitStdoutLine(
         stdout: controller.stream,
         predicate: (line) => line.trim() == 'readyok',
-        onStreamDone: () => StateError('encerrou antes de responder'),
+        onStreamDone: () => StateError('exited before responding'),
       );
 
-      controller.addError(StateError('pipe quebrado'));
+      controller.addError(StateError('broken pipe'));
 
       await expectLater(
         waiter.future,
         throwsA(
-          isA<StateError>().having(
-            (e) => e.message,
-            'message',
-            'pipe quebrado',
-          ),
+          isA<StateError>().having((e) => e.message, 'message', 'broken pipe'),
         ),
       );
       await waiter.cancel();
@@ -125,17 +122,17 @@ void main() {
     });
 
     test(
-      'falha com onStreamDone() se o stream fechar antes de casar',
+      'fails with onStreamDone() if the stream closes before a match',
       () async {
         final controller = StreamController<String>();
         final waiter = awaitStdoutLine(
           stdout: controller.stream,
           predicate: (line) => line.trim() == 'readyok',
           onStreamDone: () =>
-              StateError('lc0 encerrou antes de responder readyok'),
+              StateError('lc0 exited before responding with readyok'),
         );
 
-        controller.add('info string ainda carregando');
+        controller.add('info string still loading');
         await controller.close();
 
         await expectLater(
@@ -144,7 +141,7 @@ void main() {
             isA<StateError>().having(
               (e) => e.message,
               'message',
-              'lc0 encerrou antes de responder readyok',
+              'lc0 exited before responding with readyok',
             ),
           ),
         );
@@ -153,13 +150,13 @@ void main() {
     );
 
     test(
-      'cancel() cancela a subscription (stream deixa de ter ouvinte)',
+      'cancel() cancels the subscription and removes the stream listener',
       () async {
         final controller = StreamController<String>();
         final waiter = awaitStdoutLine(
           stdout: controller.stream,
-          predicate: (line) => line == 'nunca vai bater',
-          onStreamDone: () => StateError('encerrou'),
+          predicate: (line) => line == 'will never match',
+          onStreamDone: () => StateError('exited'),
         );
 
         expect(controller.hasListener, isTrue);
@@ -170,20 +167,19 @@ void main() {
       },
     );
 
-    test('não completa de novo após já ter casado uma linha', () async {
+    test('does not complete again after matching a line', () async {
       final controller = StreamController<String>();
       final waiter = awaitStdoutLine(
         stdout: controller.stream,
         predicate: (line) => line.startsWith('bestmove'),
-        onStreamDone: () => StateError('encerrou'),
+        onStreamDone: () => StateError('exited'),
       );
 
       controller.add('bestmove e2e4');
       expect(await waiter.future, 'bestmove e2e4');
 
-      // Uma segunda linha "bestmove" (ex: resposta atrasada de uma busca
-      // anterior) não deve ser possível observar: o consumidor já seguiu
-      // em frente com a primeira. Só confirmamos que nada lança.
+      // A second bestmove, such as a late response from a previous search,
+      // must not complete the future again. Verify that it does not throw.
       controller.add('bestmove d2d4');
       await waiter.cancel();
       await controller.close();

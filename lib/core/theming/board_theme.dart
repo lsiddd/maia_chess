@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Tabuleiros originais do Lichess, empacotados para uso offline.
+/// Original Lichess boards bundled for offline use.
 enum BoardTheme {
   brown('Brown'),
   blue('Blue'),

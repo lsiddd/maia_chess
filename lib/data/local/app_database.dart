@@ -172,9 +172,9 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Reconstrói todas as projeções da Fase 5 a partir de `games`, a fonte de
-  /// verdade. O chamador deve executar este método dentro da mesma transação
-  /// da conclusão/exclusão que motivou a reconstrução.
+  /// Rebuild rating history and campaign progress from `games`, the source of
+  /// truth. Completion and deletion callers must use the same transaction so
+  /// game data and derived state commit or roll back together.
   Future<void> rebuildDerivedState() => computeWithDatabase(
     connect: AppDatabase.connect,
     computation: _rebuildOnWorker,

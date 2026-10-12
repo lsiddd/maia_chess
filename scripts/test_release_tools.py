@@ -28,20 +28,20 @@ class SigningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             result = self.run_signing(root)
             self.assertEqual(result.returncode, 0)
-            self.assertIn("APK de teste", result.stdout)
+            self.assertIn("test APK", result.stdout)
             self.assertFalse(Path(root, "android/app/key.properties").exists())
 
     def test_tag_requires_secrets(self):
         with tempfile.TemporaryDirectory() as root:
             result = self.run_signing(root, GITHUB_REF_TYPE="tag")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Secrets ausentes", result.stderr)
+            self.assertIn("Missing secrets", result.stderr)
 
     def test_nightly_requires_secrets(self):
         with tempfile.TemporaryDirectory() as root:
             result = self.run_signing(root, REQUIRE_RELEASE_SIGNING="true")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Secrets ausentes", result.stderr)
+            self.assertIn("Missing secrets", result.stderr)
             self.assertFalse(Path(root, "android/app/key.properties").exists())
 
     def test_partial_configuration_fails(self):

@@ -34,11 +34,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('menu respeita navegação inferior com fonte ampliada', (
+  testWidgets('menu respects bottom navigation with enlarged text', (
     tester,
   ) async {
     await pumpGameAt(tester, const Size(320, 480), textScale: 2);
-    await tester.tap(find.text('Mais'));
+    await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
     final viewport = tester.getRect(find.byType(SingleChildScrollView));
     expect(viewport.bottom, lessThanOrEqualTo(456));
@@ -56,37 +56,38 @@ void main() {
     const Size(800, 400),
     const Size(600, 320),
   ]) {
-    testWidgets('64 casas visíveis e geometria estável em $size com fonte 2x', (
-      tester,
-    ) async {
-      await pumpGameAt(tester, size, textScale: 2);
-      final board = find.byKey(const Key('chess-board'));
-      final rect = tester.getRect(board);
-      expect(rect.top, greaterThanOrEqualTo(24));
-      expect(rect.bottom, lessThanOrEqualTo(size.height - 24));
-      expect(rect.left, greaterThanOrEqualTo(0));
-      expect(rect.right, lessThanOrEqualTo(size.width));
-      expect(rect.width, rect.height);
-      for (var r = 0; r < 8; r++) {
-        for (var c = 0; c < 8; c++) {
-          final square = tester.getRect(
-            find.byKey(ValueKey('board-square-$r-$c')),
-          );
-          expect(rect.contains(square.center), isTrue);
-          expect(square.width, closeTo(rect.width / 8, .01));
+    testWidgets(
+      '64 visible squares and stable geometry at $size with 2x text',
+      (tester) async {
+        await pumpGameAt(tester, size, textScale: 2);
+        final board = find.byKey(const Key('chess-board'));
+        final rect = tester.getRect(board);
+        expect(rect.top, greaterThanOrEqualTo(24));
+        expect(rect.bottom, lessThanOrEqualTo(size.height - 24));
+        expect(rect.left, greaterThanOrEqualTo(0));
+        expect(rect.right, lessThanOrEqualTo(size.width));
+        expect(rect.width, rect.height);
+        for (var r = 0; r < 8; r++) {
+          for (var c = 0; c < 8; c++) {
+            final square = tester.getRect(
+              find.byKey(ValueKey('board-square-$r-$c')),
+            );
+            expect(rect.contains(square.center), isTrue);
+            expect(square.width, closeTo(rect.width / 8, .01));
+          }
         }
-      }
-      await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
-      await tester.pumpAndSettle();
-      expect(tester.getRect(board), rect);
-      await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
-      await tester.pumpAndSettle();
-      expect(tester.getRect(board), rect);
-      expect(tester.takeException(), isNull);
-    });
+        await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
+        await tester.pumpAndSettle();
+        expect(tester.getRect(board), rect);
+        await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
+        await tester.pumpAndSettle();
+        expect(tester.getRect(board), rect);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
   testWidgets(
-    'histórico revisa sem alterar tabuleiro e reinício pede confirmação',
+    'history review preserves the board and restart requests confirmation',
     (tester) async {
       await pumpGameAt(tester, const Size(400, 800));
       await tester.tap(find.byKey(const Key('board-square-6-4')));
@@ -97,18 +98,18 @@ void main() {
       final rect = tester.getRect(find.byKey(const Key('chess-board')));
       await tester.tap(find.byKey(const Key('move-list-panel')));
       await tester.pumpAndSettle();
-      expect(find.text('Posição atual'), findsOneWidget);
+      expect(find.text('Current position'), findsOneWidget);
       await tester.tap(find.text('e4'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Fechar histórico'));
+      await tester.tap(find.byTooltip('Close history'));
       await tester.pumpAndSettle();
       expect(tester.getRect(find.byKey(const Key('chess-board'))), rect);
-      await tester.tap(find.text('Mais'));
+      await tester.tap(find.text('More'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Reiniciar'));
+      await tester.tap(find.text('Restart'));
       await tester.pumpAndSettle();
-      expect(find.text('Reiniciar partida?'), findsOneWidget);
-      await tester.tap(find.text('Cancelar'));
+      expect(find.text('Restart game?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(find.text('1. e4'), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -12,7 +12,7 @@ import 'package:maia_chess/features/pgn/application/pgn_service.dart';
 // Same fixtures, SDK, device and profile mode must be used before and after.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('profile: seleção, repetição e PGN longo', (tester) async {
+  testWidgets('profile: selection, repetition, and long PGN', (tester) async {
     final initial = _gameState();
     final source = _pgn();
     final metrics = <String, Object>{

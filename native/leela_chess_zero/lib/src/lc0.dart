@@ -75,7 +75,8 @@ class Lc0 {
   /// This is required for lc0 to function properly.
   ///
   /// This may throw a [StateError] if an active instance is being used.
-  /// Owner must [dispose] it before a new instance can be created.
+  /// The owner must call [dispose] and wait for a terminal state before
+  /// creating another instance.
   factory Lc0({String? weightsPath}) {
     if (_instance != null) {
       throw StateError('Multiple instances are not supported, yet.');
@@ -103,7 +104,7 @@ class Lc0 {
     calloc.free(pointer);
   }
 
-  /// Stops the C++ engine.
+  /// Request shutdown by sending `quit`; native cleanup is asynchronous.
   void dispose() {
     stdin = 'quit';
   }
@@ -129,8 +130,9 @@ class Lc0 {
 /// [weightsPath] is the path to the neural network weights file (.pb.gz).
 /// This is required for lc0 to function properly.
 ///
-/// This method is different from the factory method [Lc0.new] that
-/// it will wait for the engine to be ready before returning the instance.
+/// Unlike [Lc0.new], this waits for native bootstrap before returning.
+/// Callers must still wait for `isready`/`readyok` before searching with
+/// loaded weights.
 Future<Lc0> lc0Async({String? weightsPath}) {
   if (Lc0._instance != null) {
     return Future.error(StateError('Only one instance can be used at a time'));

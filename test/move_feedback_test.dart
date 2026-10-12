@@ -7,36 +7,36 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('classifyMoveFeedback', () {
-    test('reconhece lance simples', () {
+    test('recognises a quiet move', () {
       expect(classifyMoveFeedback('e4'), MoveFeedbackKind.move);
       expect(classifyMoveFeedback('Nf3'), MoveFeedbackKind.move);
     });
 
-    test('reconhece captura', () {
+    test('recognises a capture', () {
       expect(classifyMoveFeedback('exd5'), MoveFeedbackKind.capture);
       expect(classifyMoveFeedback('Nxe5'), MoveFeedbackKind.capture);
     });
 
-    test('reconhece roque dos dois lados', () {
+    test('recognises castling on both sides', () {
       expect(classifyMoveFeedback('O-O'), MoveFeedbackKind.castle);
       expect(classifyMoveFeedback('O-O-O'), MoveFeedbackKind.castle);
     });
 
-    test('reconhece promoção', () {
+    test('recognises promotion', () {
       expect(classifyMoveFeedback('e8=Q'), MoveFeedbackKind.promotion);
       expect(classifyMoveFeedback('e8=N'), MoveFeedbackKind.promotion);
     });
 
-    test('xeque e mate têm precedência sobre captura', () {
+    test('check and mate take precedence over capture', () {
       expect(classifyMoveFeedback('Qxf7+'), MoveFeedbackKind.check);
       expect(classifyMoveFeedback('Qxf7#'), MoveFeedbackKind.checkmate);
     });
 
-    test('roque com xeque é tratado como xeque', () {
+    test('castling with check is classified as check', () {
       expect(classifyMoveFeedback('O-O+'), MoveFeedbackKind.check);
     });
 
-    test('promoção com captura e mate é tratada como mate', () {
+    test('promotion with capture and mate is classified as mate', () {
       expect(classifyMoveFeedback('exd8=Q#'), MoveFeedbackKind.checkmate);
     });
   });
@@ -58,7 +58,7 @@ void main() {
           .setMockMethodCallHandler(SystemChannels.platform, null);
     });
 
-    test('cada tipo de lance emite retorno tátil', () async {
+    test('each move type produces haptic feedback', () async {
       for (final kind in MoveFeedbackKind.values) {
         await playMoveHaptic(kind);
       }
@@ -70,7 +70,7 @@ void main() {
       );
     });
 
-    test('mate vibra mais forte que um lance comum', () async {
+    test('mate vibrates more strongly than a quiet move', () async {
       await playMoveHaptic(MoveFeedbackKind.move);
       await playMoveHaptic(MoveFeedbackKind.checkmate);
 

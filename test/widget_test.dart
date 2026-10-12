@@ -1,5 +1,5 @@
-// Teste de fumaça: a tela inicial sobe sem erros e mostra os pontos de
-// entrada esperados (Fase 1: jogo local; Fase 0: diagnóstico técnico).
+// Smoke test: the home screen loads and exposes current entry points without
+// the removed technical diagnostic.
 
 import 'dart:async';
 
@@ -13,7 +13,7 @@ import 'package:maia_chess/data/repositories/settings_repository.dart';
 import 'package:maia_chess/main.dart';
 
 void main() {
-  testWidgets('HomeScreen mostra os pontos de entrada esperados', (
+  testWidgets('HomeScreen shows the expected entry points', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -29,14 +29,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Jogar (2 jogadores locais)'), findsOneWidget);
-    expect(find.text('Campanha Maia'), findsOneWidget);
-    expect(find.text('Meu desempenho'), findsOneWidget);
-    expect(find.text('Partidas salvas e PGN'), findsOneWidget);
-    expect(find.text('Diagnóstico técnico (Fase 0)'), findsNothing);
+    expect(find.text('Play (2 local players)'), findsOneWidget);
+    expect(find.text('Maia campaign'), findsOneWidget);
+    expect(find.text('My performance'), findsOneWidget);
+    expect(find.text('Saved games and PGN'), findsOneWidget);
+    expect(find.text('Technical diagnostic (Phase 0)'), findsNothing);
   });
 
-  testWidgets('pede confirmação antes de substituir o autosave', (
+  testWidgets('requests confirmation before replacing autosave', (
     WidgetTester tester,
   ) async {
     final active = _activeGame();
@@ -54,20 +54,21 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Jogar (2 jogadores locais)'));
+    await tester.tap(find.text('Play (2 local players)'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Substituir partida em andamento?'), findsOneWidget);
-    expect(find.textContaining('autosave atual será removido'), findsOneWidget);
+    expect(find.text('Replace the ongoing game?'), findsOneWidget);
+    expect(
+      find.textContaining('will remove the current autosave'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Voltar'));
+    await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('Substituir partida em andamento?'), findsNothing);
+    expect(find.text('Replace the ongoing game?'), findsNothing);
   });
 
-  testWidgets('bloqueia abrir outra partida durante restauração', (
-    tester,
-  ) async {
+  testWidgets('blocks opening another game during restore', (tester) async {
     final repository = _PendingGameRepository();
     await tester.pumpWidget(
       ProviderScope(
@@ -82,15 +83,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar partida salva'));
-    // Dois callbacks antes do rebuild também precisam respeitar o bloqueio.
-    await tester.tap(find.text('Jogar (2 jogadores locais)'));
+    await tester.tap(find.text('Continue saved game'));
+    // Two callbacks before rebuilding must also respect the opening guard.
+    await tester.tap(find.text('Play (2 local players)'));
     await tester.pump();
     expect(repository.reads, 1);
     repository.pending.complete(null);
     await tester.pumpAndSettle();
-    expect(find.text('Não há partida para continuar.'), findsOneWidget);
-    expect(find.text('Substituir partida em andamento?'), findsNothing);
+    expect(find.text('There is no game to continue.'), findsOneWidget);
+    expect(find.text('Replace the ongoing game?'), findsNothing);
   });
 }
 

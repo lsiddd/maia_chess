@@ -11,7 +11,7 @@ import 'package:maia_chess/features/game/presentation/game_screen.dart';
 import 'game_controller_test.dart' show FakeGameRepository, FakeLc0Engine;
 
 void main() {
-  testWidgets('Tentar de novo preserva a partida e repete o lance da IA', (
+  testWidgets('Try again preserves the game and retries the AI move', (
     tester,
   ) async {
     final repository = FakeGameRepository();
@@ -28,7 +28,7 @@ void main() {
           final attempt = engines.length;
           final engine = FakeLc0Engine(
             onMove: (_, _) async {
-              if (attempt < 2) throw StateError('falha de cálculo');
+              if (attempt < 2) throw StateError('search failed');
               return answer.future;
             },
           );
@@ -53,7 +53,7 @@ void main() {
       onPromotion: () async => null,
     );
     final before = container.read(gameControllerProvider);
-    expect(before.engineError, contains('falha de cálculo'));
+    expect(before.engineError, contains('search failed'));
 
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(400, 800);
@@ -66,23 +66,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Uma nova falha deve manter a posição e permitir outra tentativa.
-    await tester.tap(find.byTooltip('Tentar novamente'));
+    // Another failure must preserve the position and allow retry.
+    await tester.tap(find.byTooltip('Try again'));
     await tester.pumpAndSettle();
     final failedAgain = container.read(gameControllerProvider);
     expect(failedAgain.position.fen, before.position.fen);
     expect(failedAgain.uciHistory, ['e2e4']);
-    expect(failedAgain.engineError, contains('falha de cálculo'));
+    expect(failedAgain.engineError, contains('search failed'));
     expect(engines, hasLength(2));
     expect(engines.take(2).every((engine) => engine.disposeCount == 1), isTrue);
 
-    // Dois toques antes do rebuild não podem iniciar duas buscas.
-    await tester.tap(find.byTooltip('Tentar novamente'));
-    await tester.tap(find.byTooltip('Tentar novamente'));
+    // Two taps before rebuilding must not start two searches.
+    await tester.tap(find.byTooltip('Try again'));
+    await tester.tap(find.byTooltip('Try again'));
     await tester.pump();
     expect(container.read(gameControllerProvider).aiThinking, isTrue);
-    expect(find.byTooltip('Tentar novamente'), findsNothing);
-    expect(find.text('Vez da Maia'), findsOneWidget);
+    expect(find.byTooltip('Try again'), findsNothing);
+    expect(find.text('Maia to move'), findsOneWidget);
     expect(engines, hasLength(3));
     expect(engines.last.requestedFens, [before.position.fen]);
 

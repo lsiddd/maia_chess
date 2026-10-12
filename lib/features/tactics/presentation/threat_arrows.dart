@@ -12,8 +12,8 @@ const threatArrowColors = [
   Color(0xFF00897B),
 ];
 
-/// Camada independente dos gestos e da animação das peças. A numeração
-/// mantém a ordem legível mesmo para quem não distingue as cores.
+/// Arrow layer independent of gestures and piece animation. Numbering makes
+/// rank readable without relying on colour.
 class ThreatArrows extends StatelessWidget {
   const ThreatArrows({
     super.key,
@@ -56,7 +56,8 @@ class ThreatArrowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cell = math.min(size.width, size.height) / 8;
-    // Desenha a melhor por último para preservá-la nas sobreposições.
+    // Draw the highest-ranked candidate last so it remains visible in
+    // overlaps.
     for (var i = threats.length - 1; i >= 0; i--) {
       final threat = threats[i];
       final from = squareCenter(threat.move.from, size);
@@ -107,8 +108,8 @@ class ThreatArrowPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = cell * 0.02,
       );
-      // Badges ao longo do trajeto também distinguem promoções com a mesma
-      // origem/destino e variantes que partem da mesma peça.
+      // Badges distinguish promotions sharing origin/destination and
+      // candidates moving the same piece.
       final badge = from + direction * length * (0.25 + i * 0.18);
       canvas.drawCircle(badge, cell * 0.16, Paint()..color = color);
       canvas.drawCircle(

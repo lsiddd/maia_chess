@@ -19,10 +19,10 @@ class HistoryScreen extends ConsumerWidget {
     final library = ref.watch(gameLibraryProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Partidas salvas'),
+        title: const Text('Saved games'),
         actions: [
           IconButton(
-            tooltip: 'Importar PGN',
+            tooltip: 'Import PGN',
             onPressed: () => _importPgn(context, ref),
             icon: const Icon(Icons.file_open_outlined),
           ),
@@ -35,7 +35,7 @@ class HistoryScreen extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: ErrorStateCard(
-                message: 'Não foi possível abrir a biblioteca: $error',
+                message: 'Could not open the library: $error',
                 onRetry: () => ref.invalidate(gameLibraryProvider),
               ),
             ),
@@ -46,8 +46,8 @@ class HistoryScreen extends ConsumerWidget {
                 child: Padding(
                   padding: EdgeInsets.all(24),
                   child: Text(
-                    'Nenhuma partida salva.\n'
-                    'As partidas em andamento são salvas automaticamente.',
+                    'No saved games.\n'
+                    'Ongoing games are saved automatically.',
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -79,11 +79,11 @@ class HistoryScreen extends ConsumerWidget {
                       itemBuilder: (context) => const [
                         PopupMenuItem(
                           value: _HistoryAction.export,
-                          child: Text('Exportar PGN'),
+                          child: Text('Export PGN'),
                         ),
                         PopupMenuItem(
                           value: _HistoryAction.delete,
-                          child: Text('Excluir'),
+                          child: Text('Delete'),
                         ),
                       ],
                     ),
@@ -110,13 +110,13 @@ class HistoryScreen extends ConsumerWidget {
       await ref.read(gameRepositoryProvider).importGame(game);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PGN importado e validado.')),
+        const SnackBar(content: Text('PGN imported and validated.')),
       );
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível importar: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not import: $error')));
     }
   }
 
@@ -136,26 +136,26 @@ class HistoryScreen extends ConsumerWidget {
         } catch (error) {
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Falha ao exportar PGN: $error')),
+            SnackBar(content: Text('Failed to export PGN: $error')),
           );
         }
       case _HistoryAction.delete:
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Excluir partida?'),
+            title: const Text('Delete game?'),
             content: const Text(
-              'Essa ação não pode ser desfeita. Rating, sequências e '
-              'progresso da campanha serão reconstruídos sem esta partida.',
+              'This action cannot be undone. Rating, streaks, and '
+              'campaign progress will be rebuilt without this game.',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancelar'),
+                child: const Text('Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Excluir'),
+                child: const Text('Delete'),
               ),
             ],
           ),
@@ -168,9 +168,9 @@ class HistoryScreen extends ConsumerWidget {
 
   String _title(StoredGame game) {
     final mode = game.levelRating == null
-        ? 'Partida local'
-        : 'Contra Maia ${game.levelRating}';
-    if (game.status == StoredGameStatus.ongoing) return '$mode — em andamento';
+        ? 'Local game'
+        : 'Against Maia ${game.levelRating}';
+    if (game.status == StoredGameStatus.ongoing) return '$mode — ongoing';
     return '$mode — ${_resultLabel(game.result)}';
   }
 
@@ -181,8 +181,8 @@ class HistoryScreen extends ConsumerWidget {
         '${date.month.toString().padLeft(2, '0')}/${date.year} '
         '${date.hour.toString().padLeft(2, '0')}:'
         '${date.minute.toString().padLeft(2, '0')}';
-    final evaluated = game.evaluated ? 'avaliada' : 'não avaliada';
-    return '$formatted • ${game.moves.length} lances • $evaluated';
+    final evaluated = game.evaluated ? 'rated' : 'unrated';
+    return '$formatted • ${game.moves.length} moves • $evaluated';
   }
 }
 
@@ -224,23 +224,23 @@ class _ReplayScreenState extends ConsumerState<ReplayScreen> {
         }
         if (snapshot.hasError) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Reprodução')),
-            body: Center(child: Text('Falha ao abrir: ${snapshot.error}')),
+            appBar: AppBar(title: const Text('Replay')),
+            body: Center(child: Text('Failed to open: ${snapshot.error}')),
           );
         }
         final game = snapshot.data;
         if (game == null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Reprodução')),
-            body: const Center(child: Text('Partida não encontrada.')),
+            appBar: AppBar(title: const Text('Replay')),
+            body: const Center(child: Text('Game not found.')),
           );
         }
         try {
           return _ReplayView(game: game);
         } catch (error) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Reprodução')),
-            body: Center(child: Text('Partida corrompida: $error')),
+            appBar: AppBar(title: const Text('Replay')),
+            body: Center(child: Text('Corrupted game: $error')),
           );
         }
       },
@@ -277,10 +277,10 @@ class _ReplayViewState extends State<_ReplayView> {
     final orientation = game.playerSide ?? Side.white;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reprodução'),
+        title: const Text('Replay'),
         actions: [
           IconButton(
-            tooltip: 'Exportar PGN',
+            tooltip: 'Export PGN',
             onPressed: () async {
               try {
                 await const PgnFileService().sharePgn(
@@ -290,7 +290,7 @@ class _ReplayViewState extends State<_ReplayView> {
               } catch (error) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Falha ao exportar: $error')),
+                  SnackBar(content: Text('Failed to export: $error')),
                 );
               }
             },
@@ -317,27 +317,27 @@ class _ReplayViewState extends State<_ReplayView> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    tooltip: 'Início',
+                    tooltip: 'Start',
                     onPressed: _ply == 0
                         ? null
                         : () => setState(() => _ply = 0),
                     icon: const Icon(Icons.first_page),
                   ),
                   IconButton(
-                    tooltip: 'Anterior',
+                    tooltip: 'Previous',
                     onPressed: _ply == 0 ? null : () => setState(() => _ply--),
                     icon: const Icon(Icons.chevron_left),
                   ),
-                  Text('Lance $_ply de ${game.moves.length}'),
+                  Text('Move $_ply of ${game.moves.length}'),
                   IconButton(
-                    tooltip: 'Próximo',
+                    tooltip: 'Next',
                     onPressed: _ply == game.moves.length
                         ? null
                         : () => setState(() => _ply++),
                     icon: const Icon(Icons.chevron_right),
                   ),
                   IconButton(
-                    tooltip: 'Final',
+                    tooltip: 'End',
                     onPressed: _ply == game.moves.length
                         ? null
                         : () => setState(() => _ply = game.moves.length),
@@ -364,9 +364,9 @@ class _ReplayViewState extends State<_ReplayView> {
 enum _HistoryAction { export, delete }
 
 String _resultLabel(StoredGameResult result) => switch (result) {
-  StoredGameResult.whiteWin => 'vitória das brancas',
-  StoredGameResult.blackWin => 'vitória das pretas',
-  StoredGameResult.draw => 'empate',
-  StoredGameResult.ongoing => 'em andamento',
-  StoredGameResult.unknown => 'resultado não informado',
+  StoredGameResult.whiteWin => 'White wins',
+  StoredGameResult.blackWin => 'Black wins',
+  StoredGameResult.draw => 'draw',
+  StoredGameResult.ongoing => 'ongoing',
+  StoredGameResult.unknown => 'result not specified',
 };

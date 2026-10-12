@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'board_theme.dart';
 
-/// Escala de espaçamento compartilhada por todas as telas, para que o
-/// padding/gap entre elementos siga a mesma progressão em vez de cada
-/// widget escolher seu próprio valor (ver relatório de UI/UX, item
-/// "design system").
+/// Shared spacing scale for screen padding and gaps.
 abstract final class AppSpacing {
   static const xs = 4.0;
   static const s = 8.0;
@@ -15,9 +12,7 @@ abstract final class AppSpacing {
   static const xxl = 32.0;
 }
 
-/// Escala de raio de borda compartilhada. Os valores espelham os que já
-/// predominavam no app (12/16/20/28/pill) antes de existir um lugar único
-/// para eles.
+/// Shared corner radii for cards, controls, and pill shapes.
 abstract final class AppRadius {
   static const small = 12.0;
   static const medium = 16.0;
@@ -26,9 +21,8 @@ abstract final class AppRadius {
   static const pill = 999.0;
 }
 
-/// Duração e curva únicas para as microinterações do app, alinhadas ao
-/// Material Motion (durações curtas para feedback local, mais longas para
-/// transições entre telas).
+/// Shared durations and curve: shorter for local feedback, longer for screen
+/// transitions.
 abstract final class AppMotion {
   static const fast = Duration(milliseconds: 150);
   static const medium = Duration(milliseconds: 250);
@@ -36,18 +30,13 @@ abstract final class AppMotion {
   static const curve = Curves.easeOutCubic;
 }
 
-/// Acento tipográfico usado nos títulos de tela/seção (`headlineSmall`) e
-/// nos números de destaque (rating estimado, nível, placar) em
-/// CampaignScreen/StatsScreen/HomeScreen — nunca em rótulo, corpo de texto
-/// ou botão. Decisão registrada aqui (em vez de repetir o literal em cada
-/// `copyWith`) para não ficar implícita nem divergir entre telas.
+/// Serif accent for headings and prominent rating, level, and score values.
+/// Keep labels, body text, and buttons in the default font.
 abstract final class AppTypography {
   static const accentFontFamily = 'serif';
 }
 
-/// Tema visual do app, centralizado aqui (ver AUDITORIA_TECNICA.md,
-/// AUD-012) em vez de inline em `main.dart`, consistente com a
-/// organização feature-first do resto do projeto.
+/// Centralised light and dark app themes, with board-dependent colours.
 abstract final class AppTheme {
   static const _seedColor = Color(0xFF629924);
 
@@ -103,7 +92,7 @@ abstract final class AppTheme {
         foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
-      // Cards com superfícies neutras e o raio compartilhado do app.
+      // Neutral card surfaces with the shared app radius.
       cardTheme: CardThemeData(
         color: colorScheme.surface,
         surfaceTintColor: Colors.transparent,

@@ -13,11 +13,11 @@ values = {name: os.environ.get(name, "") for name in names}
 release = (os.environ.get("GITHUB_REF_TYPE") == "tag" or
            os.environ.get("REQUIRE_RELEASE_SIGNING") == "true")
 if not any(values.values()) and not release:
-    print("::warning::Sem secrets de assinatura: APK de teste, sem publicação de release.")
+    print("::warning::No signing secrets: test APK only; no release publication.")
 else:
     missing = [name for name, value in values.items() if not value]
     if missing:
-        raise SystemExit("Secrets ausentes: " + ", ".join(missing))
+        raise SystemExit("Missing secrets: " + ", ".join(missing))
 
     def escape(value):
         # java.util.Properties uses ISO-8859-1 and treats backslashes specially.
@@ -48,4 +48,4 @@ else:
         "".join(f"{key}={escape(value)}\n" for key, value in properties.items()),
         encoding="ascii",
     )
-    print("Assinatura release configurada.")
+    print("Release signing configured.")
