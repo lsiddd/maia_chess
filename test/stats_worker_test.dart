@@ -22,7 +22,7 @@ void main() {
   tearDown(() => database.close());
 
   test(
-    'worker vê a transação e notifica mudança de resultado sem novo jogo',
+    'worker sees the transaction and reports a changed result without a new game',
     () async {
       final game = _game('win');
       await games.beginGame(game);
@@ -54,7 +54,7 @@ void main() {
   );
 
   test(
-    'falha no worker reverte conclusão e histórico de rating juntos',
+    'worker failure rolls back completion and rating history together',
     () async {
       final previous = _game('previous');
       await games.beginGame(previous);
@@ -83,25 +83,22 @@ BEGIN SELECT RAISE(ABORT, 'forced_projection_failure'); END
     },
   );
 
-  test(
-    'stream observa escrita de rating feita pela conexão de worker',
-    () async {
-      final game = _game('rating-update');
-      await games.beginGame(game);
-      await games.completeGame(_completed(game));
-      final updates = StreamIterator(stats.watch());
-      addTearDown(updates.cancel);
-      expect(await updates.moveNext(), isTrue);
-      final changed = updates.moveNext();
-      await database.computeWithDatabase(
-        connect: AppDatabase.connect,
-        computation: _changeRating,
-      );
-      expect(await changed, isTrue);
-      expect(updates.current.estimatedRating, 1700);
-      expect(updates.current.evaluatedGames, 1);
-    },
-  );
+  test('stream observes rating writes from the worker connection', () async {
+    final game = _game('rating-update');
+    await games.beginGame(game);
+    await games.completeGame(_completed(game));
+    final updates = StreamIterator(stats.watch());
+    addTearDown(updates.cancel);
+    expect(await updates.moveNext(), isTrue);
+    final changed = updates.moveNext();
+    await database.computeWithDatabase(
+      connect: AppDatabase.connect,
+      computation: _changeRating,
+    );
+    expect(await changed, isTrue);
+    expect(updates.current.estimatedRating, 1700);
+    expect(updates.current.evaluatedGames, 1);
+  });
 }
 
 Future<void> _changeRating(AppDatabase database) async {

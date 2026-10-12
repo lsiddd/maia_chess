@@ -7,13 +7,9 @@ import 'package:path_provider/path_provider.dart';
 
 import '../uci_wait.dart';
 
-/// Serviço de alto nível para o motor lc0, usado para imitar o estilo de
-/// jogo humano através dos pesos Maia (ver ADR-001).
-///
-/// Encapsula o pacote `leela_chess_zero`, que executa o lc0 in-process via
-/// Dart FFI (sem subprocess, compatível com as restrições W^X do Android
-/// desde a API 29), falando o protocolo UCI internamente em um Isolate
-/// dedicado para não bloquear a UI.
+/// High-level lc0 contract for Maia opponent moves. The `leela_chess_zero`
+/// package runs the engine in-process through Dart FFI, with UCI I/O on
+/// background isolates.
 abstract interface class Lc0Engine {
   bool get isReady;
   String? get loadedWeightsPath;
@@ -35,27 +31,24 @@ class Lc0Service implements Lc0Engine {
   bool _handshakeDone = false;
   bool _searchInProgress = false;
 
-  /// Caminho do peso atualmente carregado, ou `null` se nenhum motor ativo.
+  /// Loaded weights path, or `null` when no engine is active.
   @override
   String? get loadedWeightsPath => _loadedWeightsPath;
 
-  /// `true` só depois do handshake `isready`/`readyok` (ver [init]) —
-  /// diferente de `_engine.state == Lc0State.ready`, que só indica que o
-  /// isolate nativo subiu, não que o motor terminou de carregar os pesos.
+  /// True after the `isready`/`readyok` handshake. Native `Lc0State.ready`
+  /// only confirms isolate startup, not that weights have finished loading.
   @override
   bool get isReady =>
       _engine != null &&
       _engine!.state.value == Lc0State.ready &&
       _handshakeDone;
 
-  /// Inicializa o motor com o peso `.pb.gz` em [weightsFilePath] (caminho
-  /// absoluto no filesystem — o lc0 não consegue ler de dentro do asset
-  /// bundle compactado do APK). Use [extractWeightsAsset] antes, se o peso
-  /// vier de um asset.
+  /// Initialise lc0 with the absolute filesystem [weightsFilePath]. Extract
+  /// bundled weights with [extractWeightsAsset] first: lc0 cannot read
+  /// directly from the APK asset bundle.
   ///
-  /// Só uma instância do lc0 pode existir por vez (limitação do pacote
-  /// subjacente); troca de nível de dificuldade passa por [dispose] seguido
-  /// de um novo [init].
+  /// Only one native instance can exist at a time. A level change disposes
+  /// the previous instance before starting another.
   @override
   Future<void> init(String weightsFilePath) async {
     if (_engine != null) {
@@ -66,9 +59,8 @@ class Lc0Service implements Lc0Engine {
     final engine = Lc0(weightsPath: weightsFilePath);
     _engine = engine;
 
-    // Cobre também o caso (improvável, mas possível) de já estar pronto
-    // antes de `awaitListenableValue` registrar o listener: ela mesma
-    // resolve na hora se o predicado já vale.
+    // The waiter also handles an engine that becomes ready before listener
+    // registration.
     final startup = awaitListenableValue(
       engine.state,
       predicate: (state) => state == Lc0State.ready || state == Lc0State.error,
@@ -77,26 +69,19 @@ class Lc0Service implements Lc0Engine {
       final state = await startup.future.timeout(
         _startupTimeout,
         onTimeout: () => throw TimeoutException(
-          'lc0 não inicializou em ${_startupTimeout.inSeconds}s',
+          'lc0 did not start within ${_startupTimeout.inSeconds}s',
         ),
       );
       if (state == Lc0State.error) {
-        throw StateError('lc0 falhou ao iniciar');
+        throw StateError('lc0 failed to start');
       }
 
-      // `Lc0State.ready` só significa que o isolate nativo subiu — o
-      // carregamento de fato dos pesos (parsing do .pb.gz) acontece depois,
-      // de forma assíncrona, e pode levar dezenas de segundos (observado na
-      // prática: até ~25s entre o motor iniciar e terminar de carregar).
-      // Mandar "go" antes disso faz o comando ficar preso atrás do
-      // carregamento na fila de stdin, e nosso timeout de getBestMove
-      // estourava achando que o motor tinha travado. Corrigido aguardando o
-      // handshake padrão UCI isready/readyok, que só responde depois que o
-      // motor processa tudo que veio antes — ver ADR-001, observação de
-      // robustez (Fase 3).
+      // Native ready only confirms isolate startup. Wait for `readyok` after
+      // weights load so a queued search does not consume its timeout waiting
+      // for initialisation.
       await _waitReadyOk(engine);
       if (!identical(_engine, engine)) {
-        throw StateError('lc0 foi descartado durante a inicialização');
+        throw StateError('lc0 was disposed during startup');
       }
       _loadedWeightsPath = weightsFilePath;
       _handshakeDone = true;
@@ -112,15 +97,16 @@ class Lc0Service implements Lc0Engine {
     final waiter = awaitStdoutLine(
       stdout: engine.stdout,
       predicate: (line) => line.trim() == 'readyok',
-      onStreamDone: () => StateError('lc0 encerrou antes de responder readyok'),
+      onStreamDone: () =>
+          StateError('lc0 exited before responding with readyok'),
     );
     try {
       engine.stdin = 'isready';
       await waiter.future.timeout(
         _readyTimeout,
         onTimeout: () => throw TimeoutException(
-          'lc0 não respondeu isready/readyok em '
-          '${_readyTimeout.inSeconds}s (carregamento dos pesos)',
+          'lc0 did not respond to isready/readyok within '
+          '${_readyTimeout.inSeconds}s (loading weights)',
         ),
       );
     } finally {
@@ -128,27 +114,24 @@ class Lc0Service implements Lc0Engine {
     }
   }
 
-  /// Envia a posição [fen] ao motor e retorna o lance sugerido em notação
-  /// UCI (ex: `e2e4`), usando busca com [nodes] posições (padrão 1 — uma
-  /// única passada de avaliação de política, sem árvore de busca: é assim
-  /// que os pesos Maia foram desenhados/validados para imitar um jogador
-  /// humano daquele nível).
+  /// Return a UCI move for [fen] with a [nodes] search budget. The app uses
+  /// one node to select from the Maia policy rather than deepen the search.
   @override
   Future<String> getBestMove(String fen, {int nodes = 1}) async {
     if (!isReady) {
-      throw StateError('lc0 não está pronto. Chame init() primeiro.');
+      throw StateError('lc0 is not ready. Call init() first.');
     }
     if (nodes <= 0) {
-      throw ArgumentError.value(nodes, 'nodes', 'deve ser positivo');
+      throw ArgumentError.value(nodes, 'nodes', 'must be positive');
     }
     if (_searchInProgress) {
-      throw StateError('lc0 já está calculando outro lance');
+      throw StateError('lc0 is already calculating another move');
     }
     final engine = _engine!;
     final waiter = awaitStdoutLine(
       stdout: engine.stdout,
       predicate: (line) => line.startsWith('bestmove'),
-      onStreamDone: () => StateError('lc0 encerrou antes de devolver bestmove'),
+      onStreamDone: () => StateError('lc0 exited before returning bestmove'),
     );
 
     _searchInProgress = true;
@@ -159,22 +142,24 @@ class Lc0Service implements Lc0Engine {
         final line = await waiter.future.timeout(_searchTimeout);
         final move = parseBestMove(line);
         if (move.isEmpty || move == '(none)') {
-          throw StateError('lc0 não devolveu um lance válido');
+          throw StateError('lc0 did not return a valid move');
         }
         return move;
       } on TimeoutException {
-        // Assim como no Stockfish, uma busca atrasada não pode deixar um
-        // `bestmove` órfão que seria confundido com a solicitação seguinte.
+        // Stop or dispose a delayed search so its orphaned `bestmove` cannot
+        // be mistaken for the next response.
         try {
           engine.stdin = 'stop';
           final line = await waiter.future.timeout(_stopGracePeriod);
           final move = parseBestMove(line);
           if (move.isNotEmpty && move != '(none)') return move;
         } on Object {
-          // O descarte abaixo é o caminho de recuperação.
+          // Disposal below is the recovery path.
         }
         await _disposeAfterFailure(engine);
-        throw TimeoutException('lc0 não respondeu à busca nem ao comando stop');
+        throw TimeoutException(
+          'lc0 did not respond to the search or stop command',
+        );
       }
     } finally {
       _searchInProgress = false;
@@ -182,17 +167,10 @@ class Lc0Service implements Lc0Engine {
     }
   }
 
-  /// Encerra o motor e só retorna depois que o singleton nativo do pacote
-  /// (`Lc0`) terminou de verdade.
-  ///
-  /// Importante: `Lc0.dispose()` só manda "quit" pelo stdin — a limpeza de
-  /// fato (`_cleanUp`, que zera o singleton estático do pacote) acontece
-  /// depois, quando o isolate do motor processa o "quit" e sai. Se
-  /// [init] for chamado de novo antes disso terminar, o pacote lança
-  /// `Bad state: Multiple instances are not supported, yet.` (visto na
-  /// prática ao trocar de nível/reiniciar contra a IA — ver ADR-001,
-  /// observação de robustez). Por isso esperamos aqui o estado virar
-  /// [Lc0State.disposed] (ou [Lc0State.error]) antes de liberar o serviço.
+  /// Request shutdown and wait for native disposal, within bounded timeouts.
+  /// `Lc0.dispose()` only sends `quit`; the package releases its singleton
+  /// after the engine loop exits. There is no force-kill API, so a timeout
+  /// does not guarantee shutdown.
   @override
   Future<void> dispose() async {
     final engine = _engine;
@@ -218,9 +196,8 @@ class Lc0Service implements Lc0Engine {
     var current = engine.state.value;
     if (current == Lc0State.disposed || current == Lc0State.error) return;
 
-    // O wrapper nativo só aceita `quit` depois de entrar em ready. Se a
-    // falha ocorreu durante o curtíssimo bootstrap do isolate, aguarda essa
-    // transição antes de tentar a saída limpa.
+    // The wrapper accepts `quit` only when ready. Wait for bootstrap to
+    // finish before attempting a clean shutdown.
     if (current == Lc0State.starting) {
       final startup = awaitListenableValue(
         engine.state,
@@ -245,17 +222,16 @@ class Lc0Service implements Lc0Engine {
       engine.dispose();
       await terminated.future.timeout(_terminateStepTimeout);
     } on Object {
-      // Não há API de kill no pacote; o singleton será liberado quando o
-      // loop UCI consumir o `quit`.
+      // The package has no force-kill API; singleton release depends on the
+      // engine loop consuming `quit`.
     } finally {
       terminated.cancel();
     }
   }
 
-  /// Copia um peso `.pb.gz` de um asset do bundle Flutter para um arquivo
-  /// gravável no armazenamento do app, retornando o caminho absoluto. Só
-  /// copia de novo se o arquivo ainda não existir ou tiver tamanho
-  /// diferente do asset de origem.
+  /// Copy bundled `.pb.gz` weights to application support storage and return
+  /// the absolute path. Rewrite only when the file is absent or its size
+  /// differs from the asset.
   static Future<String> extractWeightsAsset(
     String assetPath, {
     String? fileName,

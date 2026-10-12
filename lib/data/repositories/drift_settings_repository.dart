@@ -30,7 +30,7 @@ class DriftSettingsRepository implements SettingsRepository {
       throw ArgumentError.value(
         settings.defaultTimeMinutes,
         'defaultTimeMinutes',
-        'deve ser positivo',
+        'must be positive',
       );
     }
     await _db

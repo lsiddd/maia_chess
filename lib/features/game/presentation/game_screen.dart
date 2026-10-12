@@ -70,17 +70,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   Future<void> _hint() async {
     if (ref.read(gameControllerProvider).isGameOver) {
-      _notice('Partida encerrada: não há lance disponível.');
+      _notice('Game over: no move is available.');
       return;
     }
     try {
       await ref.read(visualHintProvider.notifier).toggle();
     } on HintCancelledException {
-      /* A posição ou a interação mudou. */
+      /* Position or interaction changed. */
     } catch (_) {
-      _notice(
-        'Não foi possível calcular a dica. Toque em Dica para tentar novamente.',
-      );
+      _notice('Could not calculate a hint. Tap Hint to try again.');
     }
   }
 
@@ -95,7 +93,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ),
       );
     } catch (_) {
-      _notice('Não foi possível salvar a preferência.');
+      _notice('Could not save the preference.');
     }
   }
 
@@ -145,9 +143,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     });
     ref.listen<LiveThreatState>(liveThreatControllerProvider, (previous, next) {
       if (next.error != null && previous?.error != next.error) {
-        _notice(
-          'Análise indisponível. Desative e ative Planos para tentar novamente.',
-        );
+        _notice('Analysis unavailable. Turn Plans off and on to try again.');
       }
     });
     final busy = game.aiThinking;
@@ -157,30 +153,30 @@ class _GameScreenState extends ConsumerState<GameScreen>
         key: const Key('game-actions'),
         children: [
           GameToolButton(
-            label: 'Desfazer',
+            label: 'Undo',
             icon: Icons.undo,
             tooltip: game.campaignMode
-                ? 'Desfazer: esta partida deixa de contar para a campanha'
-                : 'Desfazer',
+                ? 'Undo: this game will no longer count toward the campaign'
+                : 'Undo',
             onPressed: game.canUndo && !busy && !game.isGameOver
                 ? _controller.undo
                 : null,
           ),
           GameToolButton(
             key: const Key('hint-button'),
-            label: 'Dica',
+            label: 'Hint',
             icon: Icons.lightbulb_outline,
             active: hint != null,
             loading: game.hintThinking,
             tooltip:
-                'Dica Stockfish: destaca apenas a peça; retira a avaliação',
+                'Stockfish hint: highlights only the piece; makes the game unrated',
             onPressed: game.isGameOver || (!busy && !game.isAiTurn)
                 ? _hint
                 : null,
           ),
           GameToolButton(
             key: const Key('toggle-attacked-pieces'),
-            label: 'Ataques',
+            label: 'Attacks',
             icon: Icons.crop_free,
             active: settings.showAttackedPieces,
             onPressed: () {
@@ -192,23 +188,21 @@ class _GameScreenState extends ConsumerState<GameScreen>
           ),
           GameToolButton(
             key: const Key('show-opponent-threats'),
-            label: 'Planos',
+            label: 'Plans',
             icon: Icons.trending_up,
-            tooltip: 'Planos do adversário',
+            tooltip: 'Opponent plans',
             active: plans.enabled,
             loading: plans.loading,
             onPressed: () {
               _planIndex = 0;
               _plans.setEnabled(!plans.enabled);
               if (!plans.enabled && game.position.isCheck) {
-                _notice(
-                  'Saia do xeque antes de consultar os planos do adversário.',
-                );
+                _notice('Get out of check before viewing opponent plans.');
               }
             },
           ),
           GameToolButton(
-            label: 'Mais',
+            label: 'More',
             icon: Icons.more_horiz,
             onPressed: _more,
           ),
@@ -244,7 +238,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
           child: candidates.length > 1
               ? IconButton(
                   key: const Key('next-opponent-plan'),
-                  tooltip: 'Próximo plano do adversário',
+                  tooltip: 'Next opponent plan',
                   onPressed: () => setState(
                     () => _planIndex = (_planIndex + 1) % candidates.length,
                   ),
@@ -264,7 +258,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       appBar: AppBar(
         toolbarHeight: 48,
         title: Text(
-          game.aiSide == null ? 'Partida local' : 'Maia ${game.levelRating}',
+          game.aiSide == null ? 'Local game' : 'Maia ${game.levelRating}',
         ),
       ),
       body: SafeArea(
@@ -324,18 +318,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final item in [
-                ('flip', Icons.swap_vert, 'Girar tabuleiro'),
-                ('save', Icons.save_outlined, 'Salvar partida'),
-                ('settings', Icons.tune, 'Configurações'),
+                ('flip', Icons.swap_vert, 'Rotate board'),
+                ('save', Icons.save_outlined, 'Save game'),
+                ('settings', Icons.tune, 'Settings'),
                 (
                   'filter',
                   Icons.filter_alt_outlined,
                   settings.ownAttackedPiecesOnly
-                      ? 'Ataques: mostrar todas as peças'
-                      : 'Ataques: somente minhas peças',
+                      ? 'Attacks: show all pieces'
+                      : 'Attacks: my pieces only',
                 ),
-                ('help', Icons.help_outline, 'Ajuda das ferramentas'),
-                ('reset', Icons.restart_alt, 'Reiniciar'),
+                ('help', Icons.help_outline, 'Tool help'),
+                ('reset', Icons.restart_alt, 'Restart'),
               ])
                 ListTile(
                   leading: Icon(item.$2),
@@ -346,8 +340,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   game.campaignMode
-                      ? 'Dicas, ataques, planos e desfazer tornam a partida não avaliada: ela não conta para avançar na campanha.'
-                      : 'A partida é salva automaticamente a cada lance. Ajudas e desfazer retiram a avaliação.',
+                      ? 'Hints, attacks, plans, and undo make the game unrated: it does not count toward campaign progress.'
+                      : 'The game is saved automatically after every move. Assistance and undo make it unrated.',
                 ),
               ),
             ],
@@ -362,7 +356,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       case 'save':
         await _controller.saveGame();
         final error = ref.read(gameControllerProvider).persistenceError;
-        _notice(error ?? 'Partida salva.');
+        _notice(error ?? 'Game saved.');
       case 'settings':
         await Navigator.of(
           context,
@@ -373,19 +367,19 @@ class _GameScreenState extends ConsumerState<GameScreen>
         await showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Ferramentas de partida'),
+            title: const Text('Game tools'),
             content: const SingleChildScrollView(
               child: Text(
-                'Dica: o contorno âmbar indica somente a peça sugerida pelo Stockfish. Toque novamente para ocultar.\n\n'
-                'Ataques: borda laranja contínua indica peça atacada sem defesa geométrica; borda azul dupla indica atacada e defendida. Isso não garante ganho ou perda de material: cravadas e trocas exigem análise tática.\n\n'
-                'Planos do adversário: uma seta mostra uma opção do Stockfish caso o adversário pudesse jogar agora. Não é uma ameaça comprovada. Use o contador para alternar.\n\n'
-                'Desfazer: contra Maia, volta à sua decisão anterior; no modo local, volta um lance. Ajudas e desfazer retiram a avaliação e a validade na campanha.',
+                'Hint: an amber outline marks only the piece suggested by Stockfish. Tap again to hide it.\n\n'
+                'Attacks: a solid orange border marks an attacked piece without geometric defence; a double blue border marks an attacked, defended piece. This does not guarantee a material gain or loss: pins and exchanges require tactical analysis.\n\n'
+                'Opponent plans: an arrow shows one Stockfish option if the opponent could move now. It is not a proven threat. Use the counter to switch plans.\n\n'
+                'Undo: against Maia, returns to your previous decision; in local play, takes back one move. Assistance and undo make the game unrated and ineligible for campaign progress.',
               ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Entendi'),
+                child: const Text('Got it'),
               ),
             ],
           ),
@@ -400,16 +394,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Reiniciar partida?'),
-          content: const Text('O progresso atual desta partida será perdido.'),
+          title: const Text('Restart game?'),
+          content: const Text(
+            'The current progress in this game will be lost.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Reiniciar'),
+              child: const Text('Restart'),
             ),
           ],
         ),
@@ -433,28 +429,28 @@ class _TurnStatus extends StatelessWidget {
         (game.isGameOver
             ? gameResultDescription(game)
             : game.engineError != null
-            ? 'Maia indisponível'
+            ? 'Maia unavailable'
             : game.position.isCheck
-            ? 'Xeque'
+            ? 'Check'
             : game.aiSide == null
             ? (game.position.turn == Side.white
-                  ? 'Brancas jogam'
-                  : 'Pretas jogam')
+                  ? 'White to move'
+                  : 'Black to move')
             : game.isAiTurn
-            ? 'Vez da Maia'
-            : 'Sua vez');
+            ? 'Maia to move'
+            : 'Your turn');
     final mode = game.campaignMode
-        ? 'Campanha'
+        ? 'Campaign'
         : game.aiSide == null
         ? 'Local'
-        : 'Treino';
+        : 'Practice';
     return SizedBox(
       height: 52,
       child: Semantics(
         key: const Key('turn-status'),
         liveRegion: true,
         label:
-            '${lastMoveAnnouncement(game)} $turn. $mode. ${game.evaluated ? 'Avaliada' : 'Não avaliada'}',
+            '${lastMoveAnnouncement(game)} $turn. $mode. ${game.evaluated ? 'Rated' : 'Unrated'}',
         child: Row(
           children: [
             Container(
@@ -479,7 +475,7 @@ class _TurnStatus extends StatelessWidget {
             ),
             if (game.engineError != null)
               IconButton(
-                tooltip: 'Tentar novamente',
+                tooltip: 'Try again',
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
               )
@@ -494,9 +490,9 @@ class _TurnStatus extends StatelessWidget {
             Flexible(
               child: Tooltip(
                 message:
-                    'Ajudas e desfazer retiram a avaliação e a validade na campanha.',
+                    'Assistance and undo make the game unrated and ineligible for campaign progress.',
                 child: Text(
-                  '$mode${game.evaluated ? '' : ' · Não avaliada'}',
+                  '$mode${game.evaluated ? '' : ' · Unrated'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(

@@ -27,8 +27,8 @@ class LiveThreatState {
   final Object? error;
 }
 
-/// Atualiza somente quando a posição ou a disponibilidade muda. Seleção e
-/// arraste não disparam buscas; revisões impedem publicar resultados antigos.
+/// Refresh on position or availability changes. Selection and drag do not
+/// trigger searches; revisions prevent stale results from being published.
 class LiveThreatController extends AutoDisposeNotifier<LiveThreatState> {
   late GameController _game;
   int _revision = 0;
@@ -86,7 +86,7 @@ class LiveThreatController extends AutoDisposeNotifier<LiveThreatState> {
       loading: loading,
     );
     if (loading) {
-      // Agrupa mudanças síncronas (lance, início/fim do turno da IA).
+      // Coalesce synchronous changes such as a move and AI turn transitions.
       scheduleMicrotask(() {
         if (!_disposed && revision == _revision) {
           unawaited(_calculate(revision));
@@ -101,7 +101,7 @@ class LiveThreatController extends AutoDisposeNotifier<LiveThreatState> {
       if (_disposed || revision != _revision) return;
       state = LiveThreatState(enabled: true, result: result);
     } on HintCancelledException {
-      // A posição, a tela ou a disponibilidade já mudou.
+      // Position, screen, or analysis availability has already changed.
     } catch (error) {
       if (_disposed || revision != _revision) return;
       state = LiveThreatState(enabled: true, error: error);

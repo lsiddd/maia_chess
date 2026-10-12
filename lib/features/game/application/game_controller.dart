@@ -20,9 +20,8 @@ typedef StockfishEngineFactory = StockfishEngine Function();
 typedef MaiaWeightsResolver = Future<String> Function(DifficultyLevel level);
 typedef _HintCacheKey = ({int gameGeneration, String fen, int movetimeMs});
 
-/// Pontos de injeção mantidos pequenos e orientados a contrato. Além de
-/// tornarem os fluxos nativos testáveis sem FFI, evitam que o controller
-/// conheça detalhes de extração de assets e construção dos motores.
+/// Inject engine contracts and weights extraction so controller flows can be
+/// tested without native FFI.
 final lc0EngineFactoryProvider = Provider<Lc0EngineFactory>(
   (ref) => Lc0Service.new,
 );
@@ -40,8 +39,9 @@ final stockfishWarmupEnabledProvider = Provider<bool>(
   (ref) => Platform.isAndroid,
 );
 
-/// Coordena regras, persistência e motores. Maia escolhe apenas os lances
-/// do oponente; toda assistência é calculada exclusivamente pelo Stockfish.
+/// Coordinate rules, persistence, and engines. Maia selects opponent moves;
+/// Stockfish calculates hints and opponent plans. Attack highlights use
+/// geometric board analysis.
 class GameController extends Notifier<GameState> {
   Lc0Engine? _lc0;
   int? _loadedLevelRating;
@@ -74,7 +74,7 @@ class GameController extends Notifier<GameState> {
       final cancellation = _hintCancellation;
       if (cancellation != null && !cancellation.isCompleted) {
         cancellation.completeError(
-          const HintCancelledException('Controller descartado'),
+          const HintCancelledException('Controller disposed'),
         );
       }
       unawaited(_disposeEngines());
@@ -82,11 +82,11 @@ class GameController extends Notifier<GameState> {
     return GameState.initial();
   }
 
-  /// Inicia uma partida local entre dois jogadores humanos, descartando
-  /// qualquer modo vs. IA anterior (os motores não ficam mais ativos).
+  /// Start a local two-player game and dispose engines from any previous AI
+  /// game.
   Future<void> startTwoPlayers() async {
     final generation = ++_gameGeneration;
-    await _cancelHint('Uma nova partida foi iniciada.');
+    await _cancelHint('A new game was started.');
     if (!_isCurrentGame(generation)) return;
     await _disposeEngines();
     if (!_isCurrentGame(generation)) return;
@@ -94,19 +94,18 @@ class GameController extends Notifier<GameState> {
     await _beginPersistedGame();
   }
 
-  /// Inicia uma partida contra a IA: [humanSide] é o lado do jogador
-  /// humano, o lado oposto é jogado pelo Maia no nível [levelRating]
-  /// (1100-1900). Carrega o peso correspondente no lc0; se o lado da IA
-  /// jogar primeiro (IA de brancas), já dispara o primeiro lance.
+  /// Start an AI game with [humanSide] against Maia at [levelRating]
+  /// (1100–1900). Load the corresponding network and play the opening move
+  /// immediately when Maia is White.
   Future<bool> startVsAi({
     required Side humanSide,
     required int levelRating,
     bool campaignMode = false,
   }) async {
-    DifficultyLevel.byRating(levelRating); // valida antes de alterar o estado
+    DifficultyLevel.byRating(levelRating); // Validate before changing state.
     _gameGeneration++;
     final gameGeneration = _gameGeneration;
-    await _cancelHint('Uma nova partida foi iniciada.');
+    await _cancelHint('A new game was started.');
     if (!_isCurrentGame(gameGeneration)) return false;
     if (state.aiThinking) {
       await _discardLc0();
@@ -136,14 +135,14 @@ class GameController extends Notifier<GameState> {
     return _maybePlayAiTurn();
   }
 
-  /// Restaura o único autosave ativo. Cada UCI é reaplicado pela camada de
-  /// regras e cada FEN intermediária é conferida antes de expor o estado.
-  /// Se o processo caiu depois do lance humano, a IA responde uma vez; se o
-  /// lance da IA já estava salvo, a vez é humana e nenhum lance é duplicado.
+  /// Restore the sole active autosave. Replay every UCI move and check
+  /// intermediate FENs before exposing state. If only the human move was
+  /// saved, Maia responds once; an already saved Maia reply is not
+  /// duplicated.
   Future<bool> restoreActiveGame() async {
     _gameGeneration++;
     final generation = _gameGeneration;
-    await _cancelHint('Uma partida salva foi restaurada.');
+    await _cancelHint('A saved game was restored.');
     if (!_isCurrentGame(generation)) return false;
     await _disposeEngines();
     if (!_isCurrentGame(generation)) return false;
@@ -154,7 +153,7 @@ class GameController extends Notifier<GameState> {
     } catch (error) {
       if (!_isCurrentGame(generation)) return false;
       state = GameState.initial().copyWith(
-        persistenceError: 'Não foi possível abrir o autosave: $error',
+        persistenceError: 'Could not open the autosave: $error',
       );
       return false;
     }
@@ -164,7 +163,7 @@ class GameController extends Notifier<GameState> {
       replayed = const GameReplayer().replay(stored);
     } catch (error) {
       state = GameState.initial().copyWith(
-        persistenceError: 'Não foi possível restaurar a partida: $error',
+        persistenceError: 'Could not restore the game: $error',
       );
       return false;
     }
@@ -217,11 +216,9 @@ class GameController extends Notifier<GameState> {
     return true;
   }
 
-  /// Lida com um toque na casa [square]: se nada estava selecionado e há
-  /// uma peça do lado a mover ali, seleciona. Se já havia uma seleção e
-  /// [square] é um destino legal, joga o lance (chamando [onPromotion] para
-  /// perguntar a peça de promoção, se necessário). Caso contrário, troca ou
-  /// limpa a seleção. Ignorado se for a vez da IA jogar.
+  /// Select, switch, or clear a piece on a tap of [square]. Play a legal
+  /// destination, consulting [onPromotion] when needed. Ignore input while
+  /// the AI or a promotion is active, or after game over.
   Future<void> onSquareTapped(
     Square square, {
     required Future<Role?> Function() onPromotion,
@@ -254,8 +251,8 @@ class GameController extends Notifier<GameState> {
 
     final legalDestinations = state.legalDestinationsFrom(selected);
     if (!legalDestinations.contains(square)) {
-      // Toque em outra casa: troca a seleção se houver peça própria ali,
-      // senão limpa.
+      // Switch to another own piece, or clear selection on an unrelated
+      // square.
       state = _hasOwnPieceAt(square)
           ? state.copyWith(selectedSquare: square)
           : state.copyWith(clearSelection: true);
@@ -281,8 +278,8 @@ class GameController extends Notifier<GameState> {
     await _maybePlayAiTurn();
   }
 
-  /// Seleciona a peça ao iniciar um arraste, sem alternar a seleção como
-  /// um toque faria. Retorna falso quando a interação não está disponível.
+  /// Select the drag origin without toggling selection. Return false when
+  /// interaction is unavailable.
   bool selectForDrag(Square square) {
     if (_promotionPending ||
         state.isGameOver ||
@@ -298,10 +295,9 @@ class GameController extends Notifier<GameState> {
     return true;
   }
 
-  /// Tenta jogar o lance de [from] para [to] vindo do gesto de arrastar
-  /// (drag-and-drop) uma peça — alternativa ao fluxo de toque em
-  /// [onSquareTapped]. Ignora silenciosamente se o lance não for legal ou
-  /// se for a vez da IA jogar.
+  /// Attempt a drag from [from] to [to], using [onPromotion] when required.
+  /// Ignore illegal moves and unavailable interaction, as in
+  /// [onSquareTapped].
   Future<void> attemptDragMove(
     Square from,
     Square to, {
@@ -349,11 +345,9 @@ class GameController extends Notifier<GameState> {
     }
   }
 
-  /// Aplica um lance já validado externamente (ex: sugestão de um motor
-  /// FFI). Lança [PlayException] se o lance não for legal na posição
-  /// atual — a validação final do lance sempre passa por esta camada de
-  /// regras, mesmo quando a origem é um motor nativo (ver seção 4.3 da
-  /// especificação).
+  /// Validate and apply a move through the rules engine, including moves from
+  /// native engines. Throw [PlayException] if the move is illegal in the
+  /// current position.
   Future<void> _applyMove(Move move, {required GameMoveActor actor}) async {
     final (newPosition, san) = state.position.makeSan(move);
     final now = DateTime.now().toUtc();
@@ -370,11 +364,9 @@ class GameController extends Notifier<GameState> {
     await _persistCurrentGame();
   }
 
-  /// Desfaz o(s) último(s) lance(s). Numa partida contra a IA, desfaz o
-  /// lance da IA e o lance humano anterior juntos, para que a vez volte a
-  /// ser do jogador. Marca a partida como "não avaliada" (seção 5 e 7 da
-  /// especificação: undo/dica tiram a partida do cálculo de
-  /// rating/streaks).
+  /// Undo one ply in local play, or return to the previous human decision
+  /// against Maia. Mark the game unrated, excluding it from rating, streaks,
+  /// and campaign progress.
   Future<void> undo() async {
     if (state.isGameOver || !state.canUndo || state.aiThinking) {
       return;
@@ -396,8 +388,7 @@ class GameController extends Notifier<GameState> {
     actorHistory.removeLast();
     timeHistory.removeLast();
 
-    // Contra a IA: continua desfazendo até a vez voltar a ser do jogador
-    // humano (normalmente mais um lance, o da IA que acabou de responder).
+    // Against Maia, keep undoing until the turn returns to the human player.
     if (state.aiSide != null) {
       while (history.isNotEmpty && previousPosition.turn == state.aiSide) {
         previousPosition = history.removeLast();
@@ -421,16 +412,16 @@ class GameController extends Notifier<GameState> {
     await _persistCurrentGame();
   }
 
-  /// Marca a partida como "não avaliada" sem alterar o tabuleiro — usado
-  /// pelo fluxo de dica (Fase 3), que consulta o motor mas não desfaz nada.
+  /// Mark the game unrated without changing the board; persist the
+  /// eligibility change before assistance is delivered.
   Future<void> markAsNotEvaluated() async {
     if (!state.evaluated) return;
     state = state.copyWith(evaluated: false);
     await _persistCurrentGame();
   }
 
-  /// Calcula um lance legal com Stockfish na posição congelada da solicitação.
-  /// A assistência retira a partida da avaliação, inclusive se a busca falhar.
+  /// Calculate a legal Stockfish move for the captured request position.
+  /// Assistance makes the game unrated even if the search fails.
   Future<HintResult> getHint({
     int stockfishMovetimeMs = StockfishEngine.defaultMovetimeMs,
   }) {
@@ -441,7 +432,7 @@ class GameController extends Notifier<GameState> {
         ArgumentError.value(
           stockfishMovetimeMs,
           'stockfishMovetimeMs',
-          'deve ser positivo',
+          'must be positive',
         ),
       );
     }
@@ -452,12 +443,12 @@ class GameController extends Notifier<GameState> {
         state.isAiTurn ||
         state.isGameOver) {
       return Future.error(
-        StateError('Dica indisponível neste momento da partida.'),
+        StateError('Hints are unavailable at this point in the game.'),
       );
     }
 
-    // Solicitar a dica já torna a partida não avaliada, mesmo se algum motor
-    // falhar depois. Isso evita que uma falha técnica reverta a regra do jogo.
+    // Requesting assistance changes eligibility immediately, so engine
+    // failure cannot reverse the game rule.
     final evaluationPersistence = markAsNotEvaluated();
 
     final position = state.position;
@@ -481,14 +472,14 @@ class GameController extends Notifier<GameState> {
       onTimeout: () async {
         await _abortHintAfterFailure(generation);
         throw TimeoutException(
-          'A dica excedeu o limite total de ${timeout.inSeconds}s',
+          'The hint exceeded the total timeout of ${timeout.inSeconds}s',
         );
       },
     );
     _hintInFlight = exposed;
 
-    // A limpeza deve acontecer para sucesso e erro, sem criar um Future de
-    // erro órfão (um risco comum ao usar `whenComplete` sem aguardar).
+    // Clean up on success and failure without creating an unobserved error
+    // future, as an unawaited `whenComplete` could do.
     unawaited(
       exposed.then<void>(
         (_) => _finishHint(exposed),
@@ -498,9 +489,9 @@ class GameController extends Notifier<GameState> {
     return exposed;
   }
 
-  /// Analisa a posição congelada em segundo plano, sem bloquear os lances.
-  /// Buscas obsoletas são descartadas; o singleton Stockfish recebe uma busca
-  /// por vez, inclusive quando uma dica é solicitada durante a análise.
+  /// Analyse the captured hypothetical opponent position without blocking
+  /// moves. Discard stale results and serialise Stockfish searches, including
+  /// hints requested during analysis.
   Future<ThreatResult> getOpponentThreats() {
     if (_promotionPending ||
         state.aiThinking ||
@@ -508,7 +499,9 @@ class GameController extends Notifier<GameState> {
         state.isAiTurn ||
         state.isGameOver ||
         state.position.isCheck) {
-      return Future.error(StateError('Análise indisponível nesta posição.'));
+      return Future.error(
+        StateError('Analysis is unavailable in this position.'),
+      );
     }
     final fen = state.position.fen;
     final pending = _threatInFlight;
@@ -543,15 +536,16 @@ class GameController extends Notifier<GameState> {
     return future;
   }
 
-  /// Cancela a entrega e as buscas na fila. A busca nativa em andamento termina
-  /// no seu limite de 1 segundo, evitando recriar o motor a cada lance.
+  /// Cancel result delivery and queued searches. An active native search runs
+  /// to its configured budget (normally one second), subject to service
+  /// timeouts; avoid recreating the engine after every move.
   void cancelOpponentThreats() {
     _threatGeneration++;
     final cancellation = _threatInFlight?.cancellation;
     _threatInFlight = null;
     if (cancellation != null && !cancellation.isCompleted) {
       cancellation.completeError(
-        const HintCancelledException('A posição das ameaças mudou.'),
+        const HintCancelledException('The opponent-plan position changed.'),
       );
     }
   }
@@ -565,7 +559,7 @@ class GameController extends Notifier<GameState> {
         state.aiThinking ||
         state.isAiTurn ||
         state.isGameOver) {
-      throw const HintCancelledException('A posição das ameaças mudou.');
+      throw const HintCancelledException('The opponent-plan position changed.');
     }
   }
 
@@ -603,7 +597,7 @@ class GameController extends Notifier<GameState> {
       } on HintCancelledException {
         rethrow;
       } catch (_) {
-        // Falhas das setas não descartam o Maia que pode estar respondendo.
+        // An analysis failure must not dispose Maia while it may be replying.
         final currentRequest =
             generation == _threatGeneration &&
             gameGeneration == _gameGeneration;
@@ -656,7 +650,7 @@ class GameController extends Notifier<GameState> {
       );
       _ensureHintActive(generation);
       final move = Move.parse(uci);
-      if (move is! NormalMove) throw StateError('Lance de dica inválido.');
+      if (move is! NormalMove) throw StateError('Invalid hint move.');
       final result = HintResult(
         fen: position.fen,
         move: move,
@@ -687,28 +681,28 @@ class GameController extends Notifier<GameState> {
     return uci;
   }
 
-  /// Converte um lance em UCI para SAN usando exatamente a posição congelada
-  /// no início da solicitação, nunca o estado mutável do fim do cálculo.
+  /// Convert UCI to SAN using the position captured at request time, never
+  /// the state at search completion.
   String _sanFor(Chess position, String uci) {
     final move = Move.parse(uci);
     if (move == null) {
-      throw StateError('Motor devolveu UCI inválido: "$uci"');
+      throw StateError('Engine returned invalid UCI: "$uci"');
     }
     try {
       final (_, san) = position.makeSan(move);
       return san;
     } on PlayException catch (error) {
       throw StateError(
-        'Motor devolveu lance ilegal "$uci" para ${position.fen}: $error',
+        'Engine returned illegal move "$uci" for ${position.fen}: $error',
       );
     }
   }
 
-  /// Reinicia a partida para a posição inicial, preservando o modo atual
-  /// (dois jogadores ou vs. IA, com o mesmo nível).
+  /// Restart from the initial position, preserving local/AI mode, level, and
+  /// campaign mode.
   Future<void> reset() async {
     final generation = ++_gameGeneration;
-    await _cancelHint('A partida foi reiniciada.');
+    await _cancelHint('The game was restarted.');
     if (!_isCurrentGame(generation)) return;
     if (state.aiThinking) {
       await _discardLc0();
@@ -725,9 +719,9 @@ class GameController extends Notifier<GameState> {
     await _maybePlayAiTurn();
   }
 
-  /// Repete uma resposta que falhou na posição atual, preservando a partida.
-  /// O caminho da busca descarta o motor com falha e carrega outro ao tentar
-  /// novamente. O bloqueio síncrono evita buscas duplicadas por toques rápidos.
+  /// Retry a failed AI reply without resetting the game. The failed engine is
+  /// replaced on retry; the synchronous thinking flag prevents duplicate
+  /// searches from rapid taps.
   Future<void> retryAiMove() async {
     if (state.engineError == null ||
         state.aiThinking ||
@@ -756,10 +750,10 @@ class GameController extends Notifier<GameState> {
       final uci = await _lc0!.getBestMove(fen, nodes: 1);
       final move = Move.parse(uci);
       if (move == null) {
-        throw StateError('lc0 devolveu um lance inválido: "$uci"');
+        throw StateError('lc0 returned an invalid move: "$uci"');
       }
-      // Além do modo/turno, confere a geração e a FEN para uma resposta
-      // atrasada jamais cair numa partida reiniciada.
+      // Check generation and FEN as well as turn, so a late reply cannot
+      // affect a restarted game.
       if (_isCurrentGame(gameGeneration) &&
           state.isAiTurn &&
           state.position.fen == fen) {
@@ -786,7 +780,7 @@ class GameController extends Notifier<GameState> {
 
   Future<void> _ensureEngineLoaded(int levelRating) async {
     if (_isDisposed) {
-      throw const HintCancelledException('Controller descartado');
+      throw const HintCancelledException('Controller disposed');
     }
     final disposal = _engineDisposal;
     if (disposal != null) await disposal;
@@ -797,7 +791,7 @@ class GameController extends Notifier<GameState> {
     _loadedLevelRating = null;
     await previous?.dispose();
     if (_isDisposed) {
-      throw const HintCancelledException('Controller descartado');
+      throw const HintCancelledException('Controller disposed');
     }
 
     final level = DifficultyLevel.byRating(levelRating);
@@ -806,11 +800,11 @@ class GameController extends Notifier<GameState> {
     try {
       final weightsPath = await ref.read(maiaWeightsResolverProvider)(level);
       if (!identical(_lc0, engine)) {
-        throw StateError('Motor Maia foi descartado durante a inicialização');
+        throw StateError('Maia engine was disposed during startup');
       }
       await engine.init(weightsPath);
       if (!identical(_lc0, engine) || !engine.isReady) {
-        throw StateError('Motor Maia não ficou pronto após a inicialização');
+        throw StateError('Maia engine was not ready after startup');
       }
       _loadedLevelRating = levelRating;
     } catch (_) {
@@ -823,23 +817,21 @@ class GameController extends Notifier<GameState> {
     }
   }
 
-  /// Prepara a NNUE no Android enquanto o jogador observa o tabuleiro ou
-  /// joga. Uma falha desta preparação opcional não interrompe a partida;
-  /// a próxima dica tenta inicializar o motor novamente.
+  /// Warm up Stockfish NNUE on Android while the player views or plays the
+  /// game. An optional warmup failure does not interrupt play; the next hint
+  /// retries startup.
   Future<void> _warmUpStockfish() async {
     if (!ref.read(stockfishWarmupEnabledProvider)) return;
     try {
       await _ensureStockfishLoaded();
     } on Object {
-      // _initializeStockfish já descartou o motor que falhou.
+      // _initializeStockfish has already disposed the failed engine.
     }
   }
 
   Future<StockfishEngine> _ensureStockfishLoaded() {
     if (_isDisposed) {
-      return Future.error(
-        const HintCancelledException('Controller descartado'),
-      );
+      return Future.error(const HintCancelledException('Controller disposed'));
     }
     final disposal = _engineDisposal;
     if (disposal != null) {
@@ -869,7 +861,7 @@ class GameController extends Notifier<GameState> {
     try {
       await engine.init();
       if (!identical(_stockfish, engine) || !engine.isReady) {
-        throw StateError('Stockfish foi descartado durante a inicialização');
+        throw StateError('Stockfish was disposed during startup');
       }
       return engine;
     } catch (_) {
@@ -883,7 +875,7 @@ class GameController extends Notifier<GameState> {
 
   void _ensureHintActive(int generation) {
     if (generation != _hintGeneration) {
-      throw const HintCancelledException('A dica foi cancelada.');
+      throw const HintCancelledException('The hint was cancelled.');
     }
   }
 
@@ -896,10 +888,10 @@ class GameController extends Notifier<GameState> {
     }
   }
 
-  /// Cancela a dica ao fechar a consulta, sair da tela ou suspender o app.
+  /// Cancel a pending hint on interaction, screen exit, or app suspension.
   Future<void> cancelHint() => _hintInFlight == null
       ? Future.value()
-      : _cancelHint('A dica foi cancelada.');
+      : _cancelHint('The hint was cancelled.');
 
   Future<void> _cancelHint(String reason) async {
     cancelOpponentThreats();
@@ -1011,7 +1003,7 @@ class GameController extends Notifier<GameState> {
       if (!_isDisposed && state.gameId == id) {
         state = state.copyWith(
           clearGameId: true,
-          persistenceError: 'Não foi possível iniciar o autosave: $error',
+          persistenceError: 'Could not start autosave: $error',
         );
       }
       return false;
@@ -1042,7 +1034,7 @@ class GameController extends Notifier<GameState> {
       });
     } catch (error) {
       if (!_isDisposed && state.gameId == snapshot.id) {
-        state = state.copyWith(persistenceError: 'Falha no autosave: $error');
+        state = state.copyWith(persistenceError: 'Autosave failed: $error');
       }
     }
   }
@@ -1056,7 +1048,7 @@ class GameController extends Notifier<GameState> {
     final id = snapshotState.gameId;
     final startedAt = snapshotState.startedAtUtc;
     if (id == null || startedAt == null) {
-      throw StateError('A partida ainda não possui identidade persistente.');
+      throw StateError('The game does not yet have a persistent ID.');
     }
     final now = DateTime.now().toUtc();
     final moves = <StoredGameMove>[];
@@ -1119,7 +1111,7 @@ class GameController extends Notifier<GameState> {
   GameTermination _termination(GameState game) =>
       game.termination ?? GameTermination.unknown;
 
-  /// Regrava explicitamente o estado atual; o autosave continua por lance.
+  /// Explicitly persist the current state; per-move autosave remains active.
   Future<void> saveGame() async {
     state = state.copyWith(clearPersistenceError: true);
     if (state.gameId == null &&
@@ -1129,15 +1121,16 @@ class GameController extends Notifier<GameState> {
     await _persistCurrentGame();
   }
 
-  /// Aguarda gravações pendentes; usado por testes e pelo encerramento
-  /// controlado de fluxos que precisam de durabilidade determinística.
+  /// Wait for queued writes, for tests and flows requiring deterministic
+  /// durability.
   Future<void> flushPersistence() => _persistenceTail;
 
-  /// Encerramento determinístico para testes de integração e outros fluxos
-  /// que precisam aguardar a liberação dos singletons FFI.
+  /// Await cancellation and engine cleanup for integration tests and other
+  /// flows using the native singletons. Service shutdown timeouts still
+  /// apply.
   Future<void> shutdownEngines() async {
     _gameGeneration++;
-    await _cancelHint('Os motores foram encerrados.');
+    await _cancelHint('The engines were shut down.');
     await _disposeEngines();
   }
 

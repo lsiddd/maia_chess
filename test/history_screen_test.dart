@@ -9,7 +9,7 @@ import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/features/history/presentation/history_screen.dart';
 
 void main() {
-  testWidgets('biblioteca lista e reproduz uma partida salva', (tester) async {
+  testWidgets('library lists and replays a saved game', (tester) async {
     final game = _savedGame();
     final repository = _SingleGameRepository(game);
     await tester.pumpWidget(
@@ -23,17 +23,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Partida local — empate'), findsOneWidget);
-    await tester.tap(find.textContaining('Partida local — empate'));
+    expect(find.textContaining('Local game — draw'), findsOneWidget);
+    await tester.tap(find.textContaining('Local game — draw'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Lance 0 de 2'),
+      find.text('Move 0 of 2'),
       200,
       scrollable: find.byType(Scrollable).last,
     );
-    expect(find.text('Lance 0 de 2'), findsOneWidget);
-    await tester.tap(find.byTooltip('Próximo'));
+    expect(find.text('Move 0 of 2'), findsOneWidget);
+    await tester.tap(find.byTooltip('Next'));
     await tester.pump();
     expect(find.text('1. e4'), findsOneWidget);
     String boardFen() => tester
@@ -41,16 +41,16 @@ void main() {
         .position
         .fen;
     expect(boardFen(), game.moves.first.fenAfter);
-    await tester.tap(find.byTooltip('Final'));
+    await tester.tap(find.byTooltip('End'));
     await tester.pumpAndSettle();
-    expect(find.text('Lance 2 de 2'), findsOneWidget);
+    expect(find.text('Move 2 of 2'), findsOneWidget);
     expect(boardFen(), game.currentFen);
-    await tester.tap(find.byTooltip('Anterior'));
+    await tester.tap(find.byTooltip('Previous'));
     await tester.pumpAndSettle();
     expect(boardFen(), game.moves.first.fenAfter);
-    await tester.tap(find.byTooltip('Início'));
+    await tester.tap(find.byTooltip('Start'));
     await tester.pumpAndSettle();
-    expect(find.text('Lance 0 de 2'), findsOneWidget);
+    expect(find.text('Move 0 of 2'), findsOneWidget);
     expect(boardFen(), game.initialFen);
   });
 }

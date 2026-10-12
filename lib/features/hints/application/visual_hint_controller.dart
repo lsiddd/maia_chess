@@ -9,7 +9,8 @@ final visualHintProvider =
       VisualHintController.new,
     );
 
-/// Guarda apenas a origem, sem expor destino ou notação à tela de partida.
+/// Keep only the suggested origin, exposing neither destination nor notation
+/// on the game screen.
 class VisualHintController extends AutoDisposeNotifier<Square?> {
   int _revision = 0;
   bool _disposed = false;

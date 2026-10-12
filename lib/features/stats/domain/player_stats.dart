@@ -1,9 +1,10 @@
 import 'dart:math' as math;
 
-/// Resultado de uma partida elegível, sempre do ponto de vista do jogador.
+/// Eligible game result from the human player perspective.
 enum PlayerGameOutcome { win, loss, draw }
 
-/// Projeção mínima de uma partida usada pelos cálculos da Fase 5.
+/// Minimal game projection used for rating, streaks, and campaign
+/// calculations.
 class EvaluatedGameSummary {
   const EvaluatedGameSummary({
     required this.gameId,
@@ -175,18 +176,16 @@ class CampaignWindowResult {
   final bool qualified;
 }
 
-/// Avalia todas as janelas móveis em ordem cronológica. Quando uma janela
-/// atinge o requisito, a conquista permanece verdadeira no restante do
-/// histórico.
+/// Evaluate rolling windows chronologically. Once a window qualifies, later
+/// results do not remove qualification. Deleting games still rebuilds from
+/// the remaining history.
 CampaignWindowResult evaluateCampaignWindow(
   Iterable<PlayerGameOutcome> outcomes, {
   required int winsRequired,
   required int windowSize,
 }) {
   if (winsRequired <= 0 || windowSize < winsRequired) {
-    throw ArgumentError(
-      'Regra de campanha inválida: $winsRequired/$windowSize',
-    );
+    throw ArgumentError('Invalid campaign rule: $winsRequired/$windowSize');
   }
 
   final window = <PlayerGameOutcome>[];

@@ -7,7 +7,7 @@ import 'package:maia_chess/features/tactics/domain/tactical_analysis.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Stockfish nativo: MultiPV dos dois lados e retorno à dica', (
+  testWidgets('native Stockfish: MultiPV for both sides and return to hints', (
     tester,
   ) async {
     final engine = StockfishService();

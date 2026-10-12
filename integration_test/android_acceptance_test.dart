@@ -1,4 +1,4 @@
-// Suíte consolidada: uma única compilação/instalação no emulador.
+// Consolidated suite: one build and installation on the emulator.
 import 'board_interaction_android_test.dart' as board;
 import 'phase_4_android_test.dart' as persistence;
 import 'phase_5_android_test.dart' as campaign;

@@ -2,21 +2,18 @@ import 'package:dartchess/dartchess.dart';
 
 import '../../../data/repositories/game_repository.dart';
 
-/// Resultado de uma partida, do ponto de vista de "quem ganhou" (não do
-/// jogador humano especificamente — isso é resolvido em `features/stats`
-/// cruzando com o lado escolhido pelo jogador).
+/// Game result by winning side. Player-relative outcomes are derived
+/// separately from the chosen side. Legacy enum names are retained for
+/// compatibility.
 enum GameResult { emAndamento, vitoriaBrancas, vitoriaPretas, empate }
 
-/// Estado imutável de uma partida em andamento.
+/// Immutable live game state, including terminal positions.
 ///
-/// [position] é a fonte da verdade das regras (pacote `dartchess`, ver
-/// ADR-004). [positionHistory] guarda as posições anteriores para permitir
-/// desfazer jogadas; [sanHistory] guarda a notação de cada lance já jogado
-/// para exibição na lista de lances.
+/// [position] supplies rules through `dartchess`; [positionHistory] supports
+/// undo and [sanHistory] supplies move notation.
 ///
-/// [aiSide] é `null` numa partida de dois humanos (Fase 1). Numa partida
-/// contra a IA (Fase 2), indica qual lado o motor lc0/Maia joga; o lado
-/// oposto é o do jogador humano.
+/// [aiSide] is null in local two-player games, otherwise it identifies Maia.
+/// The human plays the opposite side.
 class GameState {
   GameState({
     required this.position,
@@ -82,9 +79,7 @@ class GameState {
         uciHistory.length != length ||
         moveActorHistory.length != length ||
         moveTimeHistoryUtc.length != length) {
-      throw ArgumentError(
-        'Os históricos da partida devem ter o mesmo tamanho.',
-      );
+      throw ArgumentError('All game histories must have the same length.');
     }
   }
 
@@ -99,57 +94,52 @@ class GameState {
 
   final Chess position;
 
-  /// Posições anteriores (uma por lance jogado), na ordem em que ocorreram.
-  /// Usada para desfazer jogadas (`undo`).
+  /// Previous positions, one per played ply in chronological order, for undo.
   final List<Chess> positionHistory;
 
-  /// Notação SAN de cada lance já jogado (ex: "Cf3", "e4", "O-O").
+  /// SAN notation for each played move, such as `Nf3`, `e4`, or `O-O`.
   final List<String> sanHistory;
 
-  /// UCI é a representação canônica usada para reconstruir a partida.
+  /// Canonical UCI moves used to reconstruct the game.
   final List<String> uciHistory;
 
-  /// Origem de cada lance, alinhada aos demais históricos.
+  /// Actor for each move, aligned with the other histories.
   final List<GameMoveActor> moveActorHistory;
 
-  /// Instante UTC de cada lance, alinhado aos demais históricos.
+  /// UTC timestamp for each move, aligned with the other histories.
   final List<DateTime> moveTimeHistoryUtc;
 
-  /// Casa selecionada pelo jogador (para o fluxo "toque": seleciona a
-  /// origem, depois toca no destino). `null` se nada selecionado.
+  /// Selected origin in the tap-to-move flow, or null when nothing is
+  /// selected.
   final Square? selectedSquare;
 
-  /// `false` quando undo ou dica foram usados nesta partida — nesse caso a
-  /// partida entra no histórico mas fica fora do cálculo de rating/streaks
-  /// (ver seção 7 da especificação e `features/stats`).
+  /// False after assistance or undo. The game stays in the library but is
+  /// excluded from rating, streaks, and campaign progress.
   final bool evaluated;
 
-  /// Lado jogado pela IA (Maia via lc0). `null` = partida entre dois
-  /// jogadores humanos.
+  /// Side played by Maia via lc0, or null in local two-player games.
   final Side? aiSide;
 
-  /// Nível de dificuldade (1100-1900) da partida atual contra a IA, ou
-  /// `null` fora do modo vs. IA.
+  /// Maia level (1100–1900), or null outside AI play.
   final int? levelRating;
 
-  /// `true` enquanto o motor está calculando o próximo lance da IA — usado
-  /// para bloquear interação do jogador e mostrar indicador de progresso.
+  /// True while Maia calculates its next move; disables human moves and
+  /// drives the progress indicator.
   final bool aiThinking;
 
-  /// `true` enquanto uma dica está sendo calculada.
-  /// A posição fica bloqueada nesse intervalo para que a FEN consultada
-  /// pelos motores e a posição usada na conversão UCI -> SAN permaneçam
-  /// consistentes.
+  /// True while calculating a hint. Board interaction cancels the pending
+  /// hint; the result is validated against the captured request position.
   final bool hintThinking;
 
-  /// Mensagem de erro do motor (ex: falha ao carregar peso), ou `null`.
+  /// Engine error, such as a weights-loading failure, or null.
   final String? engineError;
 
-  /// Falha do autosave. Não é misturada aos erros dos motores para permitir
-  /// que a UI explique corretamente qual subsistema precisa de atenção.
+  /// Autosave failure, kept separate from engine errors so the UI identifies
+  /// the affected subsystem.
   final String? persistenceError;
 
-  /// Metadados do autosave da partida em andamento.
+  /// Autosave identity, mode, and stored clock metadata. Clock fields do not
+  /// imply a running game timer.
   final String? gameId;
   final DateTime? startedAtUtc;
   final bool campaignMode;
@@ -158,10 +148,9 @@ class GameState {
   final int? whiteTimeMs;
   final int? blackTimeMs;
 
-  /// A biblioteca de regras cobre mate, afogamento e material insuficiente,
-  /// mas deliberadamente não mantém histórico para repetição nem adjudica a
-  /// regra dos 50 lances. Essas duas regras dependentes da partida são
-  /// resolvidas aqui.
+  /// The rules library handles mate, stalemate, and insufficient material.
+  /// This state additionally adjudicates the fifty-move rule and threefold
+  /// repetition using game history.
   bool get isDrawByFiftyMoveRule => position.halfmoves >= 100;
 
   // Memoization is internal: every public field remains immutable. These
@@ -174,7 +163,7 @@ class GameState {
 
   bool _hasThreefoldRepetition() {
     final currentKey = _repetitionKey(position);
-    var occurrences = 1; // A posição atual não está em positionHistory.
+    var occurrences = 1; // The current position is not in positionHistory.
     for (final previous in positionHistory) {
       if (_repetitionKey(previous) == currentKey) {
         occurrences++;
@@ -193,10 +182,9 @@ class GameState {
     if (positionHistory.isEmpty) return false;
     if (aiSide == null) return true;
 
-    // Se a IA abriu de brancas e o humano ainda não jogou, não há uma
-    // decisão do jogador para desfazer. Permitir undo nesse ponto deixaria
-    // a posição inicial na vez da IA, mas sem disparar seu lance: um estado
-    // travado.
+    // If Maia opened as White and the human has not moved, there is no human
+    // decision to undo. Reverting the opening alone would leave the AI turn
+    // without triggering a reply.
     var index = positionHistory.length - 1;
     var previous = positionHistory[index];
     while (previous.turn == aiSide) {
@@ -207,7 +195,7 @@ class GameState {
     return true;
   }
 
-  /// Se a casa a mover agora é a da IA (bloqueia interação do jogador).
+  /// Whether the side to move is Maia, which blocks human moves.
   bool get isAiTurn => aiSide != null && position.turn == aiSide;
 
   GameResult get result {
@@ -227,10 +215,8 @@ class GameState {
         : GameResult.vitoriaPretas;
   }
 
-  /// Por que a partida terminou, ou `null` se ela ainda está em andamento.
-  ///
-  /// Xeque-mate prevalece sobre os contadores de empate. Repetição e a
-  /// regra dos 50 lances são adjudicadas aqui, além das regras da biblioteca.
+  /// Termination reason, or null while ongoing. Checkmate takes precedence
+  /// over draw counters; repetition and the fifty-move rule are handled here.
   GameTermination? get termination {
     if (!isGameOver) return null;
     if (position.isCheckmate) return GameTermination.checkmate;
@@ -245,24 +231,23 @@ class GameState {
     return GameTermination.unknown;
   }
 
-  /// Casas de destino legais a partir de [square], ou vazio se não houver
-  /// peça do lado a mover ali.
+  /// Legal destinations from [square], or none if it has no piece for the
+  /// side to move.
   Iterable<Square> legalDestinationsFrom(Square square) {
     final destinations =
         position.legalMoves[square]?.squares.toSet() ?? <Square>{};
 
-    // dartchess representa internamente o roque como rei -> torre para
-    // também suportar Chess960. A UI deste app é de xadrez clássico, onde o
-    // usuário naturalmente move o rei para g/c. Expomos os destinos
-    // convencionais e deixamos `makeSan` fazer a validação final.
+    // dartchess represents castling as king-to-rook for Chess960
+    // compatibility. This app uses standard chess destinations g/c, with
+    // final validation through `makeSan`.
     final piece = position.board.pieceAt(square);
     if (piece?.role == Role.king) {
       final rank = piece!.color == Side.white ? Rank.first : Rank.eighth;
       final kingSideRook = Square.fromCoords(File.h, rank);
       final queenSideRook = Square.fromCoords(File.a, rank);
-      // Um destino no canto também pode ser um passo normal do rei,
-      // inclusive uma fuga de xeque ou captura. Só converte rei -> torre
-      // quando a casa realmente contém uma torre da mesma cor.
+      // A corner can also be a normal king move, check escape, or capture.
+      // Convert king-to-rook only if the square actually holds a friendly
+      // rook.
       final ownRook = Piece(color: piece.color, role: Role.rook);
       if (position.board.pieceAt(kingSideRook) == ownRook &&
           destinations.remove(kingSideRook)) {
@@ -276,8 +261,7 @@ class GameState {
     return destinations;
   }
 
-  /// Se o lance de [from] para [to] exige escolha de peça de promoção
-  /// (peão alcançando a última fileira).
+  /// Whether a pawn move from [from] to [to] reaches a promotion rank.
   bool isPromotion(Square from, Square to) {
     final piece = position.board.pieceAt(from);
     if (piece == null || piece.role != Role.pawn) return false;
@@ -358,9 +342,8 @@ class GameState {
     return next;
   }
 
-  /// Identidade de posição usada pela regra de repetição: colocação das
-  /// peças, lado a jogar, direitos de roque e en passant legal. Relógios de
-  /// meio-lance/lance completo não fazem parte da identidade.
+  /// Repetition identity: piece placement, side to move, castling rights, and
+  /// legal en passant. Halfmove and fullmove counters are excluded.
   static String _repetitionKey(Chess position) =>
       position.fen.split(' ').take(4).join(' ');
 }

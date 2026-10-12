@@ -32,19 +32,19 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
         final replace = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Substituir partida em andamento?'),
+            title: const Text('Replace the ongoing game?'),
             content: const Text(
-              'A partida atual será removida do autosave quando a etapa da '
-              'campanha começar.',
+              'The current autosave will be removed when the campaign '
+              'level begins.',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
+                child: const Text('Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Começar campanha'),
+                child: const Text('Start campaign'),
               ),
             ],
           ),
@@ -66,7 +66,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
             content: Text(
               state.engineError ??
                   state.persistenceError ??
-                  'Não foi possível iniciar esta etapa.',
+                  'Could not start this level.',
             ),
           ),
         );
@@ -78,7 +78,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível iniciar esta etapa: $error')),
+        SnackBar(content: Text('Could not start this level: $error')),
       );
     } finally {
       if (mounted) setState(() => _startingRating = null);
@@ -89,7 +89,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
   Widget build(BuildContext context) {
     final progress = ref.watch(difficultyProgressProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Campanha Maia')),
+      appBar: AppBar(title: const Text('Maia campaign')),
       body: MaxWidthBody(
         child: progress.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -97,7 +97,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: ErrorStateCard(
-                message: 'Não foi possível abrir a campanha: $error',
+                message: 'Could not open the campaign: $error',
                 onRetry: () => ref.invalidate(difficultyProgressProvider),
               ),
             ),
@@ -176,7 +176,7 @@ class _CampaignHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'A escalada dos nove Maias',
+                      'Climb through all nine Maia levels',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
                             fontFamily: AppTypography.accentFontFamily,
@@ -185,8 +185,8 @@ class _CampaignHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Faça 2 vitórias em qualquer janela de 3 partidas '
-                      'avaliadas para abrir o próximo nível.',
+                      'Win 2 games in any window of 3 rated campaign games '
+                      'to unlock the next level.',
                     ),
                   ],
                 ),
@@ -194,19 +194,19 @@ class _CampaignHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Jogar de', style: Theme.of(context).textTheme.labelLarge),
+          Text('Play as', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 8),
           SegmentedButton<Side>(
             segments: const [
               ButtonSegment(
                 value: Side.white,
                 icon: Icon(Icons.circle_outlined),
-                label: Text('Brancas'),
+                label: Text('White'),
               ),
               ButtonSegment(
                 value: Side.black,
                 icon: Icon(Icons.circle),
-                label: Text('Pretas'),
+                label: Text('Black'),
               ),
             ],
             selected: {humanSide},
@@ -246,13 +246,13 @@ class _CampaignLevelCard extends StatelessWidget {
         ? colors.primary
         : colors.outline;
     final status = !progress.unlocked
-        ? 'Bloqueado'
+        ? 'Locked'
         : completed
         ? finalLevel
-              ? 'Campanha concluída'
-              : 'Etapa concluída'
-        : '${progress.validWins}/${progress.winsRequired} vitórias • '
-              '${progress.gamesInWindow}/${progress.windowSize} partidas';
+              ? 'Campaign completed'
+              : 'Level completed'
+        : '${progress.validWins}/${progress.winsRequired} wins • '
+              '${progress.gamesInWindow}/${progress.windowSize} games';
 
     return Semantics(
       label: 'Maia ${progress.rating}, $status',
@@ -370,9 +370,7 @@ class _CampaignLevelCard extends StatelessWidget {
                                     key: ValueKey('level-starting-icon'),
                                   ),
                           ),
-                          label: Text(
-                            completed ? 'Jogar novamente' : 'Jogar etapa',
-                          ),
+                          label: Text(completed ? 'Play again' : 'Play level'),
                         ),
                       ),
                     ],

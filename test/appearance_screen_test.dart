@@ -11,59 +11,61 @@ import 'package:maia_chess/features/settings/presentation/appearance_screen.dart
 import 'package:maia_chess/main.dart';
 
 void main() {
-  testWidgets('salva aparência, atualiza prévia e mantém relógio ao reabrir', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(400, 800);
-    addTearDown(tester.view.reset);
-    final repository = _SettingsRepository();
-    addTearDown(repository.updates.close);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          activeGameProvider.overrideWith((ref) => Stream.value(null)),
-          settingsRepositoryProvider.overrideWithValue(repository),
-        ],
-        child: const MaiaChessApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Aparência'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'saves appearance, updates preview, and preserves clock settings when reopened',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.reset);
+      final repository = _SettingsRepository();
+      addTearDown(repository.updates.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeGameProvider.overrideWith((ref) => Stream.value(null)),
+            settingsRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: const MaiaChessApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Appearance'));
+      await tester.pumpAndSettle();
 
-    final blue = find.byKey(const ValueKey('board-theme-blue'));
-    await tester.ensureVisible(blue);
-    await tester.tap(blue);
-    await tester.pumpAndSettle();
-    expect(repository.settings.boardTheme, BoardTheme.blue);
-    expect(repository.settings.defaultClockEnabled, isTrue);
-    expect(repository.settings.defaultTimeMinutes, 15);
-    final background = tester.widget<Image>(
-      find.byKey(const Key('chess-board-background')),
-    );
-    final image = (background.image as ResizeImage).imageProvider as AssetImage;
-    expect(image.assetName, BoardTheme.blue.assetPath);
+      final blue = find.byKey(const ValueKey('board-theme-blue'));
+      await tester.ensureVisible(blue);
+      await tester.tap(blue);
+      await tester.pumpAndSettle();
+      expect(repository.settings.boardTheme, BoardTheme.blue);
+      expect(repository.settings.defaultClockEnabled, isTrue);
+      expect(repository.settings.defaultTimeMinutes, 15);
+      final background = tester.widget<Image>(
+        find.byKey(const Key('chess-board-background')),
+      );
+      final image =
+          (background.image as ResizeImage).imageProvider as AssetImage;
+      expect(image.assetName, BoardTheme.blue.assetPath);
 
-    final selector = find.byType(DropdownButtonFormField<StoredThemeMode>);
-    await tester.ensureVisible(selector);
-    await tester.tap(selector);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Escuro').last);
-    await tester.pumpAndSettle();
-    expect(repository.settings.themeMode, StoredThemeMode.dark);
-    expect(Theme.of(tester.element(selector)).brightness, Brightness.dark);
+      final selector = find.byType(DropdownButtonFormField<StoredThemeMode>);
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dark').last);
+      await tester.pumpAndSettle();
+      expect(repository.settings.themeMode, StoredThemeMode.dark);
+      expect(Theme.of(tester.element(selector)).brightness, Brightness.dark);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Aparência'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('theme-mode-dark')), findsOneWidget);
-    expect(repository.settings.boardTheme, BoardTheme.blue);
-    expect(tester.takeException(), isNull);
-  });
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Appearance'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('theme-mode-dark')), findsOneWidget);
+      expect(repository.settings.boardTheme, BoardTheme.blue);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('aparência cabe em tela baixa com fonte ampliada', (
+  testWidgets('appearance fits a short screen with enlarged text', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;

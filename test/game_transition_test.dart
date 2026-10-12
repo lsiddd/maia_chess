@@ -11,7 +11,7 @@ import 'game_controller_test.dart' show FakeGameRepository, FakeLc0Engine;
 
 void main() {
   for (final response in ['saved', 'error', 'missing']) {
-    test('restauração atrasada ($response) preserva a partida nova', () async {
+    test('delayed restore ($response) preserves the new game', () async {
       final repository = _DelayedReadRepository();
       var nextId = 0;
       final container = ProviderContainer(
@@ -38,7 +38,7 @@ void main() {
         case 'saved':
           repository.delayedRead.complete(oldGame);
         case 'error':
-          repository.delayedRead.completeError(StateError('leitura falhou'));
+          repository.delayedRead.completeError(StateError('read failed'));
         case 'missing':
           repository.delayedRead.complete(null);
       }
@@ -54,42 +54,45 @@ void main() {
     });
   }
 
-  test('resposta do Maia após descarte não persiste outro lance', () async {
-    final answer = Completer<String>();
-    final searchStarted = Completer<void>();
-    final repository = FakeGameRepository();
-    final engine = FakeLc0Engine(
-      onMove: (_, _) {
-        searchStarted.complete();
-        return answer.future;
-      },
-    );
-    final container = ProviderContainer(
-      overrides: [
-        gameRepositoryProvider.overrideWithValue(repository),
-        maiaWeightsResolverProvider.overrideWithValue(
-          (level) async => level.weightsAsset,
-        ),
-        lc0EngineFactoryProvider.overrideWithValue(() => engine),
-        stockfishWarmupEnabledProvider.overrideWithValue(false),
-      ],
-    );
-    final controller = container.read(gameControllerProvider.notifier);
-    await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-    final pending = controller.attemptDragMove(
-      Square.e2,
-      Square.e4,
-      onPromotion: () async => null,
-    );
-    await searchStarted.future;
-    container.dispose();
-    answer.complete('e7e5');
-    await pending;
-    expect(repository.games.values.single.moves.map((move) => move.uci), [
-      'e2e4',
-    ]);
-    expect(engine.disposeCount, 1);
-  });
+  test(
+    'a Maia response after disposal does not persist another move',
+    () async {
+      final answer = Completer<String>();
+      final searchStarted = Completer<void>();
+      final repository = FakeGameRepository();
+      final engine = FakeLc0Engine(
+        onMove: (_, _) {
+          searchStarted.complete();
+          return answer.future;
+        },
+      );
+      final container = ProviderContainer(
+        overrides: [
+          gameRepositoryProvider.overrideWithValue(repository),
+          maiaWeightsResolverProvider.overrideWithValue(
+            (level) async => level.weightsAsset,
+          ),
+          lc0EngineFactoryProvider.overrideWithValue(() => engine),
+          stockfishWarmupEnabledProvider.overrideWithValue(false),
+        ],
+      );
+      final controller = container.read(gameControllerProvider.notifier);
+      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+      final pending = controller.attemptDragMove(
+        Square.e2,
+        Square.e4,
+        onPromotion: () async => null,
+      );
+      await searchStarted.future;
+      container.dispose();
+      answer.complete('e7e5');
+      await pending;
+      expect(repository.games.values.single.moves.map((move) => move.uci), [
+        'e2e4',
+      ]);
+      expect(engine.disposeCount, 1);
+    },
+  );
 }
 
 class _DelayedReadRepository extends FakeGameRepository {

@@ -1,40 +1,68 @@
-# Validação de interação — 19/09/2026
+# Interaction validation — 2026-09-19
 
-## Cobertura
+This is a historical measurement record. The coverage summary below reflects
+current regression targets; the profile figures remain those recorded on
+2026-09-19 and have not been remeasured by the English documentation migration.
 
-- Promoção por toque e arraste: peão no destino durante a escolha; confirmação, barreira, voltar, inversão, reinício e suspensão do app. Respostas atrasadas não alteram uma partida nova.
-- Desfazer: seleção, posição, histórico e camadas de animação sincronizados. Reprodução: início, próximo, anterior e final conferidos contra a FEN salva.
-- Encerramento: resultado persistente e motivo do empate; xeque-mate prevalece sobre o contador de 50 lances.
-- Dicas: fechar, voltar ou tocar fora aciona cancelamento; respostas atrasadas são descartadas e a interação volta a funcionar. A integração Android também verifica recarga do Maia após cancelar uma dica.
-- Arraste: inversão, mudança de posição, suspensão e cancelamento do ponteiro. Roque com rei e torre sincronizados; retorno de lance inválido sem duplicar a peça.
-- Rei em xeque: fugas e capturas legais nos quatro cantos, ambas as cores, orientações, toque e arraste.
+## Coverage
 
-## Performance
+- Tap and drag promotion: keep the pawn at its destination during selection;
+  cover confirmation, barrier dismissal, Back, rotation, restart, and app
+  suspension. Delayed choices cannot change a new game.
+- Undo: synchronise selection, position, history, and animation layers. Replay
+  checks start, next, previous, and final positions against saved FENs.
+- Game over: retain the result and draw reason; checkmate takes precedence over
+  the fifty-move counter.
+- Visual hints: repeated taps, board interaction, position changes, screen exit,
+  and suspension clear or cancel hints. Delayed results are discarded. Native
+  integration verifies that Maia can continue after cancellation. The former
+  dismissible hint dialog has been removed.
+- Drag: rotation, position changes, suspension, and pointer cancellation.
+  Castling synchronises king and rook; illegal drops return without duplication.
+- King in check: legal escapes and captures in all four corners, both colours
+  and orientations, using taps and drags.
 
-Flutter 3.47.4, modo **profile**, emulador Android 16/API 36 ARM64 (`maia_test`), tabuleiro de 320 pixels lógicos. Benchmark de 180 atualizações de ponteiro; 337 frames coletados pelo `watchPerformance`.
+## Recorded performance
 
-| Medida | Resultado |
-|---|---:|
-| Reconstruções de casas em 30 atualizações, antes | 1.920 |
-| Reconstruções de casas em 30 atualizações, depois | 0 |
-| Build médio / p99 / pior | 0,590 / 2,608 / 3,733 ms |
-| Frames acima do orçamento de build | 0 |
-| Raster médio / p99 / pior | 16,631 / 33,528 / 134,466 ms |
-| Frames acima do orçamento de raster | 178 de 337 |
+Flutter 3.47.4, **profile** mode, Android 16/API 36 ARM64 emulator (`maia_test`),
+320 logical-pixel board. The benchmark made 180 pointer updates and collected
+337 frames through `watchPerformance`.
 
-O `ValueNotifier` atualiza apenas as camadas móveis; a grade é reutilizada e tem um `RepaintBoundary`. A contagem de reconstruções é um teste de regressão em modo debug. Os tempos são uma amostra profile separada, depois de estabilizar o arraste.
+| Measurement | Result |
+| --- | ---: |
+| Square rebuilds in 30 updates, before | 1,920 |
+| Square rebuilds in 30 updates, after | 0 |
+| Mean / p99 / worst build time | 0.590 / 2.608 / 3.733 ms |
+| Frames over the build budget | 0 |
+| Mean / p99 / worst raster time | 16.631 / 33.528 / 134.466 ms |
+| Frames over the raster budget | 178 of 337 |
 
-O raster ainda apresenta atrasos neste emulador. Estes números não comprovam fluidez em aparelho físico; a medição física permanece pendente por falta de aparelho conectado.
+A `ValueNotifier` updates only moving layers; the grid is reused and has a
+`RepaintBoundary`. Rebuild counts come from a debug regression test. Timings
+come from a separate profile sample after the drag settled. The raw JSON for
+this older 337-frame sample is not tracked; the
+[later profile record](performance/board-profile.json) contains 253 frames.
 
-## Reproduzir
+Raster delays remain in this emulator. These figures do not establish smooth
+rendering on physical hardware; physical-device measurement was not available
+for the original report.
+
+## Reproduce current checks
+
+Use the [README toolchain](../README.md#set-up-and-run), substitute a connected
+Android device ID for `DEVICE`, and run targets sequentially:
 
 ```sh
 flutter test --coverage
 flutter analyze --no-fatal-infos
 dart format --output=none --set-exit-if-changed lib test integration_test test_driver
 python3 -m unittest discover -s scripts -p 'test_*.py'
-flutter test integration_test -d DEVICE
+flutter test integration_test/android_acceptance_test.dart -d DEVICE
+flutter test integration_test/phase_0_3_android_test.dart -d DEVICE
 flutter drive --profile --no-dds --driver=test_driver/performance.dart --target=integration_test/board_performance_test.dart -d DEVICE
 ```
 
-O benchmark só executa em profile; a execução comum de integração o ignora. `--no-dds` permite que a coleta de timeline se conecte diretamente ao serviço da VM. O driver salva os dados brutos em `build/board_performance.json`.
+The benchmark skips non-profile runs. `--no-dds` lets timeline collection connect
+directly to the VM service. The driver writes `build/board_performance.json`.
+New runs measure the current code; they do not reproduce the old commit or
+emulator conditions automatically.

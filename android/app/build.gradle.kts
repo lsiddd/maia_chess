@@ -7,19 +7,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Assinatura de release (ver AUDITORIA_TECNICA.md, AUD-006, e ADR.md):
-// android/app/key.properties nunca é commitado (ver .gitignore). Gere um
-// keystore próprio com:
+// Release signing: see docs/android-releases.md.
+// Keep android/app/key.properties and the keystore out of version control.
+// Generate a dedicated key with:
 //
 //   keytool -genkeypair -v -keystore android/app/release-keystore.jks \
 //     -alias maia_chess_release -keyalg RSA -keysize 2048 -validity 10000
 //
-// e crie android/app/key.properties com:
+// Then create android/app/key.properties with:
 //
 //   storeFile=release-keystore.jks
-//   storePassword=<senha do keystore>
+//   storePassword=<keystore password>
 //   keyAlias=maia_chess_release
-//   keyPassword=<senha da chave>
+//   keyPassword=<key password>
 val keystorePropertiesFile = rootProject.file("app/key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 val keystoreProperties = Properties()
@@ -30,8 +30,7 @@ if (hasReleaseKeystore) {
 android {
     namespace = "com.maiachess.maia_chess"
     compileSdk = flutter.compileSdkVersion
-    // Fixado na versão exigida pelo plugin leela_chess_zero (lc0 via FFI/CMake).
-    // Ver ADR.md - "Escolha de ABIs e versão do NDK".
+    // Match the lc0 plugin's FFI/CMake toolchain.
     ndkVersion = "28.2.13676358"
 
     compileOptions {
@@ -44,19 +43,17 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.maiachess.maia_chess"
-        // minSdk 24 é exigido pelo motor lc0 (pacote leela_chess_zero). Ver ADR.md.
+        // lc0 requires Android API 24 or later.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         ndk {
-            // arm64-v8a: dispositivos reais modernos. x86_64: emuladores (dev/CI).
-            // armeabi-v7a fica de fora porque o motor lc0 (leela_chess_zero) só builda
-            // para arm64-v8a/x86_64 upstream. Ver ADR.md.
-            // Flutter configura splits por ABI quando essa opção é ligada.
-            // O AGP rejeita combinar splits com filtros em defaultConfig.
+            // arm64-v8a for devices; x86_64 for development emulators.
+            // The lc0 plugin enables only these 64-bit ABIs.
+            // Flutter configures ABI splits itself when requested; AGP rejects
+            // combining those splits with defaultConfig ABI filters.
             if (project.findProperty("split-per-abi") != "true") {
                 abiFilters += listOf("arm64-v8a", "x86_64")
             }
@@ -76,19 +73,15 @@ android {
 
     buildTypes {
         release {
-            // Usa a chave de release dedicada quando android/app/key.properties
-            // existir (gerado localmente, nunca commitado). Sem esse arquivo,
-            // cai de volta para a chave de debug — como antes, para que
-            // `flutter run --release` continue funcionando sem setup extra em
-            // ambiente de desenvolvimento — mas avisa no configure do Gradle
-            // para isso não passar despercebido numa build para distribuição.
+            // Local release builds fall back to debug signing when no dedicated
+            // key is configured. CI requires release signing for publication.
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
                 logger.warn(
-                    "AVISO: android/app/key.properties nao encontrado; build " +
-                        "de release assinada com a chave de DEBUG. Ver ADR.md " +
-                        "(assinatura de release) antes de distribuir o APK."
+                    "WARNING: android/app/key.properties is missing; release " +
+                        "build uses the DEBUG signing key. See docs/android-releases.md " +
+                        "before distributing the APK."
                 )
                 signingConfigs.getByName("debug")
             }

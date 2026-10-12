@@ -1,4 +1,4 @@
-// Regressão do antigo modal: assistência agora é exclusivamente visual.
+// Regression for the former dialog: hints are now exclusively visual.
 import 'dart:async';
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
@@ -12,47 +12,45 @@ import 'support_game_settings.dart';
 import 'opponent_threats_test.dart' show PositionedController;
 
 void main() {
-  testWidgets('dica em posição terminal informa sem consultar motor', (
-    tester,
-  ) async {
-    final settings = MemorySettings();
-    final container = ProviderContainer(
-      overrides: [
-        settingsRepositoryProvider.overrideWithValue(settings),
-        gameControllerProvider.overrideWith(
-          () => PositionedController('4k3/8/8/8/8/8/8/4K3 b - - 0 1'),
+  testWidgets(
+    'a hint in a terminal position reports no move without querying the engine',
+    (tester) async {
+      final settings = MemorySettings();
+      final container = ProviderContainer(
+        overrides: [
+          settingsRepositoryProvider.overrideWithValue(settings),
+          gameControllerProvider.overrideWith(
+            () => PositionedController('4k3/8/8/8/8/8/8/4K3 b - - 0 1'),
+          ),
+          stockfishEngineFactoryProvider.overrideWithValue(
+            () => throw StateError('Must not start'),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await settings.close();
+      });
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: GameScreen()),
         ),
-        stockfishEngineFactoryProvider.overrideWithValue(
-          () => throw StateError('Não deve iniciar'),
-        ),
-      ],
-    );
-    addTearDown(() async {
-      container.dispose();
-      await settings.close();
-    });
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: GameScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final rect = tester.getRect(find.byKey(const Key('chess-board')));
-    await tester.tap(find.byKey(const Key('hint-button')));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Partida encerrada: não há lance disponível.'),
-      findsOneWidget,
-    );
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(tester.getRect(find.byKey(const Key('chess-board'))), rect);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+      );
+      await tester.pumpAndSettle();
+      final rect = tester.getRect(find.byKey(const Key('chess-board')));
+      await tester.tap(find.byKey(const Key('hint-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Game over: no move is available.'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.getRect(find.byKey(const Key('chess-board'))), rect);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
-    'dica sem modal nem destino, loading estável e remoção por interação',
+    'hint has no dialog or destination, stable loading, and clears on interaction',
     (tester) async {
       final reply = Completer<String>();
       final settings = MemorySettings();

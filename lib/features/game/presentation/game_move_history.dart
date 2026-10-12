@@ -77,7 +77,7 @@ class _GameMoveHistoryState extends State<GameMoveHistory> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                recent.isEmpty ? 'Jogadas · Nenhum lance' : recent.join(' · '),
+                recent.isEmpty ? 'Moves · No moves yet' : recent.join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -90,7 +90,7 @@ class _GameMoveHistoryState extends State<GameMoveHistory> {
   }
 }
 
-/// Revisão isolada: navegar pelo histórico não altera a partida em andamento.
+/// Independent history review that never changes the live game.
 class _HistoryReview extends StatefulWidget {
   const _HistoryReview({
     required this.game,
@@ -149,7 +149,7 @@ class _HistoryReviewState extends State<_HistoryReview> {
                   _scroll.jumpTo(_scroll.position.maxScrollExtent);
                 }
               },
-              child: const Text('Posição atual'),
+              child: const Text('Current position'),
             );
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -160,7 +160,7 @@ class _HistoryReviewState extends State<_HistoryReview> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Jogadas',
+                          'Moves',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontWeight: FontWeight.w700),
@@ -168,7 +168,7 @@ class _HistoryReviewState extends State<_HistoryReview> {
                       ),
                       if (!separateActions) currentPosition,
                       IconButton(
-                        tooltip: 'Fechar histórico',
+                        tooltip: 'Close history',
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close),
                       ),
@@ -193,7 +193,7 @@ class _HistoryReviewState extends State<_HistoryReview> {
         Expanded(
           flex: 2,
           child: game.sanHistory.isEmpty
-              ? const Center(child: Text('Ainda não houve nenhum lance.'))
+              ? const Center(child: Text('No moves have been played yet.'))
               : ListView.builder(
                   controller: _scroll,
                   itemExtent: 48,

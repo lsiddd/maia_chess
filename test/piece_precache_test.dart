@@ -4,14 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:maia_chess/core/constants/piece_assets.dart';
 
-/// O primeiro desenho de cada peça exige ler o asset e parsear o SVG. Se
-/// isso só acontecesse quando o tabuleiro aparece, a decodificação cairia no
-/// primeiro quadro da partida e no primeiro arraste, causando engasgo.
+/// Precache SVGs so first rendering does not decode assets on the first game
+/// frame or drag.
 void main() {
   setUp(svg.cache.clear);
   tearDown(svg.cache.clear);
 
-  testWidgets('pré-carrega os SVGs das 12 peças no cache do flutter_svg', (
+  testWidgets('precaches SVGs for all 12 pieces in the flutter_svg cache', (
     tester,
   ) async {
     expect(svg.cache.count, 0);
@@ -30,7 +29,7 @@ void main() {
 
     await precachePieceSvgs(capturedContext);
 
-    // 6 papéis × 2 cores, cada um com sua própria entrada de cache.
+    // Six roles in two colours, each with its own cache entry.
     expect(svg.cache.count, 12);
   });
 }

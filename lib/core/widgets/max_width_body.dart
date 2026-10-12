@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Limita a largura do conteúdo em telas largas (tablets, paisagem),
-/// evitando que listas e botões estiquem até a borda. Em telas estreitas
-/// o conteúdo já ocupa a largura toda normalmente, então não há efeito
-/// visível.
+/// Limit content width on tablets and landscape screens so lists and buttons
+/// remain readable. Narrow screens use the available width.
 class MaxWidthBody extends StatelessWidget {
   const MaxWidthBody({required this.child, super.key, this.maxWidth = 640});
 

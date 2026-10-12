@@ -17,7 +17,7 @@ import '../test/game_controller_test.dart' show FakeGameRepository;
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'profile: latência da dica com motores Android reais',
+    'profile: hint latency with real Android engines',
     (tester) async {
       final maia = Lc0Service();
       final stockfish = StockfishService();
@@ -59,8 +59,8 @@ void main() {
       }
 
       Future<void> sequentialHint() async {
-        // Reproduz a implementação anterior: Maia, inicialização do
-        // Stockfish (quando necessária) e busca de 1500ms, nessa ordem.
+        // Reproduce the former hint implementation: Maia, Stockfish startup
+        // when needed, then a 1500 ms search.
         final position = Chess.initial;
         final maiaUci = await maia.getBestMove(position.fen, nodes: 1);
         if (!stockfish.isReady) await stockfish.init();
@@ -82,7 +82,7 @@ void main() {
 
       try {
         metrics['maia_initialization_ms'] = await measure(newGame);
-        // Aquecimento do Maia, igual nas duas medições com Stockfish frio.
+        // Warm up Maia identically in both measurements with cold Stockfish.
         await maia.getBestMove(Chess.initial.fen, nodes: 1);
         metrics['sequential_cold_ms'] = await measure(sequentialHint);
         final sequentialWarm = <double>[];
@@ -96,7 +96,7 @@ void main() {
         metrics['cached_ms'] = await measure(optimizedHint);
         final parallelWarm = <double>[];
         for (var sample = 0; sample < 3; sample++) {
-          // Nova partida invalida o cache da dica, mas reutiliza os motores.
+          // A new game invalidates the hint cache but reuses the engines.
           await newGame();
           parallelWarm.add(await measure(optimizedHint));
         }
@@ -114,7 +114,7 @@ void main() {
           final deadline = Stopwatch()..start();
           while (!stockfish.isReady) {
             if (deadline.elapsed > const Duration(seconds: 60)) {
-              fail('Preparação do Stockfish não terminou a tempo');
+              fail('Stockfish warmup did not finish in time');
             }
             await Future<void>.delayed(const Duration(milliseconds: 10));
           }

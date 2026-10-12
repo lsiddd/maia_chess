@@ -17,7 +17,7 @@ class StatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(playerStatsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Meu desempenho')),
+      appBar: AppBar(title: const Text('My performance')),
       body: MaxWidthBody(
         child: stats.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -25,7 +25,7 @@ class StatsScreen extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: ErrorStateCard(
-                message: 'Não foi possível calcular as estatísticas: $error',
+                message: 'Could not calculate statistics: $error',
                 onRetry: () => ref.invalidate(playerStatsProvider),
               ),
             ),
@@ -58,18 +58,18 @@ class _StatsBody extends StatelessWidget {
                 Expanded(
                   child: _MetricCard(
                     icon: Icons.local_fire_department_outlined,
-                    label: 'Sequência atual',
+                    label: 'Current streak',
                     value: '${stats.currentStreak}',
-                    suffix: 'vitórias',
+                    suffix: 'wins',
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: _MetricCard(
                     icon: Icons.emoji_events_outlined,
-                    label: 'Recorde',
+                    label: 'Best streak',
                     value: '${stats.recordStreak}',
-                    suffix: 'vitórias',
+                    suffix: 'wins',
                   ),
                 ),
               ],
@@ -80,7 +80,7 @@ class _StatsBody extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 22, 16, 8),
           sliver: SliverToBoxAdapter(
             child: Text(
-              'Placar por nível',
+              'Results by level',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontFamily: AppTypography.accentFontFamily,
                 fontWeight: FontWeight.w700,
@@ -132,7 +132,7 @@ class _RatingHero extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'RATING ESTIMADO',
+            'ESTIMATED RATING',
             style: theme.textTheme.labelLarge?.copyWith(
               letterSpacing: 1.5,
               color: colors.onPrimaryContainer.withValues(alpha: 0.72),
@@ -154,7 +154,7 @@ class _RatingHero extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 7),
                 child: Text(
-                  '${stats.evaluatedGames} partidas avaliadas',
+                  '${stats.evaluatedGames} rated games',
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
@@ -172,8 +172,8 @@ class _RatingHero extends StatelessWidget {
               child: const Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Termine uma partida avaliada contra o Maia para iniciar '
-                  'sua linha de evolução.',
+                  'Complete a rated game against Maia to start '
+                  'your rating history.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -181,8 +181,8 @@ class _RatingHero extends StatelessWidget {
           else
             Semantics(
               label:
-                  'Gráfico de evolução com ${stats.ratingHistory.length} '
-                  'pontos; rating atual ${stats.estimatedRating.round()}',
+                  'Rating chart with ${stats.ratingHistory.length} '
+                  'points; current rating ${stats.estimatedRating.round()}',
               child: SizedBox(
                 height: 190,
                 width: double.infinity,
@@ -293,13 +293,13 @@ class _LevelScoreCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${results.total} partidas',
+                          '${results.total} games',
                           style: theme.textTheme.labelLarge,
                         ),
                       ),
                       Text(
-                        '${results.wins}V  ${results.draws}E  '
-                        '${results.losses}D',
+                        '${results.wins}W  ${results.draws}D  '
+                        '${results.losses}L',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],

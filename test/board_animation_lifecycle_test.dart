@@ -64,7 +64,7 @@ void main() {
   final drag = find.byKey(const Key('board-drag-layer'));
 
   test(
-    'resposta de promoção atrasada não modifica partida reiniciada',
+    'a delayed promotion response does not modify a restarted game',
     () async {
       final container = ProviderContainer(
         overrides: [
@@ -96,7 +96,7 @@ void main() {
     },
   );
 
-  testWidgets('desfazer limpa seleção, histórico e posição visual juntos', (
+  testWidgets('undo clears selection, history, and visual position together', (
     tester,
   ) async {
     final container = await mount(tester);
@@ -133,7 +133,7 @@ void main() {
       'background',
     ]) {
       testWidgets(
-        'promoção mantém peão no destino: drag=$dragPromotion, $action',
+        'promotion keeps the pawn at the destination: drag=$dragPromotion, $action',
         (tester) async {
           final position = Chess.fromSetup(
             Setup.parseFen('7k/P7/8/8/8/8/8/7K w - - 0 1'),
@@ -160,7 +160,7 @@ void main() {
             await tester.tap(square(0, 0));
           }
           await tester.pumpAndSettle();
-          expect(find.text('Promover peão para'), findsOneWidget);
+          expect(find.text('Promote pawn to'), findsOneWidget);
           final preview = find.byKey(const Key('board-promotion-piece'));
           expect(tester.getCenter(preview), destination);
           expect(find.byKey(const ValueKey('board-piece-1-0')), findsNothing);
@@ -170,7 +170,7 @@ void main() {
           );
           switch (action) {
             case 'choose':
-              await tester.tap(find.byTooltip('Dama'));
+              await tester.tap(find.byTooltip('Queen'));
             case 'outside':
               await tester.tapAt(const Offset(5, 5));
             case 'back':
@@ -186,7 +186,7 @@ void main() {
           }
           await tester.pumpAndSettle();
           expect(preview, findsNothing);
-          expect(find.text('Promover peão para'), findsNothing);
+          expect(find.text('Promote pawn to'), findsNothing);
           final result = container.read(gameControllerProvider);
           if (action == 'choose') {
             expect(result.position.board.pieceAt(Square.a8)?.role, Role.queen);
@@ -210,7 +210,7 @@ void main() {
   }
 
   for (final cancel in ['flip', 'background', 'reset', 'move', 'pointer']) {
-    testWidgets('arraste cancelado com segurança: $cancel', (tester) async {
+    testWidgets('drag is safely cancelled: $cancel', (tester) async {
       final orientation = ValueNotifier(Side.white);
       addTearDown(orientation.dispose);
       final container = await mount(tester, orientation: orientation);
@@ -257,33 +257,34 @@ void main() {
     });
   }
 
-  testWidgets('retorno ilegal parte da soltura, sem peça duplicada na origem', (
-    tester,
-  ) async {
-    await mount(tester);
-    final origin = tester.getCenter(square(6, 4));
-    final release = tester.getCenter(square(3, 4));
-    final gesture = await tester.startGesture(origin);
-    await gesture.moveTo(release);
-    await tester.pumpAndSettle();
-    await gesture.up();
-    await tester.pump();
-    Finder flyingPiece() =>
-        find.descendant(of: slide, matching: find.byType(ChessPieceWidget));
-    expect(tester.getCenter(flyingPiece()), release);
-    expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(tester.getCenter(flyingPiece()).dy, greaterThan(release.dy));
-    expect(tester.getCenter(flyingPiece()).dy, lessThan(origin.dy));
-    await tester.pumpAndSettle();
-    expect(slide, findsNothing);
-    expect(find.byType(ChessPieceWidget), findsNWidgets(32));
-  });
+  testWidgets(
+    'illegal move returns from the release point without duplicating the piece',
+    (tester) async {
+      await mount(tester);
+      final origin = tester.getCenter(square(6, 4));
+      final release = tester.getCenter(square(3, 4));
+      final gesture = await tester.startGesture(origin);
+      await gesture.moveTo(release);
+      await tester.pumpAndSettle();
+      await gesture.up();
+      await tester.pump();
+      Finder flyingPiece() =>
+          find.descendant(of: slide, matching: find.byType(ChessPieceWidget));
+      expect(tester.getCenter(flyingPiece()), release);
+      expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.getCenter(flyingPiece()).dy, greaterThan(release.dy));
+      expect(tester.getCenter(flyingPiece()).dy, lessThan(origin.dy));
+      await tester.pumpAndSettle();
+      expect(slide, findsNothing);
+      expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+    },
+  );
 
   for (final side in [Side.white, Side.black]) {
     for (final queenSide in [false, true]) {
       testWidgets(
-        'roque sincroniza rei e torre: $side, longo=$queenSide; undo limpa voo',
+        'castling synchronises king and rook: $side, queenside=$queenSide; undo clears flight',
         (tester) async {
           final position = Chess.fromSetup(
             Setup.parseFen(

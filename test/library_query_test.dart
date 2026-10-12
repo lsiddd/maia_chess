@@ -11,7 +11,7 @@ import 'support_sql_counter.dart';
 void main() {
   for (final count in [3, 20, 1100]) {
     test(
-      'biblioteca com $count partidas usa duas consultas e preserva lances',
+      'library with $count games uses two queries and preserves moves',
       () async {
         final counter = SqlCounter();
         final database = AppDatabase.forTesting(
@@ -75,7 +75,7 @@ void main() {
     );
   }
 
-  test('biblioteca vazia não consulta lances', () async {
+  test('empty library does not query moves', () async {
     final counter = SqlCounter();
     final database = AppDatabase.forTesting(
       NativeDatabase.memory().interceptWith(counter),

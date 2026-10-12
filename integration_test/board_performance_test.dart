@@ -11,7 +11,7 @@ import 'package:maia_chess/features/game/presentation/chess_board_widget.dart';
 //   --target=integration_test/board_performance_test.dart -d DEVICE
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('profile: tempo de frame durante arraste', (tester) async {
+  testWidgets('profile: frame timing during drag', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: MaterialApp(

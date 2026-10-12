@@ -1,141 +1,92 @@
-# LeelaChessZero (lc0)
+# Leela Chess Zero Flutter plugin
 
-The Leela Chess Zero (lc0) neural network chess engine for Flutter.
+This repository vendors a local fork of `leela_chess_zero` 1.0.0. It exposes lc0
+through Dart FFI and UCI on Android and iOS. Maia Chess uses its Android build
+for opponent moves; the application's Stockfish service handles assistance.
+The local copy is not interchangeable with the hosted package without reviewing
+its native modifications and packaging.
 
-## About
+## Requirements and dependency
 
-Leela Chess Zero (lc0) is an open-source chess engine that uses deep neural networks to evaluate positions. It's based on the same approach as AlphaZero, using Monte Carlo Tree Search (MCTS) guided by a neural network.
+- Android: API 24+, ARM64 or x86_64, JDK 17, SDK 36, NDK 28.2.13676358,
+  CMake 3.22.1. CMake fetches Eigen 3.4.0 during setup.
+- The plugin also contains iOS configuration for iOS 13+, CocoaPods, and C++20.
+  That target is separate from the Android-only main app and is not checked by
+  its CI.
+- A neural-network weights file at an absolute filesystem path.
 
-## Requirements
-
-- iOS: `IPHONEOS_DEPLOYMENT_TARGET` >= 13.0
-- Android: `minSdkVersion` >= 24
-- Neural network weights file (see below)
-
-## Installation
-
-Add dependency to `pubspec.yaml`:
+The main app declares the fork from the repository root:
 
 ```yaml
 dependencies:
-  LeelaChessZero: ^1.0.0
+  leela_chess_zero:
+    path: native/leela_chess_zero
 ```
 
-## Usage
-
-### Initialize engine
+Use the actual package name in imports:
 
 ```dart
-import 'package:LeelaChessZero/lc0.dart';
-
-// create a new instance
-final lc0 = Lc0();
-
-// state is a ValueListenable<Lc0State>
-print(lc0.state.value); // Lc0State.starting
-
-// the engine takes a few moments to start
-await Future.delayed(...)
-print(lc0.state.value); // Lc0State.ready
+import 'package:leela_chess_zero/lc0.dart';
 ```
 
-### Async initialization
+## API and readiness
+
+`Lc0(weightsPath: path)` starts asynchronously. `lc0Async(weightsPath: path)` waits
+for native bootstrap and returns the same kind of engine. Both expose
+`state` (`ValueListenable<Lc0State>`), `stdout` (`Stream<String>`), and the `stdin`
+setter. The states are `starting`, `ready`, `disposed`, and `error`.
+
+Native `ready` means the isolates have started. It does **not** establish that
+weights have loaded. Subscribe before sending `isready`, wait for `readyok`, then
+search. For example, inside an async function with an existing absolute weights
+path:
 
 ```dart
-// Wait for engine to be ready
-final lc0 = await lc0Async();
+final engine = await lc0Async(weightsPath: weightsPath);
+final ready = engine.stdout
+    .firstWhere((line) => line.trim() == 'readyok')
+    .timeout(const Duration(seconds: 120));
+engine.stdin = 'isready';
+await ready;
+
+final reply = engine.stdout
+    .firstWhere((line) => line.startsWith('bestmove '))
+    .timeout(const Duration(seconds: 10));
+engine.stdin = 'position startpos moves e2e4';
+engine.stdin = 'go nodes 1';
+final bestMoveLine = await reply;
 ```
 
-### UCI commands
+This fragment illustrates command ordering, not a complete lifecycle manager.
+Callers must handle timeouts, cancel output subscriptions, and send `stop` or
+dispose after a failed search before reusing the engine. Maia Chess provides
+those behaviours in
+[`Lc0Service`](../../lib/engine_ffi/lc0_engine/lc0_service.dart).
 
-Waits until the state is ready before sending commands.
+Only one native instance is allowed at a time. `dispose()` sends `quit` and
+returns immediately; wait for `disposed` or `error` before constructing another
+instance. Sending commands, including `quit`, while still starting or after
+shutdown throws. The package has no force-kill API. Hot reload does not replace
+explicit lifecycle management.
 
-```dart
-lc0.stdin = 'uci';
-lc0.stdin = 'setoption name WeightsFile value /path/to/weights.pb.gz';
-lc0.stdin = 'position startpos moves e2e4 e7e5';
-lc0.stdin = 'go nodes 1000';
-lc0.stdin = 'stop';
-```
+## Weights and assets
 
-Engine output is directed to a `Stream<String>`:
+The plugin itself declares **no weights asset**. The host chooses and bundles
+its networks. Maia Chess declares nine `.pb.gz` files under
+`assets/maia_weights/`; `Lc0Service.extractWeightsAsset` copies the selected file
+to application support storage before initialisation. No runtime download is
+needed.
 
-```dart
-lc0.stdout.listen((line) {
-  print(line);
-});
-```
+The [standalone example](example/README.md) declares its own
+`assets/weights/maia-1900.pb.gz`. The former implicit key
+`packages/leela_chess_zero/assets/weights/maia-1900.pb.gz` is unavailable in this
+fork. Consumers relying on it must declare their own asset. See the
+[Maia provenance notice](../../assets/maia_weights/NOTICE.md).
 
-### Dispose / Hot reload
+## Native maintenance
 
-```dart
-// sends the UCI quit command
-lc0.stdin = 'quit';
-
-// or even easier...
-lc0.dispose();
-```
-
-**Note:** Only one instance can be created at a time. The factory method `Lc0()` will throw `StateError` if called when an existing instance is active.
-
-## Neural Network Weights
-
-Unlike Stockfish which embeds evaluation weights at compile time, lc0 requires you to provide a neural network weights file at runtime.
-
-### Weights in this vendored copy
-
-The standalone example includes **Maia-1900** weights (~1.2MB), from the [maia-chess project](https://github.com/CSSLab/maia-chess). This vendored plugin does not bundle the file automatically: the host application declares its chosen weights in its own `pubspec.yaml`. Maia Chess already bundles all nine networks, including Maia 1900, under `assets/maia_weights/`.
-
-The standalone example explicitly declares `assets/weights/maia-1900.pb.gz` in its own `pubspec.yaml`. The previous implicit package asset key is no longer available. In Maia Chess, copy the application asset to a writable location:
-
-```dart
-import 'dart:io';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-
-Future<String> extractWeights() async {
-  final dir = await getApplicationDocumentsDirectory();
-  final weightsPath = '${dir.path}/maia-1900.pb.gz';
-
-  if (!await File(weightsPath).exists()) {
-    final data = await rootBundle.load('assets/maia_weights/maia-1900.pb.gz');
-    await File(weightsPath).writeAsBytes(data.buffer.asUint8List());
-  }
-
-  return weightsPath;
-}
-
-// Then configure lc0:
-final weightsPath = await extractWeights();
-lc0.stdin = 'setoption name WeightsFile value $weightsPath';
-```
-
-### Loading custom weights
-
-```dart
-lc0.stdin = 'setoption name WeightsFile value /path/to/weights.pb.gz';
-```
-
-### Other recommended networks
-
-| Network                        | Size    | Strength   | Notes                               |
-| ------------------------------ | ------- | ---------- | ----------------------------------- |
-| [Maia](https://maiachess.com/) | ~1-10MB | Human-like | Plays like humans at various levels |
-| T80                            | ~15MB   | Strong     | Good balance of strength/speed      |
-
-Download networks from [lczero.org](https://lczero.org/play/networks/) or [maiachess.com](https://maiachess.com/).
-
-## Differences from Stockfish
-
-| Aspect     | lc0             | Stockfish             |
-| ---------- | --------------- | --------------------- |
-| Evaluation | Neural network  | NNUE + classical      |
-| Search     | MCTS            | Alpha-beta            |
-| Weights    | Runtime loaded  | Compile-time embedded |
-| Speed      | Slower per node | Faster per node       |
-| Style      | More strategic  | More tactical         |
-
-## Credits
-
-- [Leela Chess Zero](https://lczero.org/) - The lc0 project and team
-- [LeelaChessZero/lc0](https://github.com/LeelaChessZero/lc0) - Source repository
+[architecture.md](architecture.md) describes private UCI pipes shared by the
+platform builds, the Android BLAS/Eigen backend, iOS build configuration, and
+protobuf header regeneration. [CHANGELOG.md](CHANGELOG.md) distinguishes local
+changes from the inherited release history. The plugin's
+[GPL-3.0 licence](LICENSE) and upstream notices remain intact.

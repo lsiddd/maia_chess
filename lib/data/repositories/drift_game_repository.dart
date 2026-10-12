@@ -72,10 +72,10 @@ class DriftGameRepository implements GameRepository {
         _db.games,
       )..where((row) => row.id.equals(game.id))).getSingleOrNull();
       if (existing == null) {
-        throw StateError('Autosave inexistente: ${game.id}');
+        throw StateError('Autosave not found: ${game.id}');
       }
       if (existing.status != StoredGameStatus.ongoing.name) {
-        throw StateError('Não é permitido sobrescrever partida finalizada.');
+        throw StateError('A completed game cannot be overwritten.');
       }
       await _replaceSnapshot(game);
     });
@@ -84,14 +84,14 @@ class DriftGameRepository implements GameRepository {
   @override
   Future<bool> completeGame(StoredGame game) {
     if (game.status != StoredGameStatus.completed) {
-      throw ArgumentError('A partida deve estar finalizada.');
+      throw ArgumentError('The game must be completed.');
     }
     return _db.transaction(() async {
       final existing = await (_db.select(
         _db.games,
       )..where((row) => row.id.equals(game.id))).getSingleOrNull();
       if (existing == null) {
-        throw StateError('Autosave inexistente: ${game.id}');
+        throw StateError('Autosave not found: ${game.id}');
       }
       if (existing.status == StoredGameStatus.completed.name) {
         return false;
@@ -106,14 +106,16 @@ class DriftGameRepository implements GameRepository {
   @override
   Future<void> importGame(StoredGame game) {
     if (game.status != StoredGameStatus.completed) {
-      throw ArgumentError('PGN importado deve ser arquivado como finalizado.');
+      throw ArgumentError(
+        'An imported PGN must be archived as a completed game.',
+      );
     }
     return _db.transaction(() async {
       final existing = await (_db.select(
         _db.games,
       )..where((row) => row.id.equals(game.id))).getSingleOrNull();
       if (existing != null) {
-        throw StateError('Já existe uma partida com o ID ${game.id}.');
+        throw StateError('A game with ID ${game.id} already exists.');
       }
       await _insertSnapshot(game);
     });
@@ -207,7 +209,7 @@ class DriftGameRepository implements GameRepository {
       _db.games,
     )..where((row) => row.id.equals(game.id))).write(_gameCompanion(game));
     if (changed != 1) {
-      throw StateError('Falha ao atualizar a partida ${game.id}.');
+      throw StateError('Failed to update game ${game.id}.');
     }
     final existing =
         await (_db.select(_db.gameMoves)
@@ -292,7 +294,7 @@ class DriftGameRepository implements GameRepository {
 
   void _requireOngoing(StoredGame game) {
     if (game.status != StoredGameStatus.ongoing) {
-      throw ArgumentError('O autosave deve estar em andamento.');
+      throw ArgumentError('The autosave must be ongoing.');
     }
   }
 }
@@ -301,5 +303,5 @@ T _enumByName<T extends Enum>(Iterable<T> values, String name, String field) {
   for (final value in values) {
     if (value.name == name) return value;
   }
-  throw FormatException('Valor persistido inválido para $field: "$name"');
+  throw FormatException('Invalid stored value for $field: "$name"');
 }

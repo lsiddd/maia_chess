@@ -6,18 +6,21 @@ import 'package:maia_chess/features/tactics/domain/tactical_analysis.dart';
 Chess position(String fen) => Chess.fromSetup(Setup.parseFen(fen));
 
 void main() {
-  test('identifica peças atacadas dos dois lados, inclusive defendidas', () {
-    final board = position('4k3/8/2p5/3p4/4P3/5P2/8/4K3 w - - 0 1');
-    expect(attackedPieces(board), {Square.e4, Square.d5});
-    expect(attackedPieces(Chess.initial), isEmpty);
-  });
+  test(
+    'identifies attacked pieces on both sides, including defended pieces',
+    () {
+      final board = position('4k3/8/2p5/3p4/4P3/5P2/8/4K3 w - - 0 1');
+      expect(attackedPieces(board), {Square.e4, Square.d5});
+      expect(attackedPieces(Chess.initial), isEmpty);
+    },
+  );
 
-  test('peões atacam diagonais, nunca a peça bloqueando seu avanço', () {
+  test('pawns attack diagonally, never the piece blocking their advance', () {
     final board = position('4k3/8/8/4p3/4P3/8/8/4K3 w - - 0 1');
     expect(attackedPieces(board), isEmpty);
   });
 
-  test('respeita bloqueios e inclui ataques de peças cravadas', () {
+  test('respects blockers and includes attacks by pinned pieces', () {
     final board = position('4k3/8/8/8/8/3p4/4N3/4K2r w - - 0 1');
     expect(attackedPieces(board), containsAll([Square.e2, Square.e1]));
     final pinned = position('4r1k1/8/8/8/8/2p5/4N3/4K3 w - - 0 1');
@@ -26,14 +29,17 @@ void main() {
     expect(attackedPieces(blocked), isNot(contains(Square.e2)));
   });
 
-  test('marca vítima de en passant legal mas não en passant cravado', () {
-    final board = position('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1');
-    expect(attackedPieces(board), contains(Square.d5));
-    final pinned = position('4r1k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1');
-    expect(attackedPieces(pinned), isNot(contains(Square.d5)));
-  });
+  test(
+    'marks the victim of legal en passant but excludes pinned en passant',
+    () {
+      final board = position('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1');
+      expect(attackedPieces(board), contains(Square.d5));
+      final pinned = position('4r1k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1');
+      expect(attackedPieces(pinned), isNot(contains(Square.d5)));
+    },
+  );
 
-  test('simular turno preserva tabuleiro e roque, limpa en passant', () {
+  test('simulated turn preserves board and castling and clears en passant', () {
     final original = position('r3k2r/8/8/3pP3/8/8/8/R3K2R w KQkq d6 0 10');
     final simulated = opponentThreatPosition(original);
     expect(simulated.turn, Side.black);
@@ -45,27 +51,30 @@ void main() {
     expect(opponentThreatPosition(simulated).turn, Side.white);
   });
 
-  test('não envia ao motor uma posição impossível quando há xeque', () {
+  test('does not send an impossible position to the engine while in check', () {
     final board = position('4r1k1/8/8/8/8/8/8/4K3 w - - 0 1');
     expect(() => opponentThreatPosition(board), throwsStateError);
   });
 
-  test('converte promoção e mate em SAN e mantém avaliação do adversário', () {
-    final board = position('7k/P7/6K1/8/8/8/8/8 w - - 0 1');
-    final result = ThreatResult.fromLines(board, [
-      StockfishLine(rank: 1, depth: 8, moves: ['a7a8q'], mate: 1),
-    ]);
-    expect(result.threats.single.san, 'a8=Q#');
-    expect(result.threats.single.scoreLabel, 'Mate em 1');
-    expect(
-      () => ThreatResult.fromLines(board, [
-        StockfishLine(rank: 1, depth: 8, moves: ['a7a5'], centipawns: 0),
-      ]),
-      throwsA(isA<PlayException>()),
-    );
-  });
+  test(
+    'converts promotion and mate to SAN and preserves the opponent score',
+    () {
+      final board = position('7k/P7/6K1/8/8/8/8/8 w - - 0 1');
+      final result = ThreatResult.fromLines(board, [
+        StockfishLine(rank: 1, depth: 8, moves: ['a7a8q'], mate: 1),
+      ]);
+      expect(result.threats.single.san, 'a8=Q#');
+      expect(result.threats.single.scoreLabel, 'Mate in 1');
+      expect(
+        () => ThreatResult.fromLines(board, [
+          StockfishLine(rank: 1, depth: 8, moves: ['a7a5'], centipawns: 0),
+        ]),
+        throwsA(isA<PlayException>()),
+      );
+    },
+  );
 
-  test('parser reconhece score cp/mate e ignora bounds e mensagens', () {
+  test('parser recognises cp/mate scores and ignores bounds and messages', () {
     final cp = StockfishLine.parse(
       'info depth 12 seldepth 18 multipv 2 score cp -35 nodes 10 pv e7e5 g1f3',
     )!;
@@ -89,7 +98,7 @@ void main() {
     }
   });
 
-  test('MultiPV mantém última profundidade completa sem misturar ranks', () {
+  test('MultiPV keeps the latest complete depth without mixing ranks', () {
     final collector = StockfishAnalysisCollector(3);
     for (var rank = 1; rank <= 3; rank++) {
       collector.add(
@@ -109,12 +118,15 @@ void main() {
     ]);
   });
 
-  test('MultiPV suporta menos de três variantes e descarta duplicatas', () {
-    final collector = StockfishAnalysisCollector(3);
-    collector.add('info depth 8 multipv 1 score cp 20 pv e7e5');
-    collector.add('info depth 8 multipv 2 score cp 15 pv d7d5');
-    collector.add('info depth 9 multipv 1 score cp 30 pv e7e5');
-    collector.add('info depth 9 multipv 2 score cp 10 pv e7e5');
-    expect(collector.lines.map((line) => line.depth), [8, 8]);
-  });
+  test(
+    'MultiPV supports fewer than three variations and discards duplicates',
+    () {
+      final collector = StockfishAnalysisCollector(3);
+      collector.add('info depth 8 multipv 1 score cp 20 pv e7e5');
+      collector.add('info depth 8 multipv 2 score cp 15 pv d7d5');
+      collector.add('info depth 9 multipv 1 score cp 30 pv e7e5');
+      collector.add('info depth 9 multipv 2 score cp 10 pv e7e5');
+      expect(collector.lines.map((line) => line.depth), [8, 8]);
+    },
+  );
 }

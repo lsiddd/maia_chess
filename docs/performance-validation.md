@@ -1,100 +1,190 @@
-# Validação da auditoria — 11/10/2026
+# Performance audit validation — 2026-10-11
 
-## Alterações e regressões verificadas
+This historical report preserves the original measurements and validation
+results. It is not a claim that the English migration reran these benchmarks.
+Current migration checks and limitations are recorded in
+[documentation-audit.md](documentation-audit.md).
 
-- Transições: uma restauração atrasada, inclusive com erro, não substitui uma partida nova; uma resposta Maia após descarte não persiste lances. Os botões de abertura bloqueiam chamadas simultâneas antes do primeiro `await`.
-- Biblioteca: duas consultas SELECT para 3, 20 e 1.100 partidas; uma para biblioteca vazia. Antes, três partidas exigiam quatro SELECT. Os testes conferem ordenação dos lances e reprodução da FEN.
-- Autosave: histórico inalterado não exclui nem reinsere lances; acréscimo grava somente o novo lance; desfazer substitui apenas o sufixo. Uma falha SQLite provocada por trigger comprova rollback da posição e dos lances. Comparação de datas respeita a precisão configurada do Drift.
-- PGN: leitura/decodificação e validação usam isolates em Android. A API síncrona continua disponível. Comentários, variantes, tags, FEN e erros são preservados; uma sequência de 4.000 lances passa pela validação iterativa.
-- Estado: `copyWith` reutiliza históricos imutáveis não alterados. Término e repetição são memorizados e invalidados quando posição ou histórico mudam. Entradas públicas continuam copiadas; os testes verificam isolamento de listas mutáveis, seleção, desfazer, repetição e mate.
-- Estatísticas: consultas, mapeamento, cálculo e geração dos batches usam `computeWithDatabase` com a conexão existente, inclusive na transação de conclusão/exclusão. Os testes verificam visibilidade de dados ainda não commitados, rollback de conclusão + rating quando a projeção falha e notificações entre conexões, inclusive resultado alterado sem mudar a quantidade de partidas.
+## Changes and verified regressions
 
-## Diagnóstico, causa raiz, prioridade e riscos
+- **Transitions:** a delayed restore, including an error, cannot replace a new
+  game; a Maia response after disposal cannot persist another move. Opening
+  controls reject concurrent requests before the first `await`.
+- **Library:** two SELECT queries for 3, 20, and 1,100 games; one for an empty
+  library. Previously, three games required four SELECTs. Tests check move
+  ordering and replayed FENs.
+- **Autosave:** unchanged history is neither deleted nor reinserted; appending
+  writes only the new move; undo replaces only the changed suffix. A SQLite
+  trigger-induced failure verifies rollback of position and moves. Timestamp
+  comparison respects Drift's configured precision.
+- **PGN:** Android file reading/decoding and validation run on isolates. The
+  synchronous API remains available. Comments, variations, tags, FEN, and errors
+  are preserved; iterative validation handles a sequence of 4,000 plies.
+- **State:** `copyWith` reuses unchanged immutable histories. Termination and
+  repetition are memoised and invalidated when position or history changes.
+  Public inputs remain copied; tests cover mutable-list isolation, selection,
+  undo, repetition, and mate.
+- **Statistics:** queries, mapping, calculation, and batch generation use
+  `computeWithDatabase` on the existing connection, including completion/deletion
+  transactions. Tests cover uncommitted-data visibility, rollback of completion
+  and rating on projection failure, and cross-connection notifications when a
+  result changes without changing the game count.
 
-| Prioridade / esforço relativo | Causa comprovada e local | Efeito da solução / risco |
-|---|---|---|
-| P1 / médio | `GameController.restoreActiveGame` aplicava a leitura sem validar a geração após o `await`; aberturas simultâneas podiam disputar o controlador | Respostas antigas são descartadas e aberturas são bloqueadas enquanto pendentes; uma operação superada retorna sem abrir uma tela |
-| P2 / baixo | `DriftGameRepository.watchLibrary` hidratava cada partida com uma consulta adicional | Duas consultas no total; a biblioteca ainda materializa todo o histórico, portanto paginação continua relevante para volumes muito maiores |
-| P2 / médio | `_replaceSnapshot` excluía e reinseria todos os lances até quando só metadados mudavam | Somente o sufixo modificado é escrito; há uma SELECT adicional para comparar o histórico, preservando a transação |
-| P2 / médio | A tela de importação executava parsing, replay SAN e validação de variantes na isolate principal; a validação recursiva crescia por lance | Trabalho movido para workers e travessia iterativa; criação/transporte da isolate têm custo fixo |
-| P2 / médio | `GameState.copyWith` copiava cinco históricos e `isGameOver` repetia a varredura de FEN em seleções | Históricos compartilhados apenas quando imutáveis e cache invalidado por posição/histórico; duas flags internas adicionais por estado |
-| P2 / baixo | O app e o plugin empacotavam bytes idênticos do Maia 1900 | Duplicata removida, sem alterar motores ou pesos da aplicação; a chave de asset implícita do fork deixa de existir |
-| P2 / médio | SQLite já executava em background, mas mapeamento, projeção e montagem de batches de estatísticas permaneciam na isolate principal | Worker compartilha a conexão/transação; menor bloqueio da isolate principal, com custo de comunicação e maior duração total de reconstrução |
+## Diagnosis, root causes, priorities, and risks
 
-MVVM com Riverpod, repositories e Drift foi mantida. Nenhuma dependência, migração de schema ou regra de rating/campanha foi alterada. Layout e temas foram preservados; os controles de abertura ficam temporariamente bloqueados durante a operação. Cada melhoria tem seu próprio commit; a reversão deve considerar os helpers de testes compartilhados.
+| Priority / relative effort | Confirmed cause | Result / remaining risk |
+| --- | --- | --- |
+| P1 / medium | `restoreActiveGame` applied reads without validating generation after `await`; concurrent launches could compete for the controller | Discard stale responses and block pending launches; superseded requests return without opening a screen |
+| P2 / low | `watchLibrary` hydrated each game with another query | Two queries total; the library still materialises all history, so pagination remains relevant at much larger volumes |
+| P2 / medium | `_replaceSnapshot` deleted and reinserted all moves even for metadata-only updates | Write only the changed suffix; one extra SELECT compares history inside the existing transaction |
+| P2 / medium | Import parsing, SAN replay, and recursive variation validation ran on the UI isolate | Workers and iterative traversal; isolate creation and transport have fixed costs |
+| P2 / medium | `copyWith` copied five histories and `isGameOver` repeated FEN scans during selection | Share only immutable histories and invalidate cached facts by position/history; two additional internal flags per state |
+| P2 / low | App and plugin bundled identical Maia 1900 bytes | Remove duplicate without changing app weights; the fork's implicit package asset key is removed |
+| P2 / medium | SQLite ran in the background, but statistics mapping, projection, and batch construction used the UI isolate | Share connection/transaction with a worker; lower UI blocking at the cost of communication and longer total rebuild time |
 
-## Medição comparável em profile
+Riverpod controllers, repositories, and Drift were retained. This change set
+added no dependency, schema migration, or rating/campaign rule. Layout and themes
+were preserved; opening controls are temporarily disabled during launch. Each
+improvement has its own commit; reverts should account for shared test helpers.
 
-Flutter 3.47.4 / Dart 3.13.3; Android API 36 x86_64, AVD `human_chess_phase0_api36`, renderização SwiftShader. Mesmo emulador, SDK, fixtures determinísticas e modo profile. Seis amostras por operação; a primeira foi descartada. Nenhuma outra suíte ou compilação foi executada simultaneamente às medições.
+## Comparable profile measurements
 
-Referência: código de produção no commit `bed03de`, antes das mudanças de PGN e `GameState`. Depois: `b2941c5` com a alteração de `GameState` deste conjunto. O harness é `integration_test/audit_performance_android_test.dart`; na referência, a chamada era síncrona (`parseImport` sem `await`), como na tela de importação original.
+Flutter 3.47.4 / Dart 3.13.3; Android API 36 x86_64, AVD
+`human_chess_phase0_api36`, SwiftShader rendering. The same emulator, SDK,
+deterministic fixtures, and profile mode were used. Six samples per operation,
+with the first discarded. No other suite or build ran during measurement.
 
-| Medida (mediana de cinco amostras) | Antes | Depois |
-|---|---:|---:|
-| 500 seleções + `isGameOver`, histórico de 80 lances | 250,529 ms | 1,020 ms |
-| Importação/validação PGN, 1.000 lances, duração total | 59,990 ms | 51,372 ms |
-| Maior intervalo do timer da isolate principal durante importação | 61,934 ms | 9,781 ms |
+Baseline: production code at `bed03de`, before the PGN and `GameState` changes.
+After: `b2941c5` plus the `GameState` change later committed as `5a5392e`. Harness:
+`integration_test/audit_performance_android_test.dart`. The baseline used
+synchronous `parseImport`, matching the original import screen.
 
-O timer tem período de 2 ms e mede intervalos observados, incluindo agendamento, GC e transporte entre isolates; não mede diretamente frames. Os resultados comprovam ganho nestes cenários neste emulador. Não permitem afirmar redução de RAM, bateria, tempo de inicialização ou latência de dispositivos físicos. A criação de uma isolate tem custo fixo; arquivos pequenos podem ter maior latência total.
+| Measurement (median of five samples) | Before | After |
+| --- | ---: | ---: |
+| 500 selections + `isGameOver`, history of 80 plies | 250.529 ms | 1.020 ms |
+| PGN import/validation, 1,000 plies, total duration | 59.990 ms | 51.372 ms |
+| Largest UI-isolate timer gap during import | 61.934 ms | 9.781 ms |
 
-Dados brutos: [antes](performance/audit-before.json), [depois](performance/audit-after.json).
+The 2 ms timer measures observed intervals, including scheduling, GC, and
+inter-isolate transport; it does not directly measure frames. Results establish
+improvement in these scenarios on this emulator, not RAM, battery, startup, or
+physical-device latency improvements. Small files may have higher total latency
+because isolate startup has a fixed cost.
 
-## Estatísticas com históricos maiores
+Raw data: [before](performance/audit-before.json),
+[after](performance/audit-after.json).
 
-O benchmark `integration_test/stats_performance_android_test.dart` usa SQLite em arquivo temporário com `NativeDatabase.createInBackground`, como a aplicação, 1.000/5.000 partidas avaliadas e seis amostras por cenário (primeira descartada). Mesmo SDK, emulador e fixture antes/depois; sem compilação ou outra suíte simultânea. Antes: `675b592`; depois: implementação do worker de estatísticas deste conjunto.
+## Statistics with larger histories
 
-| Partidas / operação | Tempo total antes → depois | Maior intervalo do timer, antes → depois |
-|---|---:|---:|
-| 1.000 / reconstrução transacional | 101,452 → 143,582 ms | 18,259 → 15,567 ms |
-| 1.000 / leitura do snapshot | 32,884 → 30,182 ms | 15,660 → 5,697 ms |
-| 5.000 / reconstrução transacional | 118,246 → 135,134 ms | 30,423 → 11,776 ms |
-| 5.000 / leitura do snapshot | 92,423 → 93,381 ms | 27,735 → 9,706 ms |
+`integration_test/stats_performance_android_test.dart` uses a temporary SQLite
+file with `NativeDatabase.createInBackground`, as the app does, 1,000/5,000 rated
+games, and six samples per scenario (first discarded). SDK, emulator, and
+fixtures match before/after; no concurrent builds or suites. Before: `675b592`;
+after: the statistics worker later committed as `6ece385`.
 
-O ganho medido é de responsividade da isolate principal, com maior duração total na reconstrução. Há custo fixo de criar a isolate e comunicar com a conexão compartilhada. O algoritmo de rating, as regras da campanha e a reconstrução integral continuam iguais; não houve migração de schema nem cálculo incremental de Elo. O observador usa uma consulta leve para receber estado inicial e notificações de `games`/`rating_history`, e lê o snapshot no worker.
+| Games / operation | Total time before → after | Largest timer gap before → after |
+| --- | ---: | ---: |
+| 1,000 / transactional rebuild | 101.452 → 143.582 ms | 18.259 → 15.567 ms |
+| 1,000 / snapshot read | 32.884 → 30.182 ms | 15.660 → 5.697 ms |
+| 5,000 / transactional rebuild | 118.246 → 135.134 ms | 30.423 → 11.776 ms |
+| 5,000 / snapshot read | 92.423 → 93.381 ms | 27.735 → 9.706 ms |
 
-[Dados antes](performance/stats-before.json) / [depois](performance/stats-after.json). O timer também observa GC/agendamento, inclusive durante a breve espera após a operação; não é uma medição de frames. A ligação de banco entre isolates segue a [API oficial do Drift](https://drift.simonbinder.eu/isolates/#simple-sharing), confirmada no código instalado da versão 2.34.3. A atomicidade foi verificada no projeto com uma falha SQLite induzida no worker.
+The measured gain is UI-isolate responsiveness, with longer total rebuild time.
+Worker startup and shared-connection communication have fixed costs. The rating
+algorithm, campaign rules, and full reconstruction remain unchanged; there is no
+incremental Elo calculation or schema migration. A lightweight observer query
+receives initial state and `games`/`rating_history` notifications, then reads the
+snapshot on a worker.
 
-## Renderização
+[Before data](performance/stats-before.json) /
+[after data](performance/stats-after.json). The timer also observes GC and
+scheduling during a short wait after each operation; it is not a frame measure.
+Connection sharing follows the [Drift API](https://drift.simonbinder.eu/isolates/#simple-sharing),
+verified against installed Drift 2.34.3 code. An induced SQLite worker failure
+verified transaction atomicity.
 
-A medição independente de arraste coletou 253 frames: build médio 0,389 ms, p99 1,913 ms, nenhum acima do orçamento; raster médio 24,973 ms, p99 47,365 ms, 229 acima do orçamento. [Dados brutos](performance/board-profile.json).
+## Rendering
 
-O atraso de raster continua presente no emulador com GPU por software. Não há comparação antes/depois de raster neste conjunto e não foi alterada a aparência do tabuleiro. O diagnóstico em aparelho físico permanece pendente.
+A separate drag measurement collected 253 frames: mean build 0.389 ms, p99
+1.913 ms, none over budget; mean raster 24.973 ms, p99 47.365 ms, 229 over budget.
+[Raw data](performance/board-profile.json).
 
-## Tamanho e empacotamento Android
+Raster delay remains on the software-GPU emulator. This change set has no
+before/after raster comparison and did not change board appearance. Physical
+hardware diagnosis remains outstanding.
 
-No estágio de remoção da duplicata (`5a5392e` → `675b592`), dois builds consecutivos com o mesmo SDK, código Dart/nativo, configuração e comando `flutter build apk --release --split-per-abi --target-platform android-arm64`:
+## Android size and packaging
 
-| APK ARM64 | Bytes |
-|---|---:|
-| Antes da remoção da duplicata | 152.001.006 |
-| Depois | 150.737.798 |
-| Redução | 1.263.208 |
+At duplicate removal (`5a5392e` → `675b592`), two consecutive builds used the
+same SDK, Dart/native code, configuration, and command:
+`flutter build apk --release --split-per-abi --target-platform android-arm64`.
 
-O plugin vendorizado deixou de declarar o asset Maia 1900; o arquivo e sua declaração foram movidos para o exemplo, que agora usa um asset próprio. O bundle do exemplo foi compilado e contém os bytes corretos no caminho declarado. A aplicação continua usando `assets/maia_weights/maia-1900.pb.gz`. Consumidores externos deste fork que usassem a chave implícita `packages/leela_chess_zero/assets/weights/maia-1900.pb.gz` precisam declarar seus próprios pesos, conforme o README do plugin.
+| ARM64 APK | Bytes |
+| --- | ---: |
+| Before duplicate removal | 152,001,006 |
+| After | 150,737,798 |
+| Reduction | 1,263,208 |
 
-Os nove pesos da aplicação e todas as bibliotecas `.so`, inclusive `libapp.so`, são idênticos entre os APKs. A redução resulta da duplicata e dos metadados correspondentes. [Comparação instrumentada](performance/apk-size.json). `libstockfish.so` continua sendo o maior componente; alterar sua NNUE exigiria uma validação separada da qualidade de análise.
+The vendored plugin stopped declaring Maia 1900 as its asset; the file and
+declaration moved into the example, which now declares its own asset. The
+example bundle was built and contained the correct bytes at its declared path.
+The app continues using `assets/maia_weights/maia-1900.pb.gz`. External users of
+this fork's former implicit key
+`packages/leela_chess_zero/assets/weights/maia-1900.pb.gz` must declare their own
+weights, as described in the [plugin README](../native/leela_chess_zero/README.md).
 
-`verify_apk.py`, verificação da assinatura com `apksigner`, alinhamento ZIP via `zipalign -c -P 16 4` e inspeção dos segmentos ELF LOAD passaram. Todas as sete bibliotecas ARM64 têm alinhamento ELF de pelo menos 16 KB. Os scripts possuem dez testes passando, incluindo rejeição da duplicata do plugin.
+All nine app networks and every `.so`, including `libapp.so`, were identical
+between those APKs. The reduction comes from duplicate bytes and associated
+metadata. [Instrumented comparison](performance/apk-size.json).
+`libstockfish.so` remains the largest component; changing its NNUE would need
+separate analysis-quality validation.
 
-O build local utiliza a chave de debug prevista pela configuração existente, pois não há `android/app/key.properties`. Os APKs servem à validação local; a assinatura de distribuição não foi exercitada. O SDK também emitiu avisos de futura descontinuação de suporte a AGP 8.11.1 e Kotlin 2.2.20; os builds concluíram sem erro.
+The original run passed `verify_apk.py`, `apksigner`, `zipalign -c -P 16 4`, and
+ELF LOAD segment inspection. All seven ARM64 libraries had at least 16 KB ELF
+alignment. Ten Python tests passed, including duplicate-network rejection.
 
-## Validação final do conjunto
+Local builds used the configured debug-key fallback because no
+`android/app/key.properties` was present. Distribution-key signing was not
+exercised. The SDK warned about future AGP 8.11.1 and Kotlin 2.2.20 support
+changes; builds completed successfully.
 
-- `dart format --output=none --set-exit-if-changed lib test integration_test test_driver`: 96 arquivos, nenhuma alteração necessária.
-- `flutter analyze`: nenhuma ocorrência. `flutter test --coverage`: 239 testes passando. Os três testes do worker foram repetidos após o ajuste final de lint e passaram.
-- Scripts Python: dez testes passando.
-- Android API 36: 75 testes da suíte consolidada passaram novamente após o worker de estatísticas. Mais dois testes nativos passaram: troca Maia 1100 → 1900 com dicas/cancelamento e recuperação do lc0 após peso inválido.
-- Os benchmarks de seleção/PGN, estatísticas e arraste executaram em profile; as medições e limitações estão registradas acima.
-- Build release final com `--split-per-abi --target-platform android-arm64,android-x64`: ARM64 com 150.737.806 bytes e x86_64 com 152.463.137 bytes. Os nove pesos são idênticos aos fontes; duplicata ausente e segmentos ELF alinhados a pelo menos 16 KB em ambas as ABIs. APK ARM64 também passou em `verify_apk.py`, `zipalign` e `apksigner`. [Tamanhos, hashes e alinhamentos finais](performance/final-release.json).
-- Release x86_64 instalado no emulador: tela de estatísticas exibiu rating inicial 1500 e zero partidas avaliadas; Maia 1900 iniciou pelas brancas e respondeu a `e7e5`; histórico observado `1. e4 e5 · 2. Nf3`; Stockfish destacou o cavalo preto de b8. Labels e histórico foram conferidos por assertions sobre a árvore de acessibilidade do UIAutomator. [Evidência do smoke test](performance/release-smoke.json). Isto não substitui toda a suíte de integração em release nem valida ARM64 em hardware físico.
+## Original final validation
 
-Uma tentativa adicional de build release x86_64 em paralelo à integração falhou por disputa de `GeneratedPluginRegistrant.java`: o arquivo gerado passou a referenciar `integration_test`, ausente daquela compilação de produção. A repetição sequencial passou, assim como o build final das duas ABIs. Não foi necessário alterar os fontes Android.
+- Formatting: 96 Dart files, no changes needed.
+- `flutter analyze`: no issues. `flutter test --coverage`: 239 passing tests.
+  The three worker tests passed again after the final lint adjustment.
+- Python release tools: ten passing tests.
+- Android API 36: 75 consolidated acceptance tests passed after the statistics
+  worker change. Two additional native tests passed: Maia 1100 → 1900 with
+  hints/cancellation and lc0 recovery after invalid weights.
+- Selection/PGN, statistics, and drag benchmarks ran in profile mode; their
+  results and limits are above.
+- Final release build with
+  `--split-per-abi --target-platform android-arm64,android-x64`: ARM64
+  150,737,806 bytes; x86_64 152,463,137 bytes. All nine networks matched source,
+  duplicate absent, ELF alignment at least 16 KB in both ABIs. ARM64 also passed
+  the content verifier, `zipalign`, and `apksigner`.
+  [Final sizes, hashes, and alignment](performance/final-release.json).
+- The release x86_64 APK was installed on the emulator: statistics showed initial
+  rating 1500 and zero rated games; Maia 1900 opened as White and replied to
+  `e7e5`; observed history was `1. e4 e5 · 2. Nf3`; Stockfish highlighted Black's
+  b8 knight. Labels and history were checked against UIAutomator accessibility
+  assertions. [Smoke-test evidence](performance/release-smoke.json). This does
+  not replace the complete release integration suite or test ARM64 hardware.
 
-## Reproduzir
+A concurrent x86_64 release build failed because integration-test generation
+changed `GeneratedPluginRegistrant.java` to reference `integration_test`, absent
+from that production compilation. A sequential retry and the final dual-ABI
+build passed. No Android source fix was required.
+
+## Reproduce
+
+Use the [README prerequisites](../README.md#set-up-and-run), substitute `DEVICE`,
+and run commands sequentially:
 
 ```sh
 dart format --output=none --set-exit-if-changed lib test integration_test test_driver
-flutter analyze
+flutter analyze --no-fatal-infos
 flutter test --coverage
 python3 -m unittest discover -s scripts -p 'test_*.py'
 flutter drive --profile --no-dds --driver=test_driver/audit_performance.dart --target=integration_test/audit_performance_android_test.dart -d DEVICE
@@ -106,8 +196,17 @@ flutter build apk --release --split-per-abi --target-platform android-arm64
 python3 scripts/verify_apk.py build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
-O driver salva `build/audit_performance.json`. O benchmark só executa em profile e não usa limites de tempo como assertions. Para reproduzir a referência, use um checkout de `bed03de`, copie o harness e o driver, e troque `await ...parseImportAsync` por `...parseImport` no harness. Mantenha os mesmos fixtures, SDK e dispositivo.
+The audit driver saves `build/audit_performance.json`. Benchmarks require profile
+mode and use no timing assertions. For the selection/PGN baseline, use a separate
+checkout of `bed03de`, copy the harness and driver, and replace
+`await ...parseImportAsync` with `...parseImport` in the harness. Keep the SDK,
+fixtures, and device identical.
 
-O benchmark de estatísticas usa o mesmo driver e sobrescreve o arquivo temporário; copie cada saída antes de executar outro alvo. Para sua referência, use `675b592` com o harness de estatísticas e o driver deste conjunto, sem alterar o harness.
+The statistics target uses the same driver and overwrites its output. Save each
+report before running another target. Its baseline is `675b592`, with this
+statistics harness and driver copied in without changing the harness.
 
-Referências oficiais: [Flutter — isolates](https://docs.flutter.dev/perf/isolates) e [compute](https://api.flutter.dev/flutter/foundation/compute.html). As reduções de consultas/escritas são contagens instrumentadas no projeto; os tempos acima são evidência experimental, não uma garantia do framework.
+Framework references: [Flutter isolates](https://docs.flutter.dev/perf/isolates)
+and [compute](https://api.flutter.dev/flutter/foundation/compute.html). Query/write
+reductions are project instrumentation; timings are experimental evidence, not
+framework guarantees.

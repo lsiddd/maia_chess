@@ -1,6 +1,4 @@
-// Cobre AUDITORIA_TECNICA.md, AUD-004: NewGameVsAiScreen estava com 2% de
-// cobertura. Testa a seleção de lado/nível e o caminho de erro quando o
-// motor Maia falha ao iniciar.
+// Test side/level selection and the error path when Maia fails to start.
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +14,7 @@ import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
 
 void main() {
-  testWidgets('permite selecionar lado e nível antes de começar', (
+  testWidgets('allows side and level selection before starting', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -32,7 +30,7 @@ void main() {
     expect(_isChipSelected(tester, '1100'), isTrue);
     expect(_isChipSelected(tester, '1300'), isFalse);
 
-    await tester.tap(find.text('Pretas'));
+    await tester.tap(find.text('Black'));
     await tester.pump();
     expect(
       tester
@@ -47,9 +45,7 @@ void main() {
     expect(_isChipSelected(tester, '1100'), isFalse);
   });
 
-  testWidgets('mostra erro quando o motor Maia falha ao iniciar', (
-    tester,
-  ) async {
+  testWidgets('shows an error when Maia fails to start', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -66,14 +62,14 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Começar partida'));
-    // Carregamento do motor falho: um frame para o spinner, outro para o
-    // catch/SnackBar; pumpAndSettle cobre os dois sem depender de tempo real.
+    await tester.tap(find.text('Start game'));
+    // pumpAndSettle covers the loading frame and the catch/SnackBar frame
+    // without depending on wall-clock timing.
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Maia:'), findsOneWidget);
     expect(find.byType(GameScreen), findsNothing);
-    expect(find.text('Jogar contra a IA Maia'), findsOneWidget);
+    expect(find.text('Play against Maia'), findsOneWidget);
   });
 }
 
@@ -92,7 +88,7 @@ class _FailingLc0Engine extends Fake implements Lc0Engine {
 
   @override
   Future<void> init(String weightsFilePath) async {
-    throw StateError('lc0 falhou ao iniciar (teste)');
+    throw StateError('lc0 failed to start (test)');
   }
 
   @override
@@ -105,7 +101,7 @@ class _FailingStockfishEngine extends Fake implements StockfishEngine {
 
   @override
   Future<void> init() async {
-    throw StateError('Stockfish falhou ao iniciar (teste)');
+    throw StateError('Stockfish failed to start (test)');
   }
 
   @override

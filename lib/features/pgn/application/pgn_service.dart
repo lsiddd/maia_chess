@@ -48,25 +48,25 @@ class PgnService {
     required DateTime importedAtUtc,
   }) {
     if (pgn.trim().isEmpty) {
-      throw const PgnFormatException('O arquivo PGN está vazio.');
+      throw const PgnFormatException('The PGN file is empty.');
     }
 
     late final PgnGame<PgnNodeData> parsed;
     try {
       parsed = PgnGame.parsePgn(pgn);
     } catch (error) {
-      throw PgnFormatException('Não foi possível interpretar o PGN: $error');
+      throw PgnFormatException('Could not parse the PGN: $error');
     }
 
     late final Position initial;
     try {
       initial = PgnGame.startingPosition(parsed.headers);
     } catch (error) {
-      throw PgnFormatException('A posição inicial do PGN é inválida: $error');
+      throw PgnFormatException('The initial PGN position is invalid: $error');
     }
     if (initial is! Chess) {
       throw const PgnFormatException(
-        'Somente partidas de xadrez clássico podem ser importadas.',
+        'Only standard chess games can be imported.',
       );
     }
 
@@ -75,7 +75,7 @@ class PgnService {
     final parsedMainline = parsed.moves.mainline().toList(growable: false);
     if (tokens.length != parsedMainline.length) {
       throw const PgnFormatException(
-        'O PGN contém texto de lance que não pôde ser interpretado.',
+        'The PGN contains move text that could not be parsed.',
       );
     }
 
@@ -86,7 +86,7 @@ class PgnService {
       final move = position.parseSan(token);
       if (move == null) {
         throw PgnFormatException(
-          'Lance inválido no PGN, jogada ${index + 1}: "$token".',
+          'Invalid PGN move at ply ${index + 1}: "$token".',
         );
       }
       final (after, canonicalSan) = position.makeSan(move);
@@ -103,14 +103,14 @@ class PgnService {
       );
     }
 
-    // O parser é permissivo por design. A validação acima reaplica cada
-    // lance principal; esta passagem adicional impede que uma variante
-    // sintaticamente reconhecida contenha lances ilegais.
+    // The PGN parser is permissive. Replay each mainline move above, then
+    // validate every recognised variation so syntactically accepted illegal
+    // moves cannot pass.
     final parsedMoveCount = _validateVariations(parsed.moves, initial);
     if (allTokens.length != parsedMoveCount) {
       throw const PgnFormatException(
-        'O PGN contém texto de lance em uma variante que não pôde ser '
-        'interpretado.',
+        'The PGN contains move text in a variation that could not be '
+        'parsed.',
       );
     }
 
@@ -120,9 +120,7 @@ class PgnService {
       '0-1' => StoredGameResult.blackWin,
       '1/2-1/2' => StoredGameResult.draw,
       '*' => StoredGameResult.unknown,
-      _ => throw PgnFormatException(
-        'Resultado PGN desconhecido: "$headerResult".',
-      ),
+      _ => throw PgnFormatException('Unknown PGN result: "$headerResult".'),
     };
     final importedAt = importedAtUtc.toUtc();
     return StoredGame(
@@ -145,9 +143,9 @@ class PgnService {
   String export(StoredGame game) {
     final headers = PgnGame.defaultHeaders()
       ..['Event'] = game.levelRating == null
-          ? 'Partida local'
-          : 'Xadrez Maia ${game.levelRating}'
-      ..['Site'] = 'Xadrez Maia Offline'
+          ? 'Local game'
+          : 'Maia Chess ${game.levelRating}'
+      ..['Site'] = 'Maia Chess Offline'
       ..['Date'] = _formatPgnDate(game.startedAtUtc)
       ..['White'] = _playerName(game, Side.white)
       ..['Black'] = _playerName(game, Side.black)
@@ -186,7 +184,7 @@ class PgnService {
       final move = current.before.parseSan(current.node.data.san);
       if (move == null) {
         throw PgnFormatException(
-          'O PGN contém uma variante com lance ilegal: '
+          'The PGN contains a variation with an illegal move: '
           '"${current.node.data.san}".',
         );
       }
@@ -288,7 +286,7 @@ class PgnService {
     }
     if (braceDepth != 0 || variationDepth != 0 || inHeader) {
       throw const PgnFormatException(
-        'O PGN possui comentário, cabeçalho ou variante sem fechamento.',
+        'The PGN contains an unclosed comment, header, or variation.',
       );
     }
     return output.toString();
@@ -318,8 +316,8 @@ class PgnService {
   }
 
   String _playerName(StoredGame game, Side side) {
-    if (game.levelRating == null) return 'Jogador local';
-    return game.playerSide == side ? 'Jogador' : 'Maia ${game.levelRating}';
+    if (game.levelRating == null) return 'Local player';
+    return game.playerSide == side ? 'Player' : 'Maia ${game.levelRating}';
   }
 
   String _resultToken(StoredGameResult result) => switch (result) {
@@ -347,12 +345,12 @@ class PgnFileService {
       final path = file.path;
       if (path == null) {
         throw const PgnFormatException(
-          'O Android não forneceu acesso ao arquivo selecionado.',
+          'Android did not provide access to the selected file.',
         );
       }
       return await compute(_readPgn, path);
     } on FormatException {
-      throw const PgnFormatException('O arquivo PGN não está em UTF-8.');
+      throw const PgnFormatException('The PGN file is not UTF-8 encoded.');
     }
   }
 
@@ -369,8 +367,8 @@ class PgnFileService {
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'application/x-chess-pgn')],
-        subject: 'Partida de xadrez',
-        text: 'Partida exportada pelo Xadrez Maia.',
+        subject: 'Chess game',
+        text: 'Game exported by Maia Chess.',
       ),
     );
   }

@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Cartão de erro reutilizado em toda tela com dados assíncronos: ícone +
-/// mensagem sobre `errorContainer`, com uma ação opcional de nova
-/// tentativa. Extraído do padrão que antes só existia em `_StatusBar`
-/// (`game_screen.dart`) para as demais telas (campanha, estatísticas,
-/// biblioteca de partidas) pararem de mostrar só texto cru em erro.
+/// Shared error card for asynchronous screens, with an optional retry action.
 class ErrorStateCard extends StatelessWidget {
   const ErrorStateCard({
     required this.message,
     super.key,
     this.onRetry,
-    this.retryLabel = 'Tentar de novo',
+    this.retryLabel = 'Try again',
   });
 
   final String message;

@@ -1,6 +1,6 @@
-[Event "Teste Android"]
+[Event "Android test"]
 [Site "Offline"]
-[X-Custom "preservada"]
+[X-Custom "preserved"]
 [Result "*"]
 
-1. e4 {comentário importado} e5 2. Nf3 Nc6 *
+1. e4 {imported comment} e5 2. Nf3 Nc6 *

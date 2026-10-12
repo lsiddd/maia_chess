@@ -23,7 +23,7 @@ void main() {
   tearDown(() => database.close());
 
   test(
-    'snapshot idêntico e mudança de avaliação não regravam lances',
+    'identical snapshot and eligibility change do not rewrite moves',
     () async {
       final game = _game('1. e4 e5 *');
       await repository.beginGame(game);
@@ -36,7 +36,7 @@ void main() {
     },
   );
 
-  test('novo lance insere apenas uma linha', () async {
+  test('a new move inserts only one row', () async {
     await repository.beginGame(_game('1. e4 e5 *'));
     counter.reset();
     await repository.saveOngoing(_game('1. e4 e5 2. Nf3 *'));
@@ -47,21 +47,24 @@ void main() {
     expect(const GameReplayer().replay(stored).positions, hasLength(4));
   });
 
-  test('undo remove apenas o sufixo e permite seguir outra linha', () async {
-    await repository.beginGame(_game('1. e4 e5 2. Nf3 *'));
-    counter.reset();
-    await repository.saveOngoing(_game('1. e4 *'));
-    expect(counter.deletes, hasLength(1));
-    expect(counter.batchRows, 0);
-    counter.reset();
-    await repository.saveOngoing(_game('1. e4 d5 *'));
-    expect(counter.deletes, isEmpty);
-    expect(counter.batchRows, 1);
-    expect((await repository.getActiveGame())!.moves.last.uci, 'd7d5');
-  });
+  test(
+    'undo removes only the suffix and allows a different continuation',
+    () async {
+      await repository.beginGame(_game('1. e4 e5 2. Nf3 *'));
+      counter.reset();
+      await repository.saveOngoing(_game('1. e4 *'));
+      expect(counter.deletes, hasLength(1));
+      expect(counter.batchRows, 0);
+      counter.reset();
+      await repository.saveOngoing(_game('1. e4 d5 *'));
+      expect(counter.deletes, isEmpty);
+      expect(counter.batchRows, 1);
+      expect((await repository.getActiveGame())!.moves.last.uci, 'd7d5');
+    },
+  );
 
   test(
-    'falha ao inserir sufixo reverte FEN e lances na mesma transação',
+    'suffix insertion failure rolls back FEN and moves in the same transaction',
     () async {
       final original = _game('1. e4 e5 *');
       await repository.beginGame(original);
@@ -84,33 +87,30 @@ void main() {
     },
   );
 
-  test(
-    'mudanças no ator ou no instante do lance também são persistidas',
-    () async {
-      final game = _game('1. e4 e5 *');
-      await repository.beginGame(game);
-      final last = game.moves.last;
-      final changed = StoredGameMove(
-        ply: last.ply,
-        uci: last.uci,
-        san: last.san,
-        fenAfter: last.fenAfter,
-        actor: GameMoveActor.player,
-        playedAtUtc: last.playedAtUtc.add(const Duration(seconds: 2)),
-      );
-      counter.reset();
-      await repository.saveOngoing(
-        game.copyWith(moves: [game.moves.first, changed]),
-      );
-      expect(counter.batchRows, 1);
-      final stored = (await repository.getActiveGame())!.moves.last;
-      expect(stored.actor, changed.actor);
-      expect(
-        stored.playedAtUtc.millisecondsSinceEpoch ~/ 1000,
-        changed.playedAtUtc.millisecondsSinceEpoch ~/ 1000,
-      );
-    },
-  );
+  test('move actor and timestamp changes are also persisted', () async {
+    final game = _game('1. e4 e5 *');
+    await repository.beginGame(game);
+    final last = game.moves.last;
+    final changed = StoredGameMove(
+      ply: last.ply,
+      uci: last.uci,
+      san: last.san,
+      fenAfter: last.fenAfter,
+      actor: GameMoveActor.player,
+      playedAtUtc: last.playedAtUtc.add(const Duration(seconds: 2)),
+    );
+    counter.reset();
+    await repository.saveOngoing(
+      game.copyWith(moves: [game.moves.first, changed]),
+    );
+    expect(counter.batchRows, 1);
+    final stored = (await repository.getActiveGame())!.moves.last;
+    expect(stored.actor, changed.actor);
+    expect(
+      stored.playedAtUtc.millisecondsSinceEpoch ~/ 1000,
+      changed.playedAtUtc.millisecondsSinceEpoch ~/ 1000,
+    );
+  });
 }
 
 StoredGame _game(String pgn) => const PgnService()

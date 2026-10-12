@@ -12,8 +12,8 @@ void main() {
       app.main();
       await tester.pumpAndSettle();
 
-      // 5s should be enough for the engine to init itself
-      // even on the slowest devices...
+      // Fixed smoke-test delay; slower devices may require more time.
+      // Wrapper ready does not establish weights-loading completion.
       await Future.delayed(const Duration(seconds: 5));
       await tester.pumpAndSettle();
     });

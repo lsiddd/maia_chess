@@ -123,27 +123,26 @@ abstract interface class GameRepository {
 
   Future<StoredGame?> getGame(String id);
 
-  /// Cria o único autosave ativo. Qualquer partida ainda em andamento é
-  /// removida na mesma transação antes da inserção.
+  /// Create the sole active autosave. Remove any ongoing game in the same
+  /// transaction before inserting its replacement.
   Future<void> beginGame(StoredGame game);
 
-  /// Substitui o snapshot completo e seus lances, permitindo que undo seja
-  /// persistido sem deixar lances órfãos.
+  /// Persist the snapshot and reconcile changed moves, including the suffix
+  /// removed by undo.
   Future<void> saveOngoing(StoredGame game);
 
-  /// Persiste snapshot, PGN, resultado e eventual vitória de campanha em
-  /// uma transação. Retorna `false` se a partida já havia sido finalizada.
+  /// Persist the snapshot, PGN, result, and derived rating/campaign state in
+  /// one transaction. Return `false` if the game was already completed.
   Future<bool> completeGame(StoredGame game);
 
-  /// Importa somente depois que todo o PGN tiver sido validado em memória.
+  /// Import only after the entire PGN has been validated in memory.
   Future<void> importGame(StoredGame game);
 
   Future<void> deleteGame(String id);
 }
 
-/// Resultado de uma partida do ponto de vista de [playerSide], único lugar
-/// onde essa regra é calculada (antes duplicada entre `AppDatabase` e
-/// `DriftStatsRepository`, ver AUDITORIA_TECNICA.md, AUD-009).
+/// Map a stored result to the outcome for [playerSide]. Shared by rating and
+/// campaign projections.
 PlayerGameOutcome playerOutcome(StoredGameResult result, Side playerSide) {
   if (result == StoredGameResult.draw) return PlayerGameOutcome.draw;
   final playerWon =

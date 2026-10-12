@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Slots fixos: seleção, progresso e erros nunca alteram a geometria.
+/// Fixed tool slots keep geometry stable during selection, loading, and
+/// errors.
 class GameToolButton extends StatelessWidget {
   const GameToolButton({
     super.key,

@@ -1,6 +1,6 @@
 import 'package:dartchess/dartchess.dart';
 
-/// Resultado validado pelo motor de regras, vinculado à posição analisada.
+/// Rules-validated hint bound to the analysed position.
 class HintResult {
   const HintResult({
     required this.fen,

@@ -10,7 +10,7 @@ import 'package:maia_chess/features/stats/presentation/stats_screen.dart';
 
 void main() {
   group('PlayerStatsCalculator', () {
-    test('aplica Elo em ordem cronológica e calcula streak de vitórias', () {
+    test('applies Elo chronologically and calculates the winning streak', () {
       final stats = const PlayerStatsCalculator().calculate([
         EvaluatedGameSummary(
           gameId: 'loss',
@@ -47,7 +47,7 @@ void main() {
       expect(stats.resultsByLevel[1500]?.losses, 1);
     });
 
-    test('empate zera streak e conta meio ponto no rating', () {
+    test('a draw resets the streak and scores half a point for rating', () {
       final stats = const PlayerStatsCalculator().calculate([
         EvaluatedGameSummary(
           gameId: 'win',
@@ -74,7 +74,7 @@ void main() {
   });
 
   group('evaluateCampaignWindow', () {
-    test('qualifica ao obter duas vitórias em três partidas', () {
+    test('qualifies with two wins in three games', () {
       final result = evaluateCampaignWindow(
         const [
           PlayerGameOutcome.win,
@@ -90,29 +90,26 @@ void main() {
       expect(result.games, 3);
     });
 
-    test(
-      'conquista permanece mesmo se partidas posteriores forem derrotas',
-      () {
-        final result = evaluateCampaignWindow(
-          const [
-            PlayerGameOutcome.win,
-            PlayerGameOutcome.win,
-            PlayerGameOutcome.loss,
-            PlayerGameOutcome.loss,
-            PlayerGameOutcome.loss,
-          ],
-          winsRequired: 2,
-          windowSize: 3,
-        );
+    test('qualification persists after later losses', () {
+      final result = evaluateCampaignWindow(
+        const [
+          PlayerGameOutcome.win,
+          PlayerGameOutcome.win,
+          PlayerGameOutcome.loss,
+          PlayerGameOutcome.loss,
+          PlayerGameOutcome.loss,
+        ],
+        winsRequired: 2,
+        windowSize: 3,
+      );
 
-        expect(result.qualified, isTrue);
-        expect(result.wins, 2);
-        expect(result.games, 2);
-      },
-    );
+      expect(result.qualified, isTrue);
+      expect(result.wins, 2);
+      expect(result.games, 2);
+    });
   });
 
-  testWidgets('tela de estatísticas mostra rating, streaks e placar', (
+  testWidgets('statistics screen shows rating, streaks, and results', (
     tester,
   ) async {
     final snapshot = PlayerStatsSnapshot(
@@ -145,19 +142,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('1532'), findsOneWidget);
-    expect(find.text('Sequência atual'), findsOneWidget);
-    expect(find.text('Recorde'), findsOneWidget);
+    expect(find.text('Current streak'), findsOneWidget);
+    expect(find.text('Best streak'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('4 partidas'),
+      find.text('4 games'),
       300,
       scrollable: find.byType(Scrollable),
     );
-    expect(find.text('2V  1E  1D'), findsOneWidget);
+    expect(find.text('2W  1D  1L'), findsOneWidget);
   });
 
-  testWidgets('campanha apresenta progresso e bloqueio dos níveis', (
-    tester,
-  ) async {
+  testWidgets('campaign shows progress and locked levels', (tester) async {
     final now = DateTime.utc(2026, 8, 5);
     final levels = [
       DifficultyProgressModel(
@@ -191,9 +186,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('A escalada dos nove Maias'), findsOneWidget);
-    expect(find.text('1/2 vitórias • 2/3 partidas'), findsOneWidget);
-    expect(find.text('Bloqueado'), findsOneWidget);
-    expect(find.text('Jogar etapa'), findsOneWidget);
+    expect(find.text('Climb through all nine Maia levels'), findsOneWidget);
+    expect(find.text('1/2 wins • 2/3 games'), findsOneWidget);
+    expect(find.text('Locked'), findsOneWidget);
+    expect(find.text('Play level'), findsOneWidget);
   });
 }
