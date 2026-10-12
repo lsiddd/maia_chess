@@ -1,85 +1,175 @@
+<div align="center">
+
+<img src="assets/branding/app_icon.png" alt="Maia Chess app icon" width="112" height="112">
+
 # Maia Chess
 
-Maia Chess is an offline Android chess app built with Flutter and Dart. Play
-against nine human-style Maia networks, practise with Stockfish assistance, or
-play another person on the same device. Games, preferences, campaign progress,
-and statistics are stored locally; no account or runtime network connection is
-required.
+**A human-style opponent, wherever you play.**
 
-The app bundles the original [Maia networks](https://github.com/CSSLab/maia-chess)
-for rating bands 1100–1900 and runs them through lc0 with `go nodes 1`. These
-bands describe the human play the models imitate, not a guaranteed opponent
-strength. Stockfish independently provides hints and opponent plans.
+Offline chess for Android. Nine Maia opponents, Stockfish practice tools, and a campaign to climb.
 
-## Features
+[![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#get-the-app)
+[![Works offline](https://img.shields.io/badge/Play-Offline-187B80)](#why-maia)
+[![AGPL v3 or later](https://img.shields.io/badge/License-AGPL_v3%2B-68704B)](LICENSE)
 
-- **Free play:** choose any Maia level and play as White or Black.
-- **Campaign:** start at Maia 1100 and unlock successive levels by winning two
-  games in a rolling window of three rated campaign games. Later losses do not
-  revoke an earned qualification; deleting saved games rebuilds progress.
-- **Local play:** two players share one device, with tap and drag moves,
-  promotion choice, board rotation, animations, and haptic feedback.
-- **Persistence:** one active autosave, saved after each move, plus a game
-  library with replay and validated UTF-8 PGN import/export through Android's
-  file picker and share sheet.
-- **Statistics:** an estimated local rating, rating history, results by Maia
-  level, and winning streaks. Completed, unassisted AI games count; local and
-  imported games do not. The estimate starts at 1500 and uses Elo with K = 32,
-  bounded to 600–2400. It is not an online or federation rating.
-- **Appearance and accessibility:** light, dark, or system theme; Lichess Brown
-  (default), Blue, Green, and Purple boards; Cburnett SVG pieces; square labels,
-  semantic move actions, and last-move/result announcements. Appearance settings
-  also apply to replays. The screen stays awake while a game screen is active.
+**[Download for Android](https://github.com/lsiddd/maia_chess/releases/latest)** ·
+[Screenshots](#a-look-inside) · [How to play](#your-first-game) · [Build from source](#build-from-source)
 
-The application target is **Android 7.0/API 24 or later**, using `arm64-v8a` or
-`x86_64`. Published APKs contain ARM64 only. The lc0 plugin contains an iOS
-example, but the main app has no iOS, desktop, or web runner. Clock fields and
-preferences exist in storage; a playable timed-game mode is not implemented.
+</div>
 
-## Game tools
+Play a quick match against Maia, work your way through the campaign, or share a
+board with a friend. Your opponents, practice tools, and saved games run right
+on your phone. Open the app and play, even when you're offline.
 
-The toolbar offers **Undo**, **Hint**, **Attacks**, **Plans**, and **More**.
-**More** includes restart, rotation, save, appearance, an attack filter, and help.
-The board fits within the available safe area in portrait and landscape;
-loading indicators and errors do not change its geometry.
+## Get the app
 
-**Hint** highlights only the origin of a Stockfish move with an amber outline.
-Tap it again or interact with the board to clear it. Position changes and app
-suspension invalidate pending results. Hint failure does not dispose Maia.
+**[Download the Android APK →](https://github.com/lsiddd/maia_chess/releases/latest)**
 
-**Attacks** highlights attacked pieces: orange for no geometric defence, double
-blue for defended pieces. Pinned attackers count; legal en passant also marks
-its captured pawn. These highlights do not prove a material gain or loss. The
-visibility toggle and own-pieces-only filter are saved locally.
+You'll need **Android 7.0 or newer on a 64-bit ARM device (ARM64)**. All nine
+Maia networks come bundled with the app.
 
-**Plans** displays one Stockfish candidate for a hypothetical opponent turn.
-The counter switches between up to three candidates. These are possible plans,
-not proven threats or predictions of Maia's reply. Analysis shares Stockfish
-with hints and pauses during check, Maia's turn, hints, or suspension.
+1. Open the download page and select the `.apk` file under **Assets**.
+2. Open the downloaded file. If Android asks, allow installation from your
+   browser or file manager, then tap **Install**.
+3. Launch **Maia Chess** and choose a mode. You're ready to play.
 
-Assistance and undo make a game **unrated**, excluding it from rating, streaks,
-and campaign progress. Undo returns to the previous human decision against
-Maia, or takes back one ply in local play. The collapsed move history opens an
-independent review panel; **Current position** returns that panel to the live
-position without changing the game.
+Want the newest development build? [Try the nightly](https://github.com/lsiddd/maia_chess/releases/tag/nightly),
+updated after changes to `main` pass CI.
 
-## Set up and run
+## A look inside
+
+<table>
+  <tr>
+    <td align="center" width="33%"><strong>Play against Maia</strong></td>
+    <td align="center" width="33%"><strong>Climb the campaign</strong></td>
+    <td align="center" width="33%"><strong>Make it yours</strong></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/game.png" alt="A game against Maia with the chessboard, move history, and practice toolbar" width="250"></td>
+    <td align="center"><img src="docs/images/campaign.png" alt="Maia campaign showing the first level and the path to higher opponents" width="250"></td>
+    <td align="center"><img src="docs/images/appearance.png" alt="Appearance settings with a board preview, app theme, and board colours" width="250"></td>
+  </tr>
+</table>
+
+## Why Maia?
+
+[Maia](https://github.com/CSSLab/maia-chess) learns from real human games to model
+how people play at different rating bands. This app brings the original nine
+Maia networks to your phone, with levels from **1100 to 1900**. Each level
+represents a different style of human play.
+
+Maia is your opponent; **Stockfish** powers the hints and opponent-plan tools.
+Both run locally, so you can practise on the train, on a trip, or anywhere you
+want a game.
+
+| What you want to do | What Maia Chess offers |
+| --- | --- |
+| ♟️ Find an opponent | Choose any of nine Maia levels and play as White or Black. |
+| 🏁 Work toward a goal | Start at Maia 1100 and unlock higher campaign levels as you win. |
+| 💡 Explore a position | Ask for a hint, inspect attacked pieces, or view possible opponent plans. |
+| 🤝 Play with a friend | Two players, one phone. Tap or drag pieces and rotate the board. |
+| 📚 Revisit a game | Resume your autosave, replay saved games, and import or share PGN files. |
+| 📈 Follow your progress | See your personal in-app rating, winning streaks, and results by Maia level. |
+| 🎨 Set the mood | Pick a light, dark, or system theme and one of four Lichess board colours. |
+
+## Your first game
+
+From the home screen, choose how you'd like to play:
+
+- **Free play against Maia:** pick your colour, select any level from 1100 to
+  1900, and tap **Start game**.
+- **Maia campaign:** start with level 1100. Win two games in a window of three
+  rated campaign games at a level to unlock the next opponent.
+- **Play (2 local players):** share the phone with a friend and take turns on
+  the same board.
+
+Tap a piece and its destination, or drag it to a legal square. Use **More** to
+rotate the board, save the game, or change its appearance.
+
+Your ongoing game saves automatically after each move. When you come back,
+tap **Continue saved game** to pick up where you left off.
+
+### Practise with a little help
+
+The toolbar keeps useful tools within reach:
+
+| Tool | How to use it |
+| --- | --- |
+| **Undo** | Try a different idea. Against Maia, return to your previous decision; in local play, take back one move. |
+| **Hint** | An amber outline marks the piece Stockfish suggests moving. Work out where you'd like to play it. |
+| **Attacks** | Spot attacked pieces: orange for pieces without geometric defence, double blue for defended pieces. Use **More** to show your pieces only or both sides. |
+| **Plans** | Explore up to three possible opponent continuations. Tap the counter to cycle through them. |
+| **More** | Rotate, restart, save, customise the board, or open the tool guide. |
+
+Your in-app rating and campaign progress track completed, unassisted games
+against Maia. Use hints, attacks, plans, and undo whenever you'd like a practice
+game.
+
+### Keep a chess notebook
+
+Open **Saved games and PGN** to replay your games move by move. Import a PGN
+from your files, or export a game to share it with a friend or open it in another
+chess app. During a live game, tap the move history to review the position;
+**Current position** brings you back to play.
+
+Open **My performance** to see your rating history, current and best winning
+streaks, and results against each Maia level.
+
+## Your board, your pace
+
+Choose **Appearance** from the palette icon on the home screen or from the
+in-game **More** menu. Match the app to your phone's theme, or select light or
+dark mode. Choose a **Brown**, **Blue**, **Green**, or **Purple** board with
+Cburnett pieces. Your settings also carry over to game replays.
+
+The board works in portrait and landscape, supports tap and drag controls,
+and includes square labels and accessibility announcements. The screen stays
+awake while you play.
+
+Your games, settings, statistics, and campaign progress are stored on your
+device. You can play without an account or an internet connection and take
+your games with you using PGN export.
+
+<details>
+<summary><strong>Need a hand?</strong></summary>
+
+- **Maia takes a moment to start:** the first game at a level loads that
+  network. Give it a few seconds; use **Try again** if the app offers it.
+- **A hint or plan needs another try:** tap **Hint** again, or switch **Plans**
+  off and on.
+- **Android won't install an update:** updates need the same signing key as
+  the installed app. Export your games as PGN before uninstalling an older
+  installation, since uninstalling removes its local data.
+- **Something else went wrong:** [open an issue](https://github.com/lsiddd/maia_chess/issues)
+  with your Android version, app version, and the steps to reproduce it.
+
+</details>
+
+## Build from source
+
+Made with **Flutter and Dart**, with **lc0** running Maia and **Stockfish**
+providing assistance. **Riverpod** manages app state and **Drift/SQLite** stores
+your games locally.
+
+<details>
+<summary><strong>Developer setup and build commands</strong></summary>
 
 Use the toolchain pinned in [.github/workflows/ci.yaml](.github/workflows/ci.yaml):
 
-| Tool | Project configuration |
+| Tool | Version |
 | --- | --- |
-| Flutter / Dart | Flutter 3.47.4 / Dart 3.13.3 in CI; package SDK constraint `^3.11.5` |
+| Flutter / Dart | Flutter 3.47.4 / Dart 3.13.3 |
 | Java | JDK 17 |
-| Android SDK | Platform 36 and build tools 36.0.0 |
+| Android SDK / build tools | Platform 36 / 36.0.0 |
 | Android NDK | 28.2.13676358 |
 | CMake | 3.22.1 |
 
-Install Flutter and the Android SDK, add their command-line tools to `PATH`,
-and configure `ANDROID_HOME` if the SDK is outside its default location. Install
-the native tools with `sdkmanager` from the Android command-line tools:
+Install Flutter and the Android SDK, add their tools to `PATH`, and configure
+`ANDROID_HOME` if your SDK is outside its default location.
 
 ```sh
+git clone https://github.com/lsiddd/maia_chess.git
+cd maia_chess
 sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
 flutter doctor --android-licenses
 flutter doctor -v
@@ -88,106 +178,48 @@ flutter devices
 flutter run -d DEVICE
 ```
 
-Replace `DEVICE` with a connected Android device or emulator ID. Use a 64-bit
-emulator. Dependencies and the Android CMake build require network access during
-setup, including fetching Eigen 3.4.0; the installed app runs offline. All nine
-Maia weight files are already tracked. No `.env` file, server, API key, or runtime
-environment variables are needed.
+Replace `DEVICE` with your connected Android device or 64-bit emulator ID.
+Dependency setup and the native build use the internet, including fetching
+Eigen 3.4.0. The Maia networks are already included in the repository.
 
-## Development and validation
-
-Run from the repository root:
-
-```sh
-dart format lib test integration_test test_driver
-flutter analyze --no-fatal-infos
-dart format --output=none --set-exit-if-changed lib test integration_test test_driver
-flutter test --coverage
-python3 -m unittest discover -s scripts -p 'test_*.py'
-```
-
-For native engines and SQLite on Android, run these suites **sequentially**:
-
-```sh
-flutter test integration_test/android_acceptance_test.dart -d DEVICE
-flutter test integration_test/phase_0_3_android_test.dart -d DEVICE
-```
-
-[CONTRIBUTING.md](CONTRIBUTING.md) explains test scope, code generation,
-performance measurements, and English commit conventions. Historical
-[interaction](docs/interaction-validation.md) and
-[performance](docs/performance-validation.md) reports preserve their original
-measurement dates and limitations.
-
-## Build and distribution
+To build an ARM64 APK:
 
 ```sh
 flutter build apk --release --split-per-abi --target-platform android-arm64
 python3 scripts/verify_apk.py build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
-This creates `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`. Local
-release builds use the debug signing key unless `android/app/key.properties`
-is configured. The content verifier checks packaging and ZIP integrity;
-`apksigner` separately verifies the signature.
+The APK is written to `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`.
+Configure `android/app/key.properties` for release signing; local builds use
+the debug key when that file is absent. See [Android releases](docs/android-releases.md)
+for signing, checks, versioning, and publication.
 
-CI checks pull requests. Successful signed pushes to `main` update the
-[Nightly pre-release](https://github.com/lsiddd/maia_chess/releases/tag/nightly);
-`vX.Y.Z` tags publish stable releases. See
-[Android releases](docs/android-releases.md) for signing secrets, local signing,
-artifacts, versioning, and retries. Install the APK through Android's package
-installer after enabling installation from the source used to download it.
+Run Android builds and integration tests sequentially. After integration tests,
+use the normal build command to refresh plugin registration.
 
-## Architecture and repository layout
+</details>
 
-Riverpod controllers coordinate the feature UI, chess rules, repositories, and
-engine services. Drift runs SQLite in the background; PGN validation and derived
-statistics also run on workers. See [architecture](docs/architecture.md) for
-state, persistence, engine lifecycle, and eligibility rules.
+## Join in
 
-```text
-lib/
-  main.dart             App bootstrap and home screen
-  core/                 Assets, themes, and shared widgets
-  data/                 Drift schema, repositories, and providers
-  engine_ffi/           lc0/Stockfish services and UCI waiters
-  features/             Difficulty, game, hints, history, PGN, settings, stats, tactics
-android/                Main application runner and signing/build configuration
-native/leela_chess_zero/ Local lc0 plugin, native sources, and standalone example
-assets/                 Maia networks, board images, piece SVGs, and attribution
-scripts/                Signing setup, APK verification, and Python tests
-test/                   Unit, widget, persistence, and regression tests
-integration_test/       Android acceptance tests and profile benchmarks
-test_driver/            Profile report writers
-docs/                   Architecture, releases, audit notes, and measurement records
-```
+Have an idea, found a bug, or want to help? [Open an issue](https://github.com/lsiddd/maia_chess/issues)
+or send a pull request. If you enjoy the app, a GitHub star helps other players
+find it.
 
-## Troubleshooting
+- [Contributing](CONTRIBUTING.md): checks, tests, code generation, and contribution conventions.
+- [Architecture](docs/architecture.md): app state, storage, and engine integration.
+- [Android releases](docs/android-releases.md): build, signing, and release workflow.
 
-- **Native build fails:** check SDK, NDK, CMake, and Java versions against the
-  table above, and allow CMake to fetch Eigen. The local lc0 fork is required;
-  substituting the hosted plugin is not covered by this project's checks.
-- **No suitable device:** use an ARM64 device or x86_64/ARM64 emulator. A 32-bit
-  Android device cannot run the bundled engines.
-- **First game or hint loads slowly:** weights extraction and native network
-  loading precede the UCI readiness handshake. Allow startup to finish; use
-  **Try again** if Maia reports a failure. For failed hints or plans, use the
-  retry action described in the UI.
-- **APK update cannot be installed:** the existing installation may use a
-  different signing key. Uninstalling removes local app data, so export useful
-  games as PGN first.
-- **Tests/builds interfere:** run Android targets sequentially. After integration
-  tests, use the normal production build command so Flutter refreshes dependency
-  registration; `--no-pub` can retain an integration-test plugin registrant.
+## Licence and credits
 
-## Attribution
+Copyright (C) 2026 Maia Chess contributors. Original project code, documentation,
+and assets are licensed under the **GNU Affero General Public License, version 3
+or any later version (`AGPL-3.0-or-later`)**. See [LICENSE](LICENSE).
 
-Bundled third-party material has its own notices and licences:
-[Maia networks](assets/maia_weights/NOTICE.md),
-[Cburnett pieces](assets/chess_pieces/NOTICE.md),
-[Lichess boards](assets/chess_boards/NOTICE.md), and the
-[lc0 plugin](native/leela_chess_zero/LICENSE). Review those terms before
-redistribution. This repository currently has no root application licence;
-no project-wide licence is inferred from dependency licences. Outstanding
-limitations and preserved language exceptions are recorded in the
-[documentation audit](docs/documentation-audit.md).
+Built with the work of the [Maia researchers](https://github.com/CSSLab/maia-chess),
+[Leela Chess Zero](https://github.com/LeelaChessZero/lc0),
+[Stockfish](https://github.com/official-stockfish/Stockfish), and
+[dartchess](https://github.com/lichess-org/dartchess). Board themes come from
+Lichess and pirouetti; the piece set is by Colin M. L. Burnett.
+
+Third-party components retain their original licences. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for their attribution and terms.
