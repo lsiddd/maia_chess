@@ -76,11 +76,16 @@ cannot be accomplished as an ordinary documentation edit. Published GitHub
 release notes were not modified. The existing moving-nightly automation remains
 in place; this migration did not execute publication or move its tag.
 
+## Licensing follow-up
+
+No root application licence was tracked at the time of this audit. The maintainer
+subsequently selected `AGPL-3.0-or-later` for original project material. The root
+[LICENSE](../LICENSE), [README](../README.md#licence-and-credits), and
+[third-party notices](../THIRD_PARTY_NOTICES.md) record that decision and preserve
+the separate terms of upstream components.
+
 ## Findings requiring separate work
 
-- No root application `LICENSE` is tracked. The documentation lists dependency
-  and asset licences without assigning a new project-wide licence. A maintainer
-  must make that licensing decision separately.
 - Clock fields and preferences are stored but no timed-game UI/countdown exists.
   The README now says so rather than implying timed play is supported.
 - The inherited plugin example's reset path calls `dispose()` on an already

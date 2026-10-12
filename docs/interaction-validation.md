@@ -49,7 +49,7 @@ for the original report.
 
 ## Reproduce current checks
 
-Use the [README toolchain](../README.md#set-up-and-run), substitute a connected
+Use the [README toolchain](../README.md#build-from-source), substitute a connected
 Android device ID for `DEVICE`, and run targets sequentially:
 
 ```sh

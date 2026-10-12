@@ -179,7 +179,7 @@ build passed. No Android source fix was required.
 
 ## Reproduce
 
-Use the [README prerequisites](../README.md#set-up-and-run), substitute `DEVICE`,
+Use the [README prerequisites](../README.md#build-from-source), substitute `DEVICE`,
 and run commands sequentially:
 
 ```sh
