@@ -112,6 +112,10 @@ from your files, or export a game to share it with a friend or open it in anothe
 chess app. During a live game, tap the move history to review the position;
 **Current position** brings you back to play.
 
+The library shows 50 games per page. PGN imports accept a single game up to
+4 MiB, with at most 20,000 moves including variations and 64 nested variation
+levels.
+
 Open **My performance** to see your rating history, current and best winning
 streaks, and results against each Maia level.
 

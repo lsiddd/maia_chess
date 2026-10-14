@@ -63,10 +63,11 @@ dispose after a failed search before reusing the engine. Maia Chess provides
 those behaviours in
 [`Lc0Service`](../../lib/engine_ffi/lc0_engine/lc0_service.dart).
 
-Only one native instance is allowed at a time. `dispose()` sends `quit` and
-returns immediately; wait for `disposed` or `error` before constructing another
-instance. Sending commands, including `quit`, while still starting or after
-shutdown throws. The package has no force-kill API. Hot reload does not replace
+Only one native instance is allowed at a time. `dispose()` requests shutdown and
+returns immediately; during bootstrap it queues the request. Wait for `disposed`
+or `error` before constructing another instance: terminal state requires both
+the engine and stdout reader to exit. Direct commands through `stdin` still
+require `ready`. The package has no force-kill API. Hot reload does not replace
 explicit lifecycle management.
 
 ## Weights and assets

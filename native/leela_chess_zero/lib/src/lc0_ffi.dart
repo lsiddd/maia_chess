@@ -11,6 +11,10 @@ final int Function() nativeInit = _nativeLib
     .lookup<NativeFunction<Int32 Function()>>('lc0_init')
     .asFunction();
 
+final void Function(int) nativeAbortStartup = _nativeLib
+    .lookup<NativeFunction<Void Function(Int32)>>('lc0_abort_startup')
+    .asFunction();
+
 final void Function(Pointer<Utf8>) nativeSetWeights = _nativeLib
     .lookup<NativeFunction<Void Function(Pointer<Utf8>)>>('lc0_set_weights')
     .asFunction();

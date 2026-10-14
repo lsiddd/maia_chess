@@ -205,6 +205,23 @@ void main() {
   });
 
   group('transactional repository', () {
+    test('cancelled replacement rolls back the game and its moves', () async {
+      final previous = _ongoingGame('previous', ['d2d4', 'd7d5']);
+      await games.beginGame(previous);
+      await expectLater(
+        games.beginGame(
+          _ongoingGame('cancelled', ['e2e4']),
+          canCommit: () => false,
+        ),
+        throwsA(isA<GameStartCancelledException>()),
+      );
+      expect(await games.getGame('cancelled'), isNull);
+      final restored = (await games.getActiveGame())!;
+      expect(restored.id, previous.id);
+      expect(restored.moves.map((move) => move.uci), ['d2d4', 'd7d5']);
+      expect(const GameReplayer().replay(restored).positions, hasLength(3));
+    });
+
     test('autosave replaces snapshot and removes undone moves', () async {
       final first = _ongoingGame('autosave', ['e2e4', 'e7e5']);
       await games.beginGame(first);

@@ -25,6 +25,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(gameLibraryProvider);
+    final page = ref.watch(gameLibraryPageProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Saved games'),
@@ -41,6 +42,41 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            children: [
+              TextButton.icon(
+                onPressed: page == 0
+                    ? null
+                    : () {
+                        ref.read(gameLibraryPageProvider.notifier).state =
+                            page - 1;
+                      },
+                icon: const Icon(Icons.chevron_left),
+                label: const Text('Previous'),
+              ),
+              Text('Page ${page + 1}'),
+              TextButton.icon(
+                onPressed: library.isLoading ||
+                        library.hasError ||
+                        (library.valueOrNull?.length ?? 0) <= gameLibraryPageSize
+                    ? null
+                    : () {
+                        ref.read(gameLibraryPageProvider.notifier).state =
+                            page + 1;
+                      },
+                label: const Text('Next'),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: MaxWidthBody(
         child: library.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -55,20 +91,22 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           ),
           data: (games) {
             if (games.isEmpty) {
-              return const Center(
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: Text(
-                    'No saved games.\n'
-                    'Ongoing games are saved automatically.',
+                    page == 0
+                        ? 'No saved games.\nOngoing games are saved automatically.'
+                        : 'No games on this page.\nGo back to the previous page.',
                     textAlign: TextAlign.center,
                   ),
                 ),
               );
             }
             return ListView.separated(
+              key: ValueKey('game-library-page-$page'),
               padding: const EdgeInsets.all(12),
-              itemCount: games.length,
+              itemCount: games.length.clamp(0, gameLibraryPageSize),
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final game = games[index];
@@ -124,6 +162,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       if (!mounted) return;
       await ref.read(gameRepositoryProvider).importGame(game);
       if (!mounted) return;
+      ref.read(gameLibraryPageProvider.notifier).state = 0;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('PGN imported and validated.')),
       );

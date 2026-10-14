@@ -20,6 +20,28 @@ typedef StockfishEngineFactory = StockfishEngine Function();
 typedef MaiaWeightsResolver = Future<String> Function(DifficultyLevel level);
 typedef _HintCacheKey = ({int gameGeneration, String fen, int movetimeMs});
 
+/// Cancellation is accepted until the replacement transaction reaches its
+/// final commit check. After that point the caller waits for durability.
+class GameStartRequest {
+  final _cancellation = Completer<void>();
+  bool _committed = false;
+  void Function()? _onCancel;
+
+  bool get isCancelled => _cancellation.isCompleted;
+
+  void cancel() {
+    if (_committed || isCancelled) return;
+    _cancellation.complete();
+    _onCancel?.call();
+  }
+
+  bool _commit() {
+    if (isCancelled) return false;
+    _committed = true;
+    return true;
+  }
+}
+
 /// Inject engine contracts and weights extraction so controller flows can be
 /// tested without native FFI.
 final lc0EngineFactoryProvider = Provider<Lc0EngineFactory>(
@@ -62,12 +84,15 @@ class GameController extends Notifier<GameState> {
   bool _isDisposed = false;
   Future<void> _persistenceTail = Future.value();
   Future<void>? _engineDisposal;
+  Future<void> _gameStartTail = Future.value();
+  GameStartRequest? _activeStart;
 
   @override
   GameState build() {
     _isDisposed = false;
     ref.onDispose(() {
       _isDisposed = true;
+      _activeStart?.cancel();
       _gameGeneration++;
       _hintGeneration++;
       cancelOpponentThreats();
@@ -85,7 +110,10 @@ class GameController extends Notifier<GameState> {
   /// Start a local two-player game and dispose engines from any previous AI
   /// game.
   Future<void> startTwoPlayers() async {
+    _activeStart?.cancel();
     final generation = ++_gameGeneration;
+    await _gameStartTail;
+    if (!_isCurrentGame(generation)) return;
     await _cancelHint('A new game was started.');
     if (!_isCurrentGame(generation)) return;
     await _disposeEngines();
@@ -101,38 +129,137 @@ class GameController extends Notifier<GameState> {
     required Side humanSide,
     required int levelRating,
     bool campaignMode = false,
+    GameStartRequest? request,
   }) async {
     DifficultyLevel.byRating(levelRating); // Validate before changing state.
-    _gameGeneration++;
-    final gameGeneration = _gameGeneration;
-    await _cancelHint('A new game was started.');
-    if (!_isCurrentGame(gameGeneration)) return false;
-    if (state.aiThinking) {
-      await _discardLc0();
-      if (!_isCurrentGame(gameGeneration)) return false;
+    if (request?.isCancelled == true) return Future.value(false);
+    _activeStart?.cancel();
+    final gameGeneration = ++_gameGeneration;
+    final startRequest = request ?? GameStartRequest();
+    _activeStart = startRequest;
+    startRequest._onCancel = () {
+      if (!_isCurrentGame(gameGeneration)) return;
+      _gameGeneration++;
+      if (state.aiThinking || (state.isAiTurn && !state.isGameOver)) {
+        state = state.copyWith(
+          aiThinking: false,
+          engineError: 'Maia reply interrupted. Try again to continue.',
+        );
+      }
+      unawaited(
+        _discardLc0().then<void>(
+          (_) {},
+          onError: (Object _, StackTrace _) {},
+        ),
+      );
+    };
+    final operation = _gameStartTail.then(
+      (_) => _prepareVsAi(
+        humanSide: humanSide,
+        levelRating: levelRating,
+        campaignMode: campaignMode,
+        generation: gameGeneration,
+        request: startRequest,
+      ),
+    );
+    void finish() {
+      startRequest._onCancel = null;
+      if (identical(_activeStart, startRequest)) _activeStart = null;
     }
 
-    state = GameState.initial().copyWith(
+    _gameStartTail = operation.then<void>(
+      (_) => finish(),
+      onError: (Object _, StackTrace _) => finish(),
+    );
+    return Future.any<bool>([
+      operation,
+      startRequest._cancellation.future.then((_) => false),
+    ]);
+  }
+
+  Future<bool> _prepareVsAi({
+    required Side humanSide,
+    required int levelRating,
+    required bool campaignMode,
+    required int generation,
+    required GameStartRequest request,
+  }) async {
+    bool active() => _isCurrentGame(generation) && !request.isCancelled;
+    Future<T> cancellable<T>(Future<T> operation) => Future.any<T>([
+      operation,
+      request._cancellation.future.then<T>(
+        (_) => throw const GameStartCancelledException(),
+      ),
+    ]);
+    if (!active()) return false;
+    await _cancelHint('A new game was started.');
+    if (!active()) return false;
+    if (state.aiThinking) {
+      await _discardLc0();
+      if (!active()) return false;
+      state = state.copyWith(
+        aiThinking: false,
+        engineError: 'Maia reply interrupted. Try again to continue.',
+      );
+    }
+
+    var candidate = GameState.initial().copyWith(
       aiSide: humanSide.opposite,
       levelRating: levelRating,
-      aiThinking: true,
       campaignMode: campaignMode,
     );
+    var persisting = false;
+    var persisted = false;
     try {
-      await _ensureEngineLoaded(levelRating);
-    } catch (e) {
-      if (_isCurrentGame(gameGeneration)) {
-        state = state.copyWith(aiThinking: false, engineError: 'Maia: $e');
+      await cancellable(_ensureEngineLoaded(levelRating, stillNeeded: active));
+      if (!active()) return false;
+      candidate = candidate.copyWith(startedAtUtc: DateTime.now().toUtc());
+      if (candidate.isAiTurn) {
+        final uci = await cancellable(
+          _lc0!.getBestMove(candidate.position.fen, nodes: 1),
+        );
+        if (!active()) return false;
+        final move = Move.parse(uci);
+        if (move == null) {
+          throw StateError('lc0 returned an invalid move: "$uci"');
+        }
+        candidate = _stateAfterMove(candidate, move, actor: GameMoveActor.maia);
+      }
+      candidate = candidate.copyWith(gameId: ref.read(gameIdFactoryProvider)());
+      final snapshot = _snapshot(
+        candidate,
+        status: StoredGameStatus.ongoing,
+        result: StoredGameResult.ongoing,
+      );
+      final repository = ref.read(gameRepositoryProvider);
+      persisting = true;
+      await _queuePersistence(() {
+        if (!active()) throw const GameStartCancelledException();
+        return repository.beginGame(
+          snapshot,
+          canCommit: () => active() && request._commit(),
+        );
+      });
+      persisted = true;
+      if (!active()) return false;
+      state = candidate;
+      unawaited(_warmUpStockfish());
+      return true;
+    } on GameStartCancelledException {
+      return false;
+    } catch (error) {
+      if (active()) {
+        state = persisting
+            ? state.copyWith(
+                aiThinking: false,
+                persistenceError: 'Could not start autosave: $error',
+              )
+            : state.copyWith(aiThinking: false, engineError: 'Maia: $error');
       }
       return false;
+    } finally {
+      if (!persisted) await _discardLc0();
     }
-    if (!_isCurrentGame(gameGeneration)) return false;
-    state = state.copyWith(aiThinking: false);
-    if (!await _beginPersistedGame(playerSide: humanSide)) {
-      return false;
-    }
-    if (!_isCurrentGame(gameGeneration)) return false;
-    return _maybePlayAiTurn();
   }
 
   /// Restore the sole active autosave. Replay every UCI move and check
@@ -140,8 +267,11 @@ class GameController extends Notifier<GameState> {
   /// saved, Maia responds once; an already saved Maia reply is not
   /// duplicated.
   Future<bool> restoreActiveGame() async {
+    _activeStart?.cancel();
     _gameGeneration++;
     final generation = _gameGeneration;
+    await _gameStartTail;
+    if (!_isCurrentGame(generation)) return false;
     await _cancelHint('A saved game was restored.');
     if (!_isCurrentGame(generation)) return false;
     await _disposeEngines();
@@ -206,7 +336,10 @@ class GameController extends Notifier<GameState> {
     if (stored.levelRating != null) {
       state = state.copyWith(aiThinking: true);
       try {
-        await _ensureEngineLoaded(stored.levelRating!);
+        await _ensureEngineLoaded(
+          stored.levelRating!,
+          stillNeeded: () => _isCurrentGame(generation),
+        );
       } catch (error) {
         if (_isCurrentGame(generation)) {
           state = state.copyWith(
@@ -356,19 +489,27 @@ class GameController extends Notifier<GameState> {
   /// native engines. Throw [PlayException] if the move is illegal in the
   /// current position.
   Future<void> _applyMove(Move move, {required GameMoveActor actor}) async {
-    final (newPosition, san) = state.position.makeSan(move);
+    state = _stateAfterMove(state, move, actor: actor);
+    await _persistCurrentGame();
+  }
+
+  GameState _stateAfterMove(
+    GameState before,
+    Move move, {
+    required GameMoveActor actor,
+  }) {
+    final (newPosition, san) = before.position.makeSan(move);
     final now = DateTime.now().toUtc();
-    state = state.copyWith(
+    return before.copyWith(
       position: newPosition as Chess,
-      positionHistory: [...state.positionHistory, state.position],
-      sanHistory: [...state.sanHistory, san],
-      uciHistory: [...state.uciHistory, move.uci],
-      moveActorHistory: [...state.moveActorHistory, actor],
-      moveTimeHistoryUtc: [...state.moveTimeHistoryUtc, now],
+      positionHistory: [...before.positionHistory, before.position],
+      sanHistory: [...before.sanHistory, san],
+      uciHistory: [...before.uciHistory, move.uci],
+      moveActorHistory: [...before.moveActorHistory, actor],
+      moveTimeHistoryUtc: [...before.moveTimeHistoryUtc, now],
       clearSelection: true,
       clearPersistenceError: true,
     );
-    await _persistCurrentGame();
   }
 
   /// Undo one ply in local play, or return to the previous human decision
@@ -708,7 +849,10 @@ class GameController extends Notifier<GameState> {
   /// Restart from the initial position, preserving local/AI mode, level, and
   /// campaign mode.
   Future<void> reset() async {
+    _activeStart?.cancel();
     final generation = ++_gameGeneration;
+    await _gameStartTail;
+    if (!_isCurrentGame(generation)) return;
     await _cancelHint('The game was restarted.');
     if (!_isCurrentGame(generation)) return;
     if (state.aiThinking) {
@@ -741,7 +885,7 @@ class GameController extends Notifier<GameState> {
   }
 
   Future<bool> _maybePlayAiTurn() async {
-    if (_isDisposed) return false;
+    if (_isDisposed || _activeStart != null) return false;
     if (state.levelRating != null && !state.isGameOver) {
       unawaited(_warmUpStockfish());
     }
@@ -752,7 +896,10 @@ class GameController extends Notifier<GameState> {
     state = state.copyWith(aiThinking: true, clearEngineError: true);
     try {
       final levelRating = state.levelRating!;
-      await _ensureEngineLoaded(levelRating);
+      await _ensureEngineLoaded(
+        levelRating,
+        stillNeeded: () => _isCurrentGame(gameGeneration),
+      );
       if (!_isCurrentGame(gameGeneration)) return false;
       final uci = await _lc0!.getBestMove(fen, nodes: 1);
       final move = Move.parse(uci);
@@ -773,7 +920,9 @@ class GameController extends Notifier<GameState> {
         final failedEngine = _lc0;
         _lc0 = null;
         _loadedLevelRating = null;
-        await failedEngine?.dispose();
+        if (failedEngine != null) {
+          await _trackEngineDisposal([failedEngine.dispose()]);
+        }
         if (!_isCurrentGame(gameGeneration)) return false;
         state = state.copyWith(engineError: 'Maia: $e');
       }
@@ -785,31 +934,40 @@ class GameController extends Notifier<GameState> {
     }
   }
 
-  Future<void> _ensureEngineLoaded(int levelRating) async {
-    if (_isDisposed) {
-      throw const HintCancelledException('Controller disposed');
+  Future<void> _ensureEngineLoaded(
+    int levelRating, {
+    bool Function()? stillNeeded,
+  }) async {
+    void ensureActive() {
+      if (_isDisposed || stillNeeded?.call() == false) {
+        throw const GameStartCancelledException();
+      }
     }
+    ensureActive();
     final disposal = _engineDisposal;
     if (disposal != null) await disposal;
+    ensureActive();
     if (_lc0?.isReady == true && _loadedLevelRating == levelRating) return;
 
     final previous = _lc0;
     _lc0 = null;
     _loadedLevelRating = null;
-    await previous?.dispose();
-    if (_isDisposed) {
-      throw const HintCancelledException('Controller disposed');
+    if (previous != null) {
+      await _trackEngineDisposal([previous.dispose()]);
     }
+    ensureActive();
 
     final level = DifficultyLevel.byRating(levelRating);
     final engine = ref.read(lc0EngineFactoryProvider)();
     _lc0 = engine;
     try {
       final weightsPath = await ref.read(maiaWeightsResolverProvider)(level);
+      ensureActive();
       if (!identical(_lc0, engine)) {
         throw StateError('Maia engine was disposed during startup');
       }
       await engine.init(weightsPath);
+      ensureActive();
       if (!identical(_lc0, engine) || !engine.isReady) {
         throw StateError('Maia engine was not ready after startup');
       }
@@ -818,7 +976,7 @@ class GameController extends Notifier<GameState> {
       if (identical(_lc0, engine)) {
         _lc0 = null;
         _loadedLevelRating = null;
-        await engine.dispose();
+        await _trackEngineDisposal([engine.dispose()]);
       }
       rethrow;
     }
@@ -828,7 +986,7 @@ class GameController extends Notifier<GameState> {
   /// game. An optional warmup failure does not interrupt play; the next hint
   /// retries startup.
   Future<void> _warmUpStockfish() async {
-    if (!ref.read(stockfishWarmupEnabledProvider)) return;
+    if (_isDisposed || !ref.read(stockfishWarmupEnabledProvider)) return;
     try {
       await _ensureStockfishLoaded();
     } on Object {
@@ -955,11 +1113,11 @@ class GameController extends Notifier<GameState> {
     return disposal;
   }
 
-  Future<void> _discardLc0() async {
+  Future<void> _discardLc0() {
     final lc0 = _lc0;
     _lc0 = null;
     _loadedLevelRating = null;
-    await lc0?.dispose();
+    return _trackEngineDisposal([if (lc0 != null) lc0.dispose()]);
   }
 
   Future<bool> _beginPersistedGame({Side? playerSide}) async {
@@ -1143,7 +1301,9 @@ class GameController extends Notifier<GameState> {
   /// flows using the native singletons. Service shutdown timeouts still
   /// apply.
   Future<void> shutdownEngines() async {
+    _activeStart?.cancel();
     _gameGeneration++;
+    await _gameStartTail;
     await _cancelHint('The engines were shut down.');
     await _disposeEngines();
   }

@@ -151,6 +151,10 @@ class AppDatabase extends _$AppDatabase {
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS games_library_modified_id '
+        'ON games (last_modified_at_utc DESC, id DESC)',
+      );
     },
   );
 

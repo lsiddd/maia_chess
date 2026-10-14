@@ -63,7 +63,7 @@ class Lc0Service implements Lc0Engine {
     // registration.
     final startup = awaitListenableValue(
       engine.state,
-      predicate: (state) => state == Lc0State.ready || state == Lc0State.error,
+      predicate: (state) => state != Lc0State.starting,
     );
     try {
       final state = await startup.future.timeout(
@@ -72,7 +72,7 @@ class Lc0Service implements Lc0Engine {
           'lc0 did not start within ${_startupTimeout.inSeconds}s',
         ),
       );
-      if (state == Lc0State.error) {
+      if (state != Lc0State.ready) {
         throw StateError('lc0 failed to start');
       }
 
@@ -169,8 +169,8 @@ class Lc0Service implements Lc0Engine {
 
   /// Request shutdown and wait for native disposal, within bounded timeouts.
   /// `Lc0.dispose()` only sends `quit`; the package releases its singleton
-  /// after the engine loop exits. There is no force-kill API, so a timeout
-  /// does not guarantee shutdown.
+  /// after both native isolates exit. There is no force-kill API, so a
+  /// timeout does not guarantee shutdown.
   @override
   Future<void> dispose() async {
     final engine = _engine;
@@ -193,25 +193,8 @@ class Lc0Service implements Lc0Engine {
   }
 
   Future<void> _terminateEngine(Lc0 engine) async {
-    var current = engine.state.value;
+    final current = engine.state.value;
     if (current == Lc0State.disposed || current == Lc0State.error) return;
-
-    // The wrapper accepts `quit` only when ready. Wait for bootstrap to
-    // finish before attempting a clean shutdown.
-    if (current == Lc0State.starting) {
-      final startup = awaitListenableValue(
-        engine.state,
-        predicate: (state) => state != Lc0State.starting,
-      );
-      try {
-        current = await startup.future.timeout(_terminateStepTimeout);
-      } on TimeoutException {
-        return;
-      } finally {
-        startup.cancel();
-      }
-    }
-    if (current != Lc0State.ready) return;
 
     final terminated = awaitListenableValue(
       engine.state,

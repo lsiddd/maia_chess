@@ -7,6 +7,38 @@ void main() {
   const service = PgnService();
   final date = DateTime.utc(2026, 10, 11);
 
+  for (final multibyte in [false, true]) {
+    test('rejects imports beyond the byte limit (UTF-8: $multibyte)', () async {
+      final source = multibyte
+          ? 'é'.padRight(PgnService.maxImportBytes ~/ 2 + 1, 'é')
+          : 'x'.padRight(PgnService.maxImportBytes + 1, 'x');
+      await expectLater(
+        service.parseImportAsync(pgn: source, id: 'large', importedAtUtc: date),
+        throwsA(
+          isA<PgnFormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('4 MiB'),
+          ),
+        ),
+      );
+    });
+  }
+
+  test('rejects deeply nested variations before parsing', () async {
+    final source = '${''.padRight(65, '(')}${''.padRight(65, ')')} *';
+    await expectLater(
+      service.parseImportAsync(pgn: source, id: 'nested', importedAtUtc: date),
+      throwsA(
+        isA<PgnFormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('64 levels'),
+        ),
+      ),
+    );
+  });
+
   test(
     'worker preserves moves, variations, comments, FEN, and metadata',
     () async {

@@ -9,6 +9,7 @@
     lc0_main();
     lc0_stdin_write(NULL);
     lc0_stdout_read();
+    lc0_abort_startup(0);
   }
 }
 @end

@@ -1,11 +1,19 @@
 #ifndef LC0_FFI_H
 #define LC0_FFI_H
 
+#include <sys/types.h>
+
 #ifdef __cplusplus
 extern "C" __attribute__((visibility("default"))) __attribute__((used))
 #endif
 int
 lc0_init();
+
+#ifdef __cplusplus
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+#endif
+void
+lc0_abort_startup(int stdout_started);
 
 #ifdef __cplusplus
 extern "C" __attribute__((visibility("default"))) __attribute__((used))

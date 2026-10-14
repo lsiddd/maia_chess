@@ -9,20 +9,23 @@ lc0 distribution. The Dart package version is 1.0.0;
 | File | Responsibility |
 | --- | --- |
 | `lib/src/lc0.dart` | Singleton wrapper, state notifications, output stream, isolate startup, and cleanup |
-| `lib/src/lc0_ffi.dart` | Resolve five exported native functions |
+| `lib/src/lc0_ffi.dart` | Resolve six exported native functions |
 | `ios/FlutterLc0/ffi.cpp` | Private UCI pipes, weights path, engine entry point, partial-write handling, and shutdown EOF |
 | `ios/lc0/src/mobile_uci_io.h` | Private input/output declarations used by the patched UCI loop |
 | `ios/lc0/src/chess/uciloop.cc` | UCI command loop |
 
-The exported functions are `lc0_init`, `lc0_set_weights`, `lc0_main`,
-`lc0_stdin_write`, and `lc0_stdout_read`. Android loads `liblc0.so`; iOS resolves
-symbols from `DynamicLibrary.process()`.
+The exported functions are `lc0_init`, `lc0_abort_startup`, `lc0_set_weights`,
+`lc0_main`, `lc0_stdin_write`, and `lc0_stdout_read`. Android loads `liblc0.so`;
+iOS resolves symbols from `DynamicLibrary.process()`.
 
-An initial `compute` call creates pipes and supplies the weights path, then
-spawns an engine isolate and a blocking output-reader isolate. The reader
+Deferred bootstrap creates the private pipes and supplies the weights path,
+then spawns an engine isolate and a blocking output-reader isolate. The reader
 buffers partial lines and sends complete lines to the Dart broadcast stream.
-The main isolate reports its exit code; cleanup closes streams/subscriptions,
-sets terminal state, and releases the singleton.
+The main isolate reports its exit code. Both workers have exit notifications
+registered when spawned; cleanup closes streams/subscriptions, sets terminal
+state, and releases the singleton only after both have exited. An initialization
+failure after the reader starts closes the output writer so the reader wakes on
+EOF; a failure before either worker starts closes all pipe ends.
 
 The bridge keeps lc0's pipes private instead of redirecting process-wide stdin
 and stdout. Stockfish is another in-process engine; sharing those descriptors
@@ -31,9 +34,15 @@ previously caused competing blocking reads. The patched lc0 UCI loop uses
 `quitok` and closes pipe ends so the reader observes EOF even when output is
 coalesced.
 
+Pipe descriptors start at `-1`; initialization rejects any surviving descriptors
+or running engine. Descriptor changes and writes are synchronised, and stdout
+reads retry interrupted system calls. The stdout reader drains to EOF instead
+of treating a standalone `quitok` line as permission to close early.
+
 The wrapper's `ready` state confirms bootstrap, while the application service
 additionally waits for `isready`/`readyok` before searching. `dispose()` writes
-`quit`; it does not synchronously join native isolates. See the
+`quit`, or records a shutdown request during bootstrap; it does not synchronously
+join native isolates. See the
 [API README](README.md) and application
 [`Lc0Service`](../../lib/engine_ffi/lc0_engine/lc0_service.dart) for lifecycle rules.
 

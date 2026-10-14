@@ -509,7 +509,10 @@ class FakeGameRepository implements GameRepository {
   final Map<String, StoredGame> games = {};
 
   @override
-  Future<void> beginGame(StoredGame game) async {
+  Future<void> beginGame(StoredGame game, {bool Function()? canCommit}) async {
+    if (canCommit != null && !canCommit()) {
+      throw const GameStartCancelledException();
+    }
     games.removeWhere((_, stored) => stored.status == StoredGameStatus.ongoing);
     games[game.id] = game;
   }
@@ -555,8 +558,10 @@ class FakeGameRepository implements GameRepository {
   );
 
   @override
-  Stream<List<StoredGame>> watchLibrary() =>
-      Stream.value(games.values.toList(growable: false));
+  Stream<List<StoredGame>> watchLibrary({int? limit, int offset = 0}) {
+    final page = games.values.skip(offset);
+    return Stream.value((limit == null ? page : page.take(limit)).toList());
+  }
 }
 
 class FakeLc0Engine implements Lc0Engine {

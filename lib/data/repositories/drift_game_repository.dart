@@ -10,43 +10,69 @@ class DriftGameRepository implements GameRepository {
   final AppDatabase _db;
 
   @override
-  Stream<List<StoredGame>> watchLibrary() {
-    final query = _db.select(_db.games)
-      ..orderBy([(row) => OrderingTerm.desc(row.lastModifiedAtUtc)]);
-    return query.watch().asyncMap(_hydrateLibrary);
-  }
-
-  @override
-  Stream<StoredGame?> watchActiveGame() {
-    final query = _db.select(_db.games)
-      ..where((row) => row.status.equals(StoredGameStatus.ongoing.name))
-      ..orderBy([(row) => OrderingTerm.desc(row.lastModifiedAtUtc)])
-      ..limit(1);
-    return query.watchSingleOrNull().asyncMap(
-      (row) => row == null ? null : _hydrate(row),
+  Stream<List<StoredGame>> watchLibrary({int? limit, int offset = 0}) {
+    if (offset < 0 ||
+        (limit == null && offset != 0) ||
+        (limit != null && (limit < 1 || limit > 500))) {
+      throw ArgumentError('Invalid library page bounds.');
+    }
+    return _watchSnapshot(
+      () => _db.transaction(() async {
+        final query = _db.select(_db.games)
+          ..orderBy([
+            (row) => OrderingTerm.desc(row.lastModifiedAtUtc),
+            (row) => OrderingTerm.desc(row.id),
+          ]);
+        if (limit != null) query.limit(limit, offset: offset);
+        final rows = await query.get();
+        return _hydrateLibrary(rows, limited: limit != null);
+      }),
     );
   }
 
   @override
-  Future<StoredGame?> getActiveGame() async {
+  Stream<StoredGame?> watchActiveGame() {
+    return _watchSnapshot(getActiveGame);
+  }
+
+  @override
+  Future<StoredGame?> getActiveGame() => _db.transaction(() async {
     final query = _db.select(_db.games)
       ..where((row) => row.status.equals(StoredGameStatus.ongoing.name))
       ..orderBy([(row) => OrderingTerm.desc(row.lastModifiedAtUtc)])
       ..limit(1);
     final row = await query.getSingleOrNull();
     return row == null ? null : _hydrate(row);
-  }
+  });
 
   @override
-  Future<StoredGame?> getGame(String id) async {
+  Future<StoredGame?> getGame(String id) => _db.transaction(() async {
     final row = await (_db.select(
       _db.games,
     )..where((row) => row.id.equals(id))).getSingleOrNull();
     return row == null ? null : _hydrate(row);
+  });
+
+  Stream<T> _watchSnapshot<T>(Future<T> Function() read) {
+    // Subscribe before the initial read so a concurrent commit is not missed.
+    final changes = Stream<void>.multi((events) {
+      final subscription = _db
+          .tableUpdates(TableUpdateQuery.onAllTables([_db.games, _db.gameMoves]))
+          .listen(
+            (_) => events.add(null),
+            onError: events.addError,
+            onDone: events.close,
+          );
+      events.onCancel = subscription.cancel;
+      events.onPause = subscription.pause;
+      events.onResume = subscription.resume;
+      events.add(null);
+    });
+    return changes.asyncMap((_) => read());
   }
 
   @override
-  Future<void> beginGame(StoredGame game) {
+  Future<void> beginGame(StoredGame game, {bool Function()? canCommit}) {
     _requireOngoing(game);
     return _db.transaction(() async {
       final activeIds =
@@ -61,6 +87,9 @@ class DriftGameRepository implements GameRepository {
         )..where((row) => row.id.isIn(activeIds))).go();
       }
       await _insertSnapshot(game);
+      if (canCommit != null && !canCommit()) {
+        throw const GameStartCancelledException();
+      }
     });
   }
 
@@ -137,12 +166,19 @@ class DriftGameRepository implements GameRepository {
     return _fromRows(row, moves);
   }
 
-  Future<List<StoredGame>> _hydrateLibrary(List<GameRow> rows) async {
+  Future<List<StoredGame>> _hydrateLibrary(
+    List<GameRow> rows, {
+    required bool limited,
+  }) async {
     if (rows.isEmpty) return const [];
-    // The library includes every game. Reading all moves avoids both N+1
-    // queries and an IN clause that could exceed SQLite's bind limit.
+    final query = _db.select(_db.gameMoves);
+    // Bounded pages fit SQLite's bind limit. The legacy full-library read
+    // avoids an unbounded IN clause and still uses two SELECTs.
+    if (limited) {
+      query.where((move) => move.gameId.isIn(rows.map((row) => row.id)));
+    }
     final moves =
-        await (_db.select(_db.gameMoves)..orderBy([
+        await (query..orderBy([
               (move) => OrderingTerm.asc(move.gameId),
               (move) => OrderingTerm.asc(move.ply),
             ]))
