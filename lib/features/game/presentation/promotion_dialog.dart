@@ -17,8 +17,8 @@ Future<Role?> showPromotionDialog(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Promote pawn to'),
-      content: Row(
-        mainAxisSize: MainAxisSize.min,
+      content: Wrap(
+        alignment: WrapAlignment.center,
         children: _promotionChoices.map((role) {
           final piece = Piece(color: side, role: role);
           return IconButton(

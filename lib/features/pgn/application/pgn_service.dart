@@ -271,15 +271,16 @@ class PgnService {
       if (char == ';') {
         lineComment = true;
       } else if (char == '{') {
+        output.write(' ');
         braceDepth = 1;
       } else if (char == '[' && variationDepth == 0) {
         inHeader = true;
       } else if (char == '(') {
         variationDepth++;
-        if (includeVariationText) output.write(' ');
+        output.write(' ');
       } else if (char == ')' && variationDepth > 0) {
         variationDepth--;
-        if (includeVariationText) output.write(' ');
+        output.write(' ');
       } else if (variationDepth == 0 || includeVariationText) {
         output.write(char);
       }
@@ -300,9 +301,21 @@ class PgnService {
     final year = int.tryParse(parts[0]);
     final month = int.tryParse(parts[1]);
     final day = int.tryParse(parts[2]);
-    if (year == null || month == null || day == null) return null;
+    if (year == null ||
+        month == null ||
+        day == null ||
+        year < 1 ||
+        month < 1 ||
+        month > 12 ||
+        day < 1 ||
+        day > 31) {
+      return null;
+    }
     try {
-      return DateTime.utc(year, month, day);
+      final date = DateTime.utc(year, month, day);
+      return date.year == year && date.month == month && date.day == day
+          ? date
+          : null;
     } on ArgumentError {
       return null;
     }

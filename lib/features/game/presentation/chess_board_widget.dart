@@ -498,6 +498,17 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                       final piece = state.position.board.pieceAt(square);
                       final isSelected = square == selected;
                       final isLegalTarget = legalDestinations.contains(square);
+                      final isAttacked =
+                          widget.showAttackedPieces &&
+                          _attackedSquares.contains(square) &&
+                          (widget.attackedSide == null ||
+                              piece?.color == widget.attackedSide);
+                      final defended =
+                          isAttacked &&
+                          piece != null &&
+                          state.position.board
+                              .attacksTo(square, piece.color)
+                              .isNotEmpty;
                       final isBeingDragged =
                           square == _draggingFrom ||
                           square == _promotionFrom ||
@@ -528,22 +539,15 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           if (square == lastMoveFrom || square == lastMoveTo)
                             'Last move',
                           if (square == checkSquare) 'Check',
-                          if (widget.showAttackedPieces &&
-                              _attackedSquares.contains(square) &&
-                              (widget.attackedSide == null ||
-                                  piece?.color == widget.attackedSide))
-                            'Attacked piece${piece != null && state.position.board.attacksTo(square, piece.color).isNotEmpty ? ', defended' : ', without geometric defence'}',
+                          if (isAttacked)
+                            'Attacked piece${defended ? ', defended' : ', without geometric defence'}',
                         ].join(', '),
                         onTap: canInteract
                             ? () => unawaited(tapSquare(square))
                             : null,
                         child: _SquareVisual(
                           isHint: square == widget.hintSquare,
-                          defended:
-                              piece != null &&
-                              state.position.board
-                                  .attacksTo(square, piece.color)
-                                  .isNotEmpty,
+                          defended: defended,
                           key: ValueKey('board-square-$displayRow-$displayCol'),
                           piece: (isBeingDragged || isFlightDestination)
                               ? null
@@ -556,11 +560,7 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
                           isLastMove:
                               square == lastMoveFrom || square == lastMoveTo,
                           isCheck: square == checkSquare,
-                          isAttacked:
-                              widget.showAttackedPieces &&
-                              _attackedSquares.contains(square) &&
-                              (widget.attackedSide == null ||
-                                  piece?.color == widget.attackedSide),
+                          isAttacked: isAttacked,
                           instantExit:
                               isFlightOrigin ||
                               isBeingDragged ||

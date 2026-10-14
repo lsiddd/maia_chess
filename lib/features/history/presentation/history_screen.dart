@@ -11,11 +11,19 @@ import '../../game/presentation/chess_board_widget.dart';
 import '../../pgn/application/pgn_service.dart';
 import '../domain/game_replayer.dart';
 
-class HistoryScreen extends ConsumerWidget {
+class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends ConsumerState<HistoryScreen> {
+  bool _importing = false;
+  final _busyGameIds = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
     final library = ref.watch(gameLibraryProvider);
     return Scaffold(
       appBar: AppBar(
@@ -23,8 +31,13 @@ class HistoryScreen extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: 'Import PGN',
-            onPressed: () => _importPgn(context, ref),
-            icon: const Icon(Icons.file_open_outlined),
+            onPressed: _importing ? null : _importPgn,
+            icon: _importing
+                ? const SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.file_open_outlined),
           ),
         ],
       ),
@@ -74,8 +87,8 @@ class HistoryScreen extends ConsumerWidget {
                       ),
                     ),
                     trailing: PopupMenuButton<_HistoryAction>(
-                      onSelected: (action) =>
-                          _handleAction(context, ref, game, action),
+                      enabled: !_busyGameIds.contains(game.id),
+                      onSelected: (action) => _handleAction(game, action),
                       itemBuilder: (context) => const [
                         PopupMenuItem(
                           value: _HistoryAction.export,
@@ -97,72 +110,82 @@ class HistoryScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _importPgn(BuildContext context, WidgetRef ref) async {
+  Future<void> _importPgn() async {
+    if (_importing) return;
+    setState(() => _importing = true);
     try {
       final source = await const PgnFileService().pickPgn();
-      if (source == null || !context.mounted) return;
+      if (source == null || !mounted) return;
       final game = await const PgnService().parseImportAsync(
         pgn: source,
         id: ref.read(gameIdFactoryProvider)(),
         importedAtUtc: DateTime.now().toUtc(),
       );
-      if (!context.mounted) return;
+      if (!mounted) return;
       await ref.read(gameRepositoryProvider).importGame(game);
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('PGN imported and validated.')),
       );
     } catch (error) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Could not import: $error')));
+    } finally {
+      if (mounted) setState(() => _importing = false);
     }
   }
 
   Future<void> _handleAction(
-    BuildContext context,
-    WidgetRef ref,
     StoredGame game,
     _HistoryAction action,
   ) async {
-    switch (action) {
-      case _HistoryAction.export:
-        try {
+    if (_busyGameIds.contains(game.id)) return;
+    setState(() => _busyGameIds.add(game.id));
+    try {
+      switch (action) {
+        case _HistoryAction.export:
           await const PgnFileService().sharePgn(
             gameId: game.id,
             pgn: game.pgn ?? const PgnService().export(game),
           );
-        } catch (error) {
-          if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to export PGN: $error')),
-          );
-        }
-      case _HistoryAction.delete:
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete game?'),
-            content: const Text(
-              'This action cannot be undone. Rating, streaks, and '
-              'campaign progress will be rebuilt without this game.',
+        case _HistoryAction.delete:
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Delete game?'),
+              content: const Text(
+                'This action cannot be undone. Rating, streaks, and '
+                'campaign progress will be rebuilt without this game.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Delete'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed == true) {
+          );
+          if (confirmed != true || !mounted) return;
           await ref.read(gameRepositoryProvider).deleteGame(game.id);
-        }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Game deleted.')),
+          );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      final operation = action == _HistoryAction.delete ? 'delete' : 'export';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not $operation the game: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busyGameIds.remove(game.id));
     }
   }
 
@@ -181,7 +204,10 @@ class HistoryScreen extends ConsumerWidget {
         '${date.month.toString().padLeft(2, '0')}/${date.year} '
         '${date.hour.toString().padLeft(2, '0')}:'
         '${date.minute.toString().padLeft(2, '0')}';
-    final evaluated = game.evaluated ? 'rated' : 'unrated';
+    final evaluated =
+        game.evaluated && game.levelRating != null && game.playerSide != null
+        ? 'rated'
+        : 'unrated';
     return '$formatted • ${game.moves.length} moves • $evaluated';
   }
 }
@@ -313,8 +339,9 @@ class _ReplayViewState extends State<_ReplayView> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Center(child: Text('Move $_ply of ${game.moves.length}')),
+              Wrap(
+                alignment: WrapAlignment.center,
                 children: [
                   IconButton(
                     tooltip: 'Start',
@@ -328,7 +355,6 @@ class _ReplayViewState extends State<_ReplayView> {
                     onPressed: _ply == 0 ? null : () => setState(() => _ply--),
                     icon: const Icon(Icons.chevron_left),
                   ),
-                  Text('Move $_ply of ${game.moves.length}'),
                   IconButton(
                     tooltip: 'Next',
                     onPressed: _ply == game.moves.length
@@ -348,7 +374,8 @@ class _ReplayViewState extends State<_ReplayView> {
               if (_ply > 0)
                 Center(
                   child: Text(
-                    '${_ply.isOdd ? '${(_ply + 1) ~/ 2}.' : '${_ply ~/ 2}...'} '
+                    '${widget.replayed.positions[_ply - 1].fullmoves}'
+                    '${widget.replayed.positions[_ply - 1].turn == Side.white ? '.' : '...'} '
                     '${game.moves[_ply - 1].san}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),

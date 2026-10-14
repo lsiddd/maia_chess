@@ -11,22 +11,36 @@ class AppPageRoute<T> extends PageRouteBuilder<T> {
             builder(context),
         transitionDuration: AppMotion.medium,
         reverseTransitionDuration: AppMotion.medium,
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: AppMotion.curve,
-            reverseCurve: AppMotion.curve.flipped,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.04, 0),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
-        },
       );
+
+  CurvedAnimation? _curvedAnimation;
+  Animation<Offset>? _slideAnimation;
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final curved = _curvedAnimation ??= CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.curve,
+      reverseCurve: AppMotion.curve.flipped,
+    );
+    final slide = _slideAnimation ??= Tween<Offset>(
+      begin: const Offset(0.04, 0),
+      end: Offset.zero,
+    ).animate(curved);
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(position: slide, child: child),
+    );
+  }
+
+  @override
+  void dispose() {
+    _curvedAnimation?.dispose();
+    super.dispose();
+  }
 }
