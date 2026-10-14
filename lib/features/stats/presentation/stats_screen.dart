@@ -139,8 +139,10 @@ class _RatingHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.end,
+            spacing: 10,
+            runSpacing: 8,
             children: [
               Text(
                 '${stats.estimatedRating.round()}',
@@ -150,7 +152,6 @@ class _RatingHero extends StatelessWidget {
                   height: 1,
                 ),
               ),
-              const SizedBox(width: 10),
               Padding(
                 padding: const EdgeInsets.only(bottom: 7),
                 child: Text(
@@ -289,13 +290,14 @@ class _LevelScoreCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
-                      Expanded(
-                        child: Text(
-                          '${results.total} games',
-                          style: theme.textTheme.labelLarge,
-                        ),
+                      Text(
+                        '${results.total} games',
+                        style: theme.textTheme.labelLarge,
                       ),
                       Text(
                         '${results.wins}W  ${results.draws}D  '
@@ -405,6 +407,7 @@ class _RatingChartPainter extends CustomPainter {
         canvas,
         Offset(chart.left - text.width - 6, y - text.height / 2),
       );
+      text.dispose();
     }
 
     Offset coordinate(int index, double value) {
@@ -456,6 +459,8 @@ class _RatingChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _RatingChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.lineColor != lineColor ||
-        oldDelegate.gridColor != gridColor;
+        oldDelegate.gridColor != gridColor ||
+        oldDelegate.labelColor != labelColor ||
+        oldDelegate.fillColor != fillColor;
   }
 }

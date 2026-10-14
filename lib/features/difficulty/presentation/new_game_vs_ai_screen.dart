@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,10 +43,13 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
         ).showSnackBar(SnackBar(content: Text(error)));
         return;
       }
-      unawaited(
-        Navigator.of(
-          context,
-        ).push(AppPageRoute(builder: (_) => const GameScreen())),
+      await Navigator.of(
+        context,
+      ).push(AppPageRoute(builder: (_) => const GameScreen()));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start the game: $error')),
       );
     } finally {
       if (mounted) setState(() => _starting = false);
@@ -81,8 +82,10 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                         ButtonSegment(value: Side.black, label: Text('Black')),
                       ],
                       selected: {_humanSide},
-                      onSelectionChanged: (selection) =>
-                          setState(() => _humanSide = selection.first),
+                      onSelectionChanged: _starting
+                          ? null
+                          : (selection) =>
+                                setState(() => _humanSide = selection.first),
                     ),
                   ],
                 ),
@@ -109,8 +112,10 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                         return ChoiceChip(
                           label: Text('${level.rating}'),
                           selected: selected,
-                          onSelected: (_) =>
-                              setState(() => _levelRating = level.rating),
+                          onSelected: _starting
+                              ? null
+                              : (_) =>
+                                    setState(() => _levelRating = level.rating),
                         );
                       }).toList(),
                     ),
@@ -164,7 +169,9 @@ class _SectionLabel extends StatelessWidget {
       children: [
         Icon(icon, size: 20, color: colors.primary),
         const SizedBox(width: AppSpacing.s),
-        Text(label, style: Theme.of(context).textTheme.titleMedium),
+        Expanded(
+          child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+        ),
       ],
     );
   }

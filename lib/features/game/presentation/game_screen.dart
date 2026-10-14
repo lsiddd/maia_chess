@@ -27,6 +27,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   late final GameController _controller;
   late final LiveThreatController _plans;
   bool _flipped = false;
+  bool _savingSettings = false;
   int _planIndex = 0;
   String? _noticeText;
   Timer? _noticeTimer;
@@ -36,6 +37,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
     super.initState();
     _controller = ref.read(gameControllerProvider.notifier);
     _plans = ref.read(liveThreatControllerProvider.notifier);
+    ref.listenManual(
+      appSettingsProvider,
+      (previous, next) {
+        if (next.valueOrNull?.showAttackedPieces == true) {
+          _markAttackAssistance();
+        }
+      },
+      fireImmediately: true,
+    );
     WidgetsBinding.instance.addObserver(this);
     unawaited(WakelockPlus.enable());
   }
@@ -83,6 +93,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _settings({bool? attacks, bool? ownOnly}) async {
+    if (_savingSettings) return;
+    setState(() => _savingSettings = true);
     try {
       final repository = ref.read(settingsRepositoryProvider);
       final current = await repository.get();
@@ -94,17 +106,24 @@ class _GameScreenState extends ConsumerState<GameScreen>
       );
     } catch (_) {
       _notice('Could not save the preference.');
+    } finally {
+      if (mounted) setState(() => _savingSettings = false);
     }
+  }
+
+  void _markAttackAssistance() {
+    scheduleMicrotask(() {
+      if (!mounted ||
+          ref.read(appSettingsProvider).valueOrNull?.showAttackedPieces != true ||
+          ref.read(gameControllerProvider).isGameOver) {
+        return;
+      }
+      unawaited(_controller.markAsNotEvaluated());
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(appSettingsProvider, (previous, next) {
-      if (next.valueOrNull?.showAttackedPieces == true &&
-          !ref.read(gameControllerProvider).isGameOver) {
-        scheduleMicrotask(_controller.markAsNotEvaluated);
-      }
-    });
     final game = ref.watch(gameControllerProvider);
     final plans = ref.watch(liveThreatControllerProvider);
     final hint = ref.watch(visualHintProvider);
@@ -138,7 +157,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       if (previous?.gameId != next.gameId &&
           settings.showAttackedPieces &&
           !next.isGameOver) {
-        scheduleMicrotask(_controller.markAsNotEvaluated);
+        _markAttackAssistance();
       }
     });
     ref.listen<LiveThreatState>(liveThreatControllerProvider, (previous, next) {
@@ -179,12 +198,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
             label: 'Attacks',
             icon: Icons.crop_free,
             active: settings.showAttackedPieces,
-            onPressed: () {
-              unawaited(_settings(attacks: !settings.showAttackedPieces));
-              if (!settings.showAttackedPieces && !game.isGameOver) {
-                unawaited(_controller.markAsNotEvaluated());
-              }
-            },
+            onPressed: _savingSettings
+                ? null
+                : () {
+                    unawaited(
+                      _settings(attacks: !settings.showAttackedPieces),
+                    );
+                    if (!settings.showAttackedPieces && !game.isGameOver) {
+                      unawaited(_controller.markAsNotEvaluated());
+                    }
+                  },
           ),
           GameToolButton(
             key: const Key('show-opponent-threats'),
@@ -355,6 +378,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         setState(() => _flipped = !_flipped);
       case 'save':
         await _controller.saveGame();
+        if (!mounted) return;
         final error = ref.read(gameControllerProvider).persistenceError;
         _notice(error ?? 'Game saved.');
       case 'settings':
@@ -426,7 +450,9 @@ class _TurnStatus extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final turn =
         notice ??
-        (game.isGameOver
+        (game.persistenceError != null
+            ? game.persistenceError!
+            : game.isGameOver
             ? gameResultDescription(game)
             : game.engineError != null
             ? 'Maia unavailable'

@@ -42,7 +42,7 @@ final activeGameProvider = StreamProvider<StoredGame?>(
   (ref) => ref.watch(gameRepositoryProvider).watchActiveGame(),
 );
 
-final gameLibraryProvider = StreamProvider<List<StoredGame>>(
+final gameLibraryProvider = StreamProvider.autoDispose<List<StoredGame>>(
   (ref) => ref.watch(gameRepositoryProvider).watchLibrary(),
 );
 
@@ -55,6 +55,6 @@ final appSettingsProvider = StreamProvider<StoredAppSettings>(
   (ref) => ref.watch(settingsRepositoryProvider).watch(),
 );
 
-final playerStatsProvider = StreamProvider<PlayerStatsSnapshot>(
+final playerStatsProvider = StreamProvider.autoDispose<PlayerStatsSnapshot>(
   (ref) => ref.watch(statsRepositoryProvider).watch(),
 );

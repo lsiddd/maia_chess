@@ -149,6 +149,8 @@ class GameController extends Notifier<GameState> {
 
     StoredGame? stored;
     try {
+      await flushPersistence();
+      if (!_isCurrentGame(generation)) return false;
       stored = await ref.read(gameRepositoryProvider).getActiveGame();
     } catch (error) {
       if (!_isCurrentGame(generation)) return false;
@@ -195,6 +197,11 @@ class GameController extends Notifier<GameState> {
       whiteTimeMs: stored.whiteTimeMs,
       blackTimeMs: stored.blackTimeMs,
     );
+
+    if (state.isGameOver) {
+      await _persistCurrentGame();
+      return _isCurrentGame(generation);
+    }
 
     if (stored.levelRating != null) {
       state = state.copyWith(aiThinking: true);
@@ -1032,6 +1039,11 @@ class GameController extends Notifier<GameState> {
             ? repository.completeGame(snapshot).then<void>((_) {})
             : repository.saveOngoing(snapshot);
       });
+      if (!_isDisposed &&
+          state.gameId == snapshot.id &&
+          state.persistenceError != null) {
+        state = state.copyWith(clearPersistenceError: true);
+      }
     } catch (error) {
       if (!_isDisposed && state.gameId == snapshot.id) {
         state = state.copyWith(persistenceError: 'Autosave failed: $error');
@@ -1079,7 +1091,9 @@ class GameController extends Notifier<GameState> {
       termination: termination,
       evaluated: snapshotState.evaluated,
       campaignMode: snapshotState.campaignMode,
-      initialFen: Chess.initial.fen,
+      initialFen: snapshotState.positionHistory.isEmpty
+          ? snapshotState.position.fen
+          : snapshotState.positionHistory.first.fen,
       currentFen: snapshotState.position.fen,
       clockEnabled: snapshotState.clockEnabled,
       initialTimeMs: snapshotState.initialTimeMs,
