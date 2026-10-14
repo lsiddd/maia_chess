@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,17 +24,47 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   Side _humanSide = Side.white;
   int _levelRating = DifficultyLevel.all.first.rating;
   bool _starting = false;
+  bool _leaving = false;
+  GameStartRequest? _startRequest;
+  Future<bool>? _pendingStart;
+
+  @override
+  void dispose() {
+    _startRequest?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _leaveWhileStarting() async {
+    if (_leaving || !mounted) return;
+    final route = ModalRoute.of(context);
+    _leaving = true;
+    _startRequest?.cancel();
+    await _pendingStart?.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    if (mounted) {
+      setState(() => _starting = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && route?.isCurrent == true) Navigator.of(context).pop();
+      });
+    }
+  }
 
   Future<void> _start() async {
-    if (_starting) return;
+    if (_starting || _leaving) return;
     setState(() => _starting = true);
+    final request = _startRequest = GameStartRequest();
     final controller = ref.read(gameControllerProvider.notifier);
     try {
-      final started = await controller.startVsAi(
+      final pending = _pendingStart = controller.startVsAi(
         humanSide: _humanSide,
         levelRating: _levelRating,
+        request: request,
       );
-      if (!mounted) return;
+      final started = await pending;
+      if (!mounted || request.isCancelled || _leaving) return;
+      _startRequest = null;
       if (!started) {
         final error =
             ref.read(gameControllerProvider).engineError ??
@@ -47,18 +79,20 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
         context,
       ).push(AppPageRoute(builder: (_) => const GameScreen()));
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || request.isCancelled || _leaving) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not start the game: $error')),
       );
     } finally {
+      _pendingStart = null;
+      _startRequest = null;
       if (mounted) setState(() => _starting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(title: const Text('Play against Maia')),
       body: MaxWidthBody(
         child: ListView(
@@ -152,6 +186,18 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
           ],
         ),
       ),
+    );
+    return PopScope<void>(
+      canPop: !_starting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          _leaving = true;
+          _startRequest?.cancel();
+        } else {
+          unawaited(_leaveWhileStarting());
+        }
+      },
+      child: scaffold,
     );
   }
 }

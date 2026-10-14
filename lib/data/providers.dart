@@ -42,9 +42,17 @@ final activeGameProvider = StreamProvider<StoredGame?>(
   (ref) => ref.watch(gameRepositoryProvider).watchActiveGame(),
 );
 
-final gameLibraryProvider = StreamProvider.autoDispose<List<StoredGame>>(
-  (ref) => ref.watch(gameRepositoryProvider).watchLibrary(),
-);
+const gameLibraryPageSize = 50;
+
+final gameLibraryPageProvider = StateProvider.autoDispose<int>((ref) => 0);
+
+final gameLibraryProvider = StreamProvider.autoDispose<List<StoredGame>>((ref) {
+  final page = ref.watch(gameLibraryPageProvider);
+  return ref.watch(gameRepositoryProvider).watchLibrary(
+    limit: gameLibraryPageSize + 1,
+    offset: page * gameLibraryPageSize,
+  );
+});
 
 final difficultyProgressProvider =
     StreamProvider<List<DifficultyProgressModel>>(

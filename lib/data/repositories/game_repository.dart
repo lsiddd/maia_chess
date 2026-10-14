@@ -115,7 +115,8 @@ class StoredGame {
 }
 
 abstract interface class GameRepository {
-  Stream<List<StoredGame>> watchLibrary();
+  /// Read all games by default, or a bounded page when [limit] is supplied.
+  Stream<List<StoredGame>> watchLibrary({int? limit, int offset = 0});
 
   Stream<StoredGame?> watchActiveGame();
 
@@ -124,8 +125,9 @@ abstract interface class GameRepository {
   Future<StoredGame?> getGame(String id);
 
   /// Create the sole active autosave. Remove any ongoing game in the same
-  /// transaction before inserting its replacement.
-  Future<void> beginGame(StoredGame game);
+  /// transaction before inserting its replacement. If [canCommit] rejects
+  /// after the writes, roll back the replacement.
+  Future<void> beginGame(StoredGame game, {bool Function()? canCommit});
 
   /// Persist the snapshot and reconcile changed moves, including the suffix
   /// removed by undo.
@@ -139,6 +141,10 @@ abstract interface class GameRepository {
   Future<void> importGame(StoredGame game);
 
   Future<void> deleteGame(String id);
+}
+
+class GameStartCancelledException implements Exception {
+  const GameStartCancelledException();
 }
 
 /// Map a stored result to the outcome for [playerSide]. Shared by rating and

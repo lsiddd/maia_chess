@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' as io;
+import 'dart:typed_data';
 
 import 'package:dartchess/dartchess.dart';
 import 'package:file_picker/file_picker.dart';
@@ -22,17 +23,32 @@ class PgnFormatException implements Exception {
 class PgnService {
   const PgnService();
 
+  static const maxImportBytes = 4 * 1024 * 1024;
+  static const maxImportMoves = 20000;
+
+  static void validateImportSize(String source) {
+    if (source.length > maxImportBytes ||
+        utf8.encode(source).length > maxImportBytes) {
+      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
+    }
+  }
+
   /// Keeps file validation and SAN replay off the UI isolate on Android.
   /// The synchronous API remains available for callers with small inputs.
   Future<StoredGame> parseImportAsync({
     required String pgn,
     required String id,
     required DateTime importedAtUtc,
-  }) => compute(_parseImport, (
-    pgn: pgn,
-    id: id,
-    importedAtUtc: importedAtUtc,
-  ), debugLabel: 'PGN import');
+  }) async {
+    if (pgn.length > maxImportBytes) {
+      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
+    }
+    return compute(_parseImport, (
+      pgn: pgn,
+      id: id,
+      importedAtUtc: importedAtUtc,
+    ), debugLabel: 'PGN import');
+  }
 
   static StoredGame _parseImport(
     ({String pgn, String id, DateTime importedAtUtc}) request,
@@ -47,9 +63,11 @@ class PgnService {
     required String id,
     required DateTime importedAtUtc,
   }) {
+    validateImportSize(pgn);
     if (pgn.trim().isEmpty) {
       throw const PgnFormatException('The PGN file is empty.');
     }
+    final allTokens = _allSanTokens(pgn);
 
     late final PgnGame<PgnNodeData> parsed;
     try {
@@ -71,7 +89,6 @@ class PgnService {
     }
 
     final tokens = _mainlineSanTokens(pgn);
-    final allTokens = _allSanTokens(pgn);
     final parsedMainline = parsed.moves.mainline().toList(growable: false);
     if (tokens.length != parsedMainline.length) {
       throw const PgnFormatException(
@@ -189,6 +206,11 @@ class PgnService {
         );
       }
       count++;
+      if (count > maxImportMoves) {
+        throw const PgnFormatException(
+          'A PGN may contain at most 20,000 moves, including variations.',
+        );
+      }
       final after = current.before.play(move);
       for (final child in current.node.children.reversed) {
         pending.add((node: child, before: after));
@@ -211,9 +233,8 @@ class PgnService {
 
   List<String> _sanTokens(String plain) {
     final result = <String>[];
-    for (final raw in plain.split(RegExp(r'\s+'))) {
-      if (raw.isEmpty) continue;
-      var token = raw;
+    for (final match in RegExp(r'\S+').allMatches(plain)) {
+      var token = match[0]!;
       token = token.replaceFirst(RegExp(r'^\d+\.(?:\.\.)?'), '');
       if (token.isEmpty ||
           token == '...' ||
@@ -224,6 +245,14 @@ class PgnService {
       }
       token = token.replaceFirst(RegExp(r'[!?]+$'), '');
       if (token.isEmpty) continue;
+      if (token.length > 16) {
+        throw const PgnFormatException('The PGN contains invalid move text.');
+      }
+      if (result.length == maxImportMoves) {
+        throw const PgnFormatException(
+          'A PGN may contain at most 20,000 moves, including variations.',
+        );
+      }
       result.add(token);
     }
     return result;
@@ -277,6 +306,11 @@ class PgnService {
         inHeader = true;
       } else if (char == '(') {
         variationDepth++;
+        if (variationDepth > 64) {
+          throw const PgnFormatException(
+            'PGN variations may be nested at most 64 levels.',
+          );
+        }
         output.write(' ');
       } else if (char == ')' && variationDepth > 0) {
         variationDepth--;
@@ -352,6 +386,9 @@ class PgnFileService {
     );
     if (selected == null) return null;
     final file = selected.files.single;
+    if (file.size > PgnService.maxImportBytes) {
+      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
+    }
     final bytes = file.bytes;
     try {
       if (bytes != null) return await compute(_decodePgn, bytes);
@@ -367,10 +404,24 @@ class PgnFileService {
     }
   }
 
-  static String _decodePgn(Uint8List bytes) => utf8.decode(bytes);
+  static String _decodePgn(Uint8List bytes) {
+    if (bytes.length > PgnService.maxImportBytes) {
+      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
+    }
+    return utf8.decode(bytes);
+  }
 
-  static Future<String> _readPgn(String filename) =>
-      io.File(filename).readAsString();
+  static Future<String> _readPgn(String filename) async {
+    final file = io.File(filename);
+    if (await file.length() > PgnService.maxImportBytes) {
+      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
+    }
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in file.openRead(0, PgnService.maxImportBytes + 1)) {
+      bytes.add(chunk);
+    }
+    return _decodePgn(bytes.takeBytes());
+  }
 
   Future<void> sharePgn({required String gameId, required String pgn}) async {
     final cache = await getTemporaryDirectory();

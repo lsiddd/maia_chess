@@ -22,49 +22,92 @@ class Lc0 {
   late StreamSubscription _mainSubscription;
   late StreamSubscription _stdoutSubscription;
   bool _cleanedUp = false;
+  bool _bootstrapFinished = false;
+  bool _mainExited = false;
+  bool _stdoutExited = false;
+  bool _disposeRequested = false;
+  bool _quitSent = false;
+  int _exitCode = 1;
 
   Lc0._({this.completer, String? weightsPath}) {
-    _mainSubscription =
-        _mainPort.listen((message) => _cleanUp(message is int ? message : 1));
+    _mainSubscription = _mainPort.listen((message) {
+      if (message is int) {
+        _exitCode = message;
+      } else if (message == null) {
+        _mainExited = true;
+        _tryCleanUp();
+      }
+    });
     _stdoutSubscription = _stdoutPort.listen((message) {
       if (message is String) {
         _logger.finest('The stdout isolate sent $message');
         _stdoutController.sink.add(message);
-      } else {
-        _logger.fine('The stdout isolate sent $message');
+      } else if (message == null) {
+        _stdoutExited = true;
+        _tryCleanUp();
       }
     });
 
-    // Pass weightsPath along with the SendPorts
-    compute(
-        _spawnIsolates,
-        _IsolateParams(
-          mainPort: _mainPort.sendPort,
-          stdoutPort: _stdoutPort.sendPort,
-          weightsPath: weightsPath,
-        )).then(
-      (success) {
-        if (_cleanedUp) return;
-        final state = success ? Lc0State.ready : Lc0State.error;
-        _logger.fine('The init isolate reported $state');
-        if (state == Lc0State.ready) {
-          _state._setValue(state);
-          completer?.complete(this);
-        } else {
-          if (completer != null && !completer!.isCompleted) {
-            completer!.completeError(StateError('Lc0 failed to initialize'));
-          }
-          _cleanUp(1);
+    unawaited(Future<void>.microtask(() => _start(weightsPath)));
+  }
+
+  Future<void> _start(String? weightsPath) async {
+    var initialized = false;
+    var stdoutStarted = false;
+    var mainStarted = false;
+    try {
+      if (_disposeRequested) return;
+      final result = nativeInit();
+      if (result != 0) {
+        throw StateError('Lc0 pipe initialization failed: $result');
+      }
+      initialized = true;
+      if (weightsPath != null) {
+        final pointer = weightsPath.toNativeUtf8();
+        try {
+          nativeSetWeights(pointer);
+        } finally {
+          calloc.free(pointer);
         }
-      },
-      onError: (error) {
-        _logger.severe('The init isolate encountered an error $error');
-        if (completer != null && !completer!.isCompleted) {
-          completer!.completeError(error);
+      }
+      await Isolate.spawn(
+        _isolateStdout,
+        _stdoutPort.sendPort,
+        onExit: _stdoutPort.sendPort,
+      );
+      stdoutStarted = true;
+      if (_disposeRequested) {
+        nativeAbortStartup(1);
+        return;
+      }
+      await Isolate.spawn(
+        _isolateMain,
+        _mainPort.sendPort,
+        onExit: _mainPort.sendPort,
+      );
+      mainStarted = true;
+      if (!_mainExited && !_stdoutExited) {
+        _state._setValue(Lc0State.ready);
+        if (_disposeRequested) {
+          _sendQuit();
+        } else if (completer != null && !completer!.isCompleted) {
+          completer!.complete(this);
         }
-        _cleanUp(1);
-      },
-    );
+      }
+    } catch (error, stackTrace) {
+      _logger.severe('Lc0 startup failed', error, stackTrace);
+      if (initialized && !mainStarted) {
+        nativeAbortStartup(stdoutStarted ? 1 : 0);
+      }
+      if (completer != null && !completer!.isCompleted) {
+        completer!.completeError(error, stackTrace);
+      }
+    } finally {
+      if (!mainStarted) _mainExited = true;
+      if (!stdoutStarted) _stdoutExited = true;
+      _bootstrapFinished = true;
+      _tryCleanUp();
+    }
   }
 
   static Lc0? _instance;
@@ -100,28 +143,44 @@ class Lc0 {
     }
 
     final pointer = '$line\n'.toNativeUtf8();
-    nativeStdinWrite(pointer);
-    calloc.free(pointer);
+    try {
+      if (nativeStdinWrite(pointer) < 0) {
+        throw StateError('Could not write a command to Lc0');
+      }
+    } finally {
+      calloc.free(pointer);
+    }
   }
 
   /// Request shutdown by sending `quit`; native cleanup is asynchronous.
   void dispose() {
-    stdin = 'quit';
+    if (_cleanedUp || _disposeRequested) return;
+    _disposeRequested = true;
+    if (_state.value == Lc0State.ready) _sendQuit();
   }
 
-  void _cleanUp(int exitCode) {
-    if (_cleanedUp) return;
+  void _sendQuit() {
+    if (_quitSent) return;
+    stdin = 'quit';
+    _quitSent = true;
+  }
+
+  void _tryCleanUp() {
+    if (_cleanedUp || !_bootstrapFinished || !_mainExited || !_stdoutExited) {
+      return;
+    }
     _cleanedUp = true;
-    _stdoutController.close();
-
-    _mainSubscription.cancel();
-    _stdoutSubscription.cancel();
-
-    _state._setValue(exitCode == 0 ? Lc0State.disposed : Lc0State.error);
+    unawaited(_stdoutController.close());
+    unawaited(_mainSubscription.cancel());
+    unawaited(_stdoutSubscription.cancel());
 
     if (identical(_instance, this)) {
       _instance = null;
     }
+    if (completer != null && !completer!.isCompleted) {
+      completer!.completeError(StateError('Lc0 exited during startup'));
+    }
+    _state._setValue(_exitCode == 0 ? Lc0State.disposed : Lc0State.error);
   }
 }
 
@@ -156,24 +215,16 @@ class _Lc0State extends ChangeNotifier implements ValueListenable<Lc0State> {
   }
 }
 
-/// Parameters for spawning isolates - passed to compute() function
-class _IsolateParams {
-  final SendPort mainPort;
-  final SendPort stdoutPort;
-  final String? weightsPath;
-
-  _IsolateParams({
-    required this.mainPort,
-    required this.stdoutPort,
-    this.weightsPath,
-  });
-}
-
 void _isolateMain(SendPort mainPort) {
-  final exitCode = nativeMain();
-  mainPort.send(exitCode);
-
-  _logger.fine('nativeMain returns $exitCode');
+  var exitCode = 1;
+  try {
+    exitCode = nativeMain();
+  } catch (error, stackTrace) {
+    nativeAbortStartup(1);
+    _logger.severe('The main isolate failed', error, stackTrace);
+  } finally {
+    mainPort.send(exitCode);
+  }
 }
 
 void _isolateStdout(SendPort stdoutPort) {
@@ -196,36 +247,3 @@ void _isolateStdout(SendPort stdoutPort) {
   }
 }
 
-Future<bool> _spawnIsolates(_IsolateParams params) async {
-  final initResult = nativeInit();
-  if (initResult != 0) {
-    _logger.severe('initResult=$initResult');
-    return false;
-  }
-
-  // Set weights path if provided
-  if (params.weightsPath != null) {
-    final pointer = params.weightsPath!.toNativeUtf8();
-    nativeSetWeights(pointer);
-    calloc.free(pointer);
-    _logger.fine('Set weights path to: ${params.weightsPath}');
-  } else {
-    _logger.warning('No weights path provided - lc0 may fail to start');
-  }
-
-  try {
-    await Isolate.spawn(_isolateStdout, params.stdoutPort);
-  } catch (error) {
-    _logger.severe('Failed to spawn stdout isolate: $error');
-    return false;
-  }
-
-  try {
-    await Isolate.spawn(_isolateMain, params.mainPort);
-  } catch (error) {
-    _logger.severe('Failed to spawn main isolate: $error');
-    return false;
-  }
-
-  return true;
-}

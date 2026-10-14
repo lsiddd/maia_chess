@@ -103,7 +103,8 @@ class _SingleGameRepository implements GameRepository {
   }
 
   @override
-  Stream<List<StoredGame>> watchLibrary() => Stream.value([?game]);
+  Stream<List<StoredGame>> watchLibrary({int? limit, int offset = 0}) =>
+      Stream.value(offset == 0 ? [?game] : []);
 
   @override
   Stream<StoredGame?> watchActiveGame() => Stream.value(null);
@@ -112,7 +113,12 @@ class _SingleGameRepository implements GameRepository {
   Future<StoredGame?> getActiveGame() async => null;
 
   @override
-  Future<void> beginGame(StoredGame game) async => this.game = game;
+  Future<void> beginGame(StoredGame game, {bool Function()? canCommit}) async {
+    if (canCommit != null && !canCommit()) {
+      throw const GameStartCancelledException();
+    }
+    this.game = game;
+  }
 
   @override
   Future<bool> completeGame(StoredGame game) async {

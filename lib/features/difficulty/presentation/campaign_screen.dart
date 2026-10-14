@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,13 +23,40 @@ class CampaignScreen extends ConsumerStatefulWidget {
 class _CampaignScreenState extends ConsumerState<CampaignScreen> {
   Side _humanSide = Side.white;
   int? _startingRating;
+  bool _leaving = false;
+  GameStartRequest? _startRequest;
+  Future<bool>? _pendingStart;
+
+  @override
+  void dispose() {
+    _startRequest?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _leaveWhileStarting() async {
+    if (_leaving || !mounted) return;
+    final route = ModalRoute.of(context);
+    _leaving = true;
+    _startRequest?.cancel();
+    await _pendingStart?.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    if (mounted) {
+      setState(() => _startingRating = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && route?.isCurrent == true) Navigator.of(context).pop();
+      });
+    }
+  }
 
   Future<void> _startLevel(DifficultyProgressModel progress) async {
-    if (!progress.unlocked || _startingRating != null) return;
+    if (!progress.unlocked || _startingRating != null || _leaving) return;
     setState(() => _startingRating = progress.rating);
+    final request = _startRequest = GameStartRequest();
     try {
       final active = await ref.read(gameRepositoryProvider).getActiveGame();
-      if (!mounted) return;
+      if (!mounted || request.isCancelled) return;
       if (active != null) {
         final replace = await showDialog<bool>(
           context: context,
@@ -49,16 +78,19 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
             ],
           ),
         );
-        if (replace != true || !mounted) return;
+        if (replace != true || !mounted || request.isCancelled) return;
       }
-      final started = await ref
+      final pending = _pendingStart = ref
           .read(gameControllerProvider.notifier)
           .startVsAi(
             humanSide: _humanSide,
             levelRating: progress.rating,
             campaignMode: true,
+            request: request,
           );
-      if (!mounted) return;
+      final started = await pending;
+      if (!mounted || request.isCancelled || _leaving) return;
+      _startRequest = null;
       if (!started) {
         final state = ref.read(gameControllerProvider);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -76,11 +108,13 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
         context,
       ).push(AppPageRoute(builder: (_) => const GameScreen()));
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || request.isCancelled || _leaving) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not start this level: $error')),
       );
     } finally {
+      _pendingStart = null;
+      _startRequest = null;
       if (mounted) setState(() => _startingRating = null);
     }
   }
@@ -88,7 +122,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
   @override
   Widget build(BuildContext context) {
     final progress = ref.watch(difficultyProgressProvider);
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(title: const Text('Maia campaign')),
       body: MaxWidthBody(
         child: progress.when(
@@ -136,6 +170,18 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
           ),
         ),
       ),
+    );
+    return PopScope<void>(
+      canPop: _startingRating == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          _leaving = true;
+          _startRequest?.cancel();
+        } else {
+          unawaited(_leaveWhileStarting());
+        }
+      },
+      child: scaffold,
     );
   }
 }

@@ -71,6 +71,16 @@ void main() {
             imported.currentFen,
           );
         }
+        counter.reset();
+        final page = await repository.watchLibrary(limit: 2, offset: 1).first;
+        expect(counter.selects, hasLength(2));
+        expect(page.map((game) => game.id), [
+          'game-${count - 2}',
+          'game-${count - 3}',
+        ]);
+        for (final game in page) {
+          expect(const GameReplayer().replay(game).positions, hasLength(4));
+        }
       },
     );
   }
