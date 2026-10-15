@@ -237,6 +237,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('opponent-threat-arrows')), findsNothing);
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await game.shutdownEngines();
     },
   );
 
@@ -267,10 +269,7 @@ void main() {
         gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
       ],
     );
-    addTearDown(() async {
-      await container.read(gameControllerProvider.notifier).shutdownEngines();
-      container.dispose();
-    });
+    addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -293,6 +292,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('opponent-threat-legend')), findsNothing);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await container.read(gameControllerProvider.notifier).shutdownEngines();
   });
 
   testWidgets('arrow failure allows retry without blocking the game', (
@@ -323,6 +324,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('opponent-threat-arrows')), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await container.read(gameControllerProvider.notifier).shutdownEngines();
   });
 }
 
@@ -343,10 +346,7 @@ ProviderContainer threatContainer(MultiPvEngine engine) {
       gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
     ],
   );
-  addTearDown(() async {
-    await container.read(gameControllerProvider.notifier).shutdownEngines();
-    container.dispose();
-  });
+  addTearDown(container.dispose);
   return container;
 }
 

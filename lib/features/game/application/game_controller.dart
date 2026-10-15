@@ -147,10 +147,7 @@ class GameController extends Notifier<GameState> {
         );
       }
       unawaited(
-        _discardLc0().then<void>(
-          (_) {},
-          onError: (Object _, StackTrace _) {},
-        ),
+        _discardLc0().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
       );
     };
     final operation = _gameStartTail.then(
@@ -943,6 +940,7 @@ class GameController extends Notifier<GameState> {
         throw const GameStartCancelledException();
       }
     }
+
     ensureActive();
     final disposal = _engineDisposal;
     if (disposal != null) await disposal;
