@@ -38,10 +38,7 @@ void main() {
       ],
     );
     final controller = container.read(gameControllerProvider.notifier);
-    addTearDown(() async {
-      await controller.shutdownEngines();
-      container.dispose();
-    });
+    addTearDown(container.dispose);
     await controller.startVsAi(
       humanSide: Side.white,
       levelRating: 1100,
@@ -105,5 +102,6 @@ void main() {
     expect(stored.moves.map((move) => move.uci), ['e2e4', 'e7e5']);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+    await controller.shutdownEngines();
   });
 }

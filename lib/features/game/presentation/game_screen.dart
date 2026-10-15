@@ -37,15 +37,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
     super.initState();
     _controller = ref.read(gameControllerProvider.notifier);
     _plans = ref.read(liveThreatControllerProvider.notifier);
-    ref.listenManual(
-      appSettingsProvider,
-      (previous, next) {
-        if (next.valueOrNull?.showAttackedPieces == true) {
-          _markAttackAssistance();
-        }
-      },
-      fireImmediately: true,
-    );
+    ref.listenManual(appSettingsProvider, (previous, next) {
+      if (next.valueOrNull?.showAttackedPieces == true) {
+        _markAttackAssistance();
+      }
+    }, fireImmediately: true);
     WidgetsBinding.instance.addObserver(this);
     unawaited(WakelockPlus.enable());
   }
@@ -114,7 +110,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void _markAttackAssistance() {
     scheduleMicrotask(() {
       if (!mounted ||
-          ref.read(appSettingsProvider).valueOrNull?.showAttackedPieces != true ||
+          ref.read(appSettingsProvider).valueOrNull?.showAttackedPieces !=
+              true ||
           ref.read(gameControllerProvider).isGameOver) {
         return;
       }
@@ -201,9 +198,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
             onPressed: _savingSettings
                 ? null
                 : () {
-                    unawaited(
-                      _settings(attacks: !settings.showAttackedPieces),
-                    );
+                    unawaited(_settings(attacks: !settings.showAttackedPieces));
                     if (!settings.showAttackedPieces && !game.isGameOver) {
                       unawaited(_controller.markAsNotEvaluated());
                     }

@@ -163,6 +163,7 @@ void main() {
     test(
       'v2 -> v4 migration preserves preferences and adopts Cburnett and Brown',
       () async {
+        await database.close();
         final migrated = AppDatabase.forTesting(
           NativeDatabase.memory(
             setup: (raw) {
@@ -180,6 +181,28 @@ void main() {
                 ..execute(
                   "INSERT INTO app_settings VALUES (1, 'classic', 'dark', 1, 15, 0)",
                 )
+                ..execute('''
+                CREATE TABLE games (
+                  id TEXT NOT NULL PRIMARY KEY,
+                  started_at_utc INTEGER NOT NULL,
+                  ended_at_utc INTEGER,
+                  last_modified_at_utc INTEGER NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'ongoing',
+                  level_rating INTEGER,
+                  player_side TEXT,
+                  result TEXT NOT NULL DEFAULT 'ongoing',
+                  termination TEXT,
+                  evaluated INTEGER NOT NULL DEFAULT 1,
+                  campaign_mode INTEGER NOT NULL DEFAULT 0,
+                  initial_fen TEXT NOT NULL,
+                  current_fen TEXT NOT NULL,
+                  pgn TEXT,
+                  clock_enabled INTEGER NOT NULL DEFAULT 0,
+                  initial_time_ms INTEGER,
+                  white_time_ms INTEGER,
+                  black_time_ms INTEGER
+                )
+              ''')
                 ..execute('PRAGMA user_version = 2');
             },
           ),
@@ -192,6 +215,11 @@ void main() {
         expect(settings.themeMode, StoredThemeMode.dark);
         expect(settings.defaultClockEnabled, isTrue);
         expect(settings.defaultTimeMinutes, 15);
+        final indexes = await migrated
+            .customSelect('PRAGMA index_list(games)')
+            .map((row) => row.read<String>('name'))
+            .get();
+        expect(indexes, contains('games_library_modified_id'));
       },
     );
 

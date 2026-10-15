@@ -48,10 +48,12 @@ final gameLibraryPageProvider = StateProvider.autoDispose<int>((ref) => 0);
 
 final gameLibraryProvider = StreamProvider.autoDispose<List<StoredGame>>((ref) {
   final page = ref.watch(gameLibraryPageProvider);
-  return ref.watch(gameRepositoryProvider).watchLibrary(
-    limit: gameLibraryPageSize + 1,
-    offset: page * gameLibraryPageSize,
-  );
+  return ref
+      .watch(gameRepositoryProvider)
+      .watchLibrary(
+        limit: gameLibraryPageSize + 1,
+        offset: page * gameLibraryPageSize,
+      );
 });
 
 final difficultyProgressProvider =

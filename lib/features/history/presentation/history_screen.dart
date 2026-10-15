@@ -62,9 +62,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               ),
               Text('Page ${page + 1}'),
               TextButton.icon(
-                onPressed: library.isLoading ||
+                onPressed:
+                    library.isLoading ||
                         library.hasError ||
-                        (library.valueOrNull?.length ?? 0) <= gameLibraryPageSize
+                        (library.valueOrNull?.length ?? 0) <=
+                            gameLibraryPageSize
                     ? null
                     : () {
                         ref.read(gameLibraryPageProvider.notifier).state =
@@ -176,10 +178,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
   }
 
-  Future<void> _handleAction(
-    StoredGame game,
-    _HistoryAction action,
-  ) async {
+  Future<void> _handleAction(StoredGame game, _HistoryAction action) async {
     if (_busyGameIds.contains(game.id)) return;
     setState(() => _busyGameIds.add(game.id));
     try {
@@ -213,9 +212,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           if (confirmed != true || !mounted) return;
           await ref.read(gameRepositoryProvider).deleteGame(game.id);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Game deleted.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Game deleted.')));
       }
     } catch (error) {
       if (!mounted) return;

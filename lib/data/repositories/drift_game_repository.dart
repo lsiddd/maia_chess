@@ -57,7 +57,9 @@ class DriftGameRepository implements GameRepository {
     // Subscribe before the initial read so a concurrent commit is not missed.
     final changes = Stream<void>.multi((events) {
       final subscription = _db
-          .tableUpdates(TableUpdateQuery.onAllTables([_db.games, _db.gameMoves]))
+          .tableUpdates(
+            TableUpdateQuery.onAllTables([_db.games, _db.gameMoves]),
+          )
           .listen(
             (_) => events.add(null),
             onError: events.addError,
