@@ -41,6 +41,11 @@ if needed. Once the final commit check accepts the candidate, back navigation
 waits for the commit to finish. Startup and cleanup are serialised so cancelled
 requests cannot create a late engine over a newer game.
 
+Maia replies in the live turn flow use a random 500–1,100 ms minimum wait
+that runs alongside the existing one-node search. A search that takes longer
+can play as soon as its result arrives. Invalidating the current game cancels
+any pending wait, and the controller checks the position before playing.
+
 Hints use Stockfish only and retain the suggested origin in
 `VisualHintController`. Board interaction cancels a hint. `LiveThreatController`
 refreshes plans on position/availability changes, not selection or drag. Plans
