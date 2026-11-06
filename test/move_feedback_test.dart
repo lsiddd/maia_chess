@@ -78,4 +78,51 @@ void main() {
       expect(calls.last.arguments, 'HapticFeedbackType.heavyImpact');
     });
   });
+
+  group('playMoveSound', () {
+    const channel = MethodChannel('maia_chess/move_sounds');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    late List<String> sounds;
+
+    setUp(() {
+      sounds = [];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        sounds.add(call.method);
+        return true;
+      });
+    });
+
+    tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    test(
+      'selects the sound by capture independently of haptic priority',
+      () async {
+        for (final san in ['e4', 'O-O+', 'e8=Q#', 'exd6', 'Qxf7+', 'exd8=Q#']) {
+          await playMoveSound(san);
+        }
+
+        expect(sounds, [
+          'move',
+          'move',
+          'move',
+          'capture',
+          'capture',
+          'capture',
+        ]);
+      },
+    );
+
+    test(
+      'a missing or failed native audio bridge leaves gameplay usable',
+      () async {
+        messenger.setMockMethodCallHandler(channel, null);
+        await playMoveSound('e4');
+        messenger.setMockMethodCallHandler(channel, (_) async {
+          throw PlatformException(code: 'audio_unavailable');
+        });
+        await playMoveSound('exd5');
+      },
+    );
+  });
 }

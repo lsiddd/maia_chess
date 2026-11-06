@@ -29,11 +29,15 @@ when redistributing these components or their modifications.
 | --- | --- | --- |
 | Twelve Cburnett piece SVGs | Colin M. L. Burnett; unmodified copies from Lichess | GPL-2.0-or-later; [provenance](assets/chess_pieces/NOTICE.md), [licence text](assets/chess_pieces/LICENSE-GPL-2.0.txt) |
 | Brown, Blue, Green, and Purple board PNGs | The lila authors and pirouetti; unmodified copies from Lichess | AGPL-3.0-or-later; [provenance](assets/chess_boards/NOTICE.md), [licence text](assets/chess_boards/LICENSE-AGPL-3.0.txt) |
+| Lichess SFX move and capture sounds | Enigmahack; unmodified copies of [Move.ogg](https://github.com/lichess-org/lila/blob/3747530a154ab955bfbcd8e2bba58787479098d4/public/sound/sfx/Move.ogg) and [Capture.ogg](https://github.com/lichess-org/lila/blob/3747530a154ab955bfbcd8e2bba58787479098d4/public/sound/sfx/Capture.ogg) | AGPL-3.0-or-later; [licence text](assets/chess_boards/LICENSE-AGPL-3.0.txt) |
 | Maia networks, ratings 1100–1900 | CSSLab/maia-chess, official v1.0 release; unmodified weights | Source repository uses GNU GPL v3; see [provenance](assets/maia_weights/NOTICE.md) and the [upstream licence](https://github.com/CSSLab/maia-chess/blob/master/LICENSE). |
 
 The Lichess assets are pinned to commit
 `3747530a154ab955bfbcd8e2bba58787479098d4`. Their respective licences are listed
 in the upstream [COPYING.md](https://github.com/lichess-org/lila/blob/3747530a154ab955bfbcd8e2bba58787479098d4/COPYING.md).
+The move and capture sounds are bundled as `chess_move.ogg` and
+`chess_capture.ogg` in Android's raw resources. Lichess lists its default
+Standard sound set among the non-free exceptions.
 
 ## Native supporting code
 
@@ -73,5 +77,5 @@ Each package supplies its own licence text. Additional transitive and developmen
 dependencies are recorded in [pubspec.lock](pubspec.lock); preserve their licence
 texts and notices when their material is redistributed. The app exposes package
 licences through **Appearance → Credits and licences** and registers the bundled
-piece and board licence texts in
+piece, board, and sound licence texts in
 [`registerChessAssetLicenses`](lib/core/constants/chess_asset_licenses.dart).
