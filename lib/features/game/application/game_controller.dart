@@ -14,6 +14,7 @@ import '../../hints/domain/hint_result.dart';
 import '../../pgn/application/pgn_service.dart';
 import '../../tactics/domain/tactical_analysis.dart';
 import 'game_state.dart';
+import 'move_feedback.dart';
 
 typedef Lc0EngineFactory = Lc0Engine Function();
 typedef StockfishEngineFactory = StockfishEngine Function();
@@ -240,6 +241,9 @@ class GameController extends Notifier<GameState> {
       persisted = true;
       if (!active()) return false;
       state = candidate;
+      if (candidate.sanHistory.isNotEmpty) {
+        unawaited(ref.read(moveSoundPlayerProvider)(candidate.sanHistory.last));
+      }
       unawaited(_warmUpStockfish());
       return true;
     } on GameStartCancelledException {
@@ -486,7 +490,9 @@ class GameController extends Notifier<GameState> {
   /// native engines. Throw [PlayException] if the move is illegal in the
   /// current position.
   Future<void> _applyMove(Move move, {required GameMoveActor actor}) async {
-    state = _stateAfterMove(state, move, actor: actor);
+    final next = _stateAfterMove(state, move, actor: actor);
+    state = next;
+    unawaited(ref.read(moveSoundPlayerProvider)(next.sanHistory.last));
     await _persistCurrentGame();
   }
 

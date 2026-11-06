@@ -1,4 +1,27 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final moveSoundPlayerProvider = Provider<Future<void> Function(String)>(
+  (ref) => Platform.isAndroid ? playMoveSound : (_) async {},
+);
+
+const _moveSounds = MethodChannel('maia_chess/move_sounds');
+
+/// Captures use their own sound even when they also give check or promote.
+Future<void> playMoveSound(String san) async {
+  try {
+    await _moveSounds.invokeMethod<bool>(
+      san.contains('x') ? 'capture' : 'move',
+    );
+  } on MissingPluginException {
+    // A host without the Android audio bridge can still play the game.
+  } on PlatformException catch (error) {
+    debugPrint('Could not play chess sound: ${error.code}');
+  }
+}
 
 /// Haptic move event derived from SAN. Enum order expresses priority: emit
 /// only the most significant event when, for example, a capture also gives
