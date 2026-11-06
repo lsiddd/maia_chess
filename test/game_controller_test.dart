@@ -165,6 +165,96 @@ void main() {
   });
 
   group('AI game flow with injected engines', () {
+    testWidgets('a fast Maia reply leaves the player move visible first', (
+      tester,
+    ) async {
+      final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
+      final container = _engineContainer(lc0Factory: () => maia);
+      addTearDown(container.dispose);
+      final controller = container.read(gameControllerProvider.notifier);
+      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+
+      final reply = controller.attemptDragMove(
+        Square.e2,
+        Square.e4,
+        onPromotion: noPromotion,
+      );
+      await tester.pump();
+      expect(maia.requestedFens, hasLength(1));
+
+      await tester.pump(const Duration(milliseconds: 499));
+      final waiting = container.read(gameControllerProvider);
+      expect(waiting.uciHistory, ['e2e4']);
+      expect(waiting.aiThinking, isTrue);
+      expect(controller.selectForDrag(Square.e7), isFalse);
+
+      await tester.pump(const Duration(milliseconds: 601));
+      final played = container.read(gameControllerProvider);
+      expect(played.uciHistory, ['e2e4', 'e7e5']);
+      expect(played.aiThinking, isFalse);
+      await reply;
+    });
+
+    testWidgets('a slow Maia search applies its reply as soon as it returns', (
+      tester,
+    ) async {
+      final answer = Completer<String>();
+      final maia = FakeLc0Engine(onMove: (_, _) => answer.future);
+      final container = _engineContainer(lc0Factory: () => maia);
+      addTearDown(container.dispose);
+      final controller = container.read(gameControllerProvider.notifier);
+      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+
+      final reply = controller.attemptDragMove(
+        Square.e2,
+        Square.e4,
+        onPromotion: noPromotion,
+      );
+      await tester.pump();
+      expect(maia.requestedFens, hasLength(1));
+      await tester.pump(const Duration(milliseconds: 1200));
+      expect(container.read(gameControllerProvider).uciHistory, ['e2e4']);
+
+      answer.complete('e7e5');
+      await tester.pump();
+      expect(container.read(gameControllerProvider).uciHistory, [
+        'e2e4',
+        'e7e5',
+      ]);
+      await reply;
+    });
+
+    testWidgets('restarting cancels a delayed Maia reply immediately', (
+      tester,
+    ) async {
+      final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
+      final container = _engineContainer(lc0Factory: () => maia);
+      addTearDown(container.dispose);
+      final controller = container.read(gameControllerProvider.notifier);
+      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+
+      var replyFinished = false;
+      unawaited(
+        controller
+            .attemptDragMove(Square.e2, Square.e4, onPromotion: noPromotion)
+            .then((_) => replyFinished = true),
+      );
+      await tester.pump();
+      expect(maia.requestedFens, hasLength(1));
+      expect(replyFinished, isFalse);
+
+      await controller.reset();
+      await tester.pump();
+      expect(replyFinished, isTrue);
+      final restarted = container.read(gameControllerProvider);
+      expect(restarted.uciHistory, isEmpty);
+      expect(restarted.aiThinking, isFalse);
+      final persisted = await container
+          .read(gameRepositoryProvider)
+          .getActiveGame();
+      expect(persisted!.moves, isEmpty);
+    });
+
     test(
       'undo takes back the human and AI pair and sets evaluated=false',
       () async {

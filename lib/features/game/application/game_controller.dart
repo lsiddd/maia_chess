@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -67,6 +68,11 @@ final stockfishWarmupEnabledProvider = Provider<bool>(
 /// Stockfish calculates hints and opponent plans. Attack highlights use
 /// geometric board analysis.
 class GameController extends Notifier<GameState> {
+  static const _minimumMaiaReplyMs = 500;
+  static const _maximumMaiaReplyMs = 1100;
+
+  final _random = Random();
+  void Function()? _cancelMaiaReplyDelay;
   Lc0Engine? _lc0;
   int? _loadedLevelRating;
   StockfishEngine? _stockfish;
@@ -95,7 +101,7 @@ class GameController extends Notifier<GameState> {
     ref.onDispose(() {
       _isDisposed = true;
       _activeStart?.cancel();
-      _gameGeneration++;
+      _invalidateCurrentGame();
       _hintGeneration++;
       cancelOpponentThreats();
       final cancellation = _hintCancellation;
@@ -113,7 +119,7 @@ class GameController extends Notifier<GameState> {
   /// game.
   Future<void> startTwoPlayers() async {
     _activeStart?.cancel();
-    final generation = ++_gameGeneration;
+    final generation = _invalidateCurrentGame();
     await _gameStartTail;
     if (!_isCurrentGame(generation)) return;
     await _cancelHint('A new game was started.');
@@ -136,12 +142,12 @@ class GameController extends Notifier<GameState> {
     DifficultyLevel.byRating(levelRating); // Validate before changing state.
     if (request?.isCancelled == true) return Future.value(false);
     _activeStart?.cancel();
-    final gameGeneration = ++_gameGeneration;
+    final gameGeneration = _invalidateCurrentGame();
     final startRequest = request ?? GameStartRequest();
     _activeStart = startRequest;
     startRequest._onCancel = () {
       if (!_isCurrentGame(gameGeneration)) return;
-      _gameGeneration++;
+      _invalidateCurrentGame();
       if (state.aiThinking || (state.isAiTurn && !state.isGameOver)) {
         state = state.copyWith(
           aiThinking: false,
@@ -270,8 +276,7 @@ class GameController extends Notifier<GameState> {
   /// duplicated.
   Future<bool> restoreActiveGame() async {
     _activeStart?.cancel();
-    _gameGeneration++;
-    final generation = _gameGeneration;
+    final generation = _invalidateCurrentGame();
     await _gameStartTail;
     if (!_isCurrentGame(generation)) return false;
     await _cancelHint('A saved game was restored.');
@@ -417,7 +422,7 @@ class GameController extends Notifier<GameState> {
       NormalMove(from: selected, to: square, promotion: promotion),
       actor: GameMoveActor.player,
     );
-    await _maybePlayAiTurn();
+    if (_isCurrentGame(generation)) await _maybePlayAiTurn();
   }
 
   /// Select the drag origin without toggling selection. Return false when
@@ -475,7 +480,7 @@ class GameController extends Notifier<GameState> {
       NormalMove(from: from, to: to, promotion: promotion),
       actor: GameMoveActor.player,
     );
-    await _maybePlayAiTurn();
+    if (_isCurrentGame(generation)) await _maybePlayAiTurn();
   }
 
   Future<Role?> _choosePromotion(Future<Role?> Function() choose) async {
@@ -892,7 +897,7 @@ class GameController extends Notifier<GameState> {
   /// campaign mode.
   Future<void> reset() async {
     _activeStart?.cancel();
-    final generation = ++_gameGeneration;
+    final generation = _invalidateCurrentGame();
     await _gameStartTail;
     if (!_isCurrentGame(generation)) return;
     await _cancelHint('The game was restarted.');
@@ -927,7 +932,7 @@ class GameController extends Notifier<GameState> {
   }
 
   Future<bool> _maybePlayAiTurn() async {
-    if (_isDisposed || _activeStart != null) return false;
+    if (_isDisposed || _activeStart != null || state.aiThinking) return false;
     if (state.levelRating != null && !state.isGameOver) {
       unawaited(_warmUpStockfish());
     }
@@ -935,6 +940,23 @@ class GameController extends Notifier<GameState> {
 
     final gameGeneration = _gameGeneration;
     final fen = state.position.fen;
+    // Start the wait alongside the search so slow searches add no delay.
+    final replyDelay = Completer<void>();
+    final timer = Timer(
+      Duration(
+        milliseconds:
+            _minimumMaiaReplyMs +
+            _random.nextInt(_maximumMaiaReplyMs - _minimumMaiaReplyMs + 1),
+      ),
+      replyDelay.complete,
+    );
+    void cancelDelay() {
+      if (replyDelay.isCompleted) return;
+      timer.cancel();
+      replyDelay.complete();
+    }
+
+    _cancelMaiaReplyDelay = cancelDelay;
     state = state.copyWith(aiThinking: true, clearEngineError: true);
     try {
       final levelRating = state.levelRating!;
@@ -948,6 +970,7 @@ class GameController extends Notifier<GameState> {
       if (move == null) {
         throw StateError('lc0 returned an invalid move: "$uci"');
       }
+      await replyDelay.future;
       // Check generation and FEN as well as turn, so a late reply cannot
       // affect a restarted game.
       if (_isCurrentGame(gameGeneration) &&
@@ -970,7 +993,9 @@ class GameController extends Notifier<GameState> {
       }
       return false;
     } finally {
+      cancelDelay();
       if (_isCurrentGame(gameGeneration)) {
+        _cancelMaiaReplyDelay = null;
         state = state.copyWith(aiThinking: false);
       }
     }
@@ -1349,7 +1374,7 @@ class GameController extends Notifier<GameState> {
   /// apply.
   Future<void> shutdownEngines() async {
     _activeStart?.cancel();
-    _gameGeneration++;
+    _invalidateCurrentGame();
     await _gameStartTail;
     await _cancelHint('The engines were shut down.');
     await _disposeEngines();
@@ -1358,6 +1383,13 @@ class GameController extends Notifier<GameState> {
   bool _hasOwnPieceAt(Square square) {
     final piece = state.position.board.pieceAt(square);
     return piece != null && piece.color == state.position.turn;
+  }
+
+  int _invalidateCurrentGame() {
+    _gameGeneration++;
+    _cancelMaiaReplyDelay?.call();
+    _cancelMaiaReplyDelay = null;
+    return _gameGeneration;
   }
 
   bool _isCurrentGame(int generation) =>
