@@ -301,7 +301,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       appBar: AppBar(
         toolbarHeight: 48,
         title: Text(
-          game.aiSide == null ? 'Local game' : 'Maia ${game.levelRating}',
+          game.aiSide == null ? 'Local game' : 'Maia-3 ${game.levelRating}',
         ),
         actions: [
           if (game.isGameOver &&
@@ -481,7 +481,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 'Hint: an amber outline marks only the piece suggested by Stockfish. Tap again to hide it.\n\n'
                 'Attacks: a solid orange border marks an attacked piece without geometric defence; a double blue border marks an attacked, defended piece. This does not guarantee a material gain or loss: pins and exchanges require tactical analysis.\n\n'
                 'Opponent plans: an arrow shows one Stockfish option if the opponent could move now. It is not a proven threat. Use the counter to switch plans.\n\n'
-                'Undo: against Maia, returns to your previous decision. In local play, it takes back one move. Assistance and undo make the game unrated.',
+                'Undo: against Maia-3, returns to your previous decision. In local play, it takes back one move. Assistance and undo make the game unrated.',
               ),
             ),
             actions: [
@@ -539,7 +539,7 @@ class _TurnStatus extends StatelessWidget {
             : game.isGameOver
             ? gameResultDescription(game)
             : game.engineError != null
-            ? 'Maia unavailable'
+            ? 'Maia-3 unavailable'
             : game.position.isCheck
             ? 'Check'
             : game.aiSide == null
@@ -547,7 +547,7 @@ class _TurnStatus extends StatelessWidget {
                   ? 'White to move'
                   : 'Black to move')
             : game.isAiTurn
-            ? 'Maia to move'
+            ? 'Maia-3 to move'
             : 'Your turn');
     final mode = game.campaignMode
         ? 'Campaign'

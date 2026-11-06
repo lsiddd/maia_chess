@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:maia_chess/data/providers.dart';
-import 'package:maia_chess/engine_ffi/lc0_engine/lc0_service.dart';
+import 'package:maia_chess/engine_ffi/maia_engine/maia_service.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_service.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 
@@ -19,13 +19,13 @@ void main() {
   testWidgets(
     'profile: hint latency with real Android engines',
     (tester) async {
-      final maia = Lc0Service();
+      final maia = MaiaService();
       final stockfish = StockfishService();
       var backgroundWarmup = false;
       var gameId = 0;
       final container = ProviderContainer(
         overrides: [
-          lc0EngineFactoryProvider.overrideWithValue(() => maia),
+          maiaEngineFactoryProvider.overrideWithValue(() => maia),
           stockfishEngineFactoryProvider.overrideWithValue(() => stockfish),
           stockfishWarmupEnabledProvider.overrideWith(
             (ref) => backgroundWarmup,
@@ -62,7 +62,11 @@ void main() {
         // Reproduce the former hint implementation: Maia, Stockfish startup
         // when needed, then a 1500 ms search.
         final position = Chess.initial;
-        final maiaUci = await maia.getBestMove(position.fen, nodes: 1);
+        final maiaUci = await maia.getMove(
+          [position],
+          selfElo: 1100,
+          opponentElo: 1100,
+        );
         if (!stockfish.isReady) await stockfish.init();
         final stockfishUci = await stockfish.getBestMove(
           position.fen,
@@ -82,8 +86,8 @@ void main() {
 
       try {
         metrics['maia_initialization_ms'] = await measure(newGame);
-        // Warm up Maia identically in both measurements with cold Stockfish.
-        await maia.getBestMove(Chess.initial.fen, nodes: 1);
+        // Warm up Maia-3 identically in both measurements with cold Stockfish.
+        await maia.getMove([Chess.initial], selfElo: 1100, opponentElo: 1100);
         metrics['sequential_cold_ms'] = await measure(sequentialHint);
         final sequentialWarm = <double>[];
         for (var sample = 0; sample < 3; sample++) {

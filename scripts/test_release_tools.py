@@ -5,7 +5,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import zipfile
 
 SCRIPTS = Path(__file__).resolve().parent
 SECRET_NAMES = (
@@ -62,37 +61,6 @@ class SigningTests(unittest.TestCase):
             self.assertIn(r"storePassword=\ test\\key\n\u00e7", (app / "key.properties").read_text())
             self.assertEqual((app / "ci-release.jks").stat().st_mode & 0o777, 0o600)
             self.assertNotIn(password, result.stdout + result.stderr)
-
-
-class ApkTests(unittest.TestCase):
-    def verify(self, omit=None, extra=None):
-        with tempfile.TemporaryDirectory() as root:
-            apk = Path(root, "test.apk")
-            names = [f"lib/arm64-v8a/lib{name}.so" for name in ("app", "flutter", "lc0", "stockfish")]
-            names += [f"assets/flutter_assets/assets/maia_weights/maia-{n}.pb.gz" for n in range(1100, 2000, 100)]
-            with zipfile.ZipFile(apk, "w") as archive:
-                for name in names + ([extra] if extra else []):
-                    if name != omit:
-                        archive.writestr(name, b"fixture")
-            return subprocess.run([sys.executable, str(SCRIPTS / "verify_apk.py"), str(apk)], capture_output=True).returncode
-
-    def test_complete_apk(self):
-        self.assertEqual(self.verify(), 0)
-
-    def test_missing_engine(self):
-        self.assertNotEqual(self.verify(omit="lib/arm64-v8a/liblc0.so"), 0)
-
-    def test_missing_weights(self):
-        self.assertNotEqual(self.verify(omit="assets/flutter_assets/assets/maia_weights/maia-1900.pb.gz"), 0)
-
-    def test_extra_architecture(self):
-        self.assertNotEqual(self.verify(extra="lib/x86_64/liblc0.so"), 0)
-
-    def test_duplicate_plugin_weights(self):
-        self.assertNotEqual(self.verify(extra=(
-            "assets/flutter_assets/packages/leela_chess_zero/"
-            "assets/weights/maia-1900.pb.gz"
-        )), 0)
 
 
 if __name__ == "__main__":

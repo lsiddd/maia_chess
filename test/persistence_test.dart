@@ -44,7 +44,7 @@ void main() {
             .map((row) => row.read<int>('foreign_keys'))
             .getSingle();
 
-        expect(version, 4);
+        expect(version, 5);
         expect(
           tables,
           containsAll([
@@ -56,6 +56,9 @@ void main() {
           ]),
         );
         expect(progress.map((row) => row.rating), [
+          600,
+          800,
+          1000,
           1100,
           1200,
           1300,
@@ -65,6 +68,10 @@ void main() {
           1700,
           1800,
           1900,
+          2000,
+          2200,
+          2400,
+          2600,
         ]);
         expect(progress.first.unlocked, isTrue);
         expect(progress.skip(1).every((row) => !row.unlocked), isTrue);
@@ -81,7 +88,7 @@ void main() {
     );
 
     test(
-      'v1 -> v4 migration adds campaign windows and appearance and rebuilds derived state',
+      'v1 -> v5 migration adds campaign windows and appearance and rebuilds derived state',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
@@ -152,16 +159,16 @@ void main() {
             .get();
         final progress = await DriftProgressRepository(migrated).getAll();
 
-        expect(version, 4);
+        expect(version, 5);
         expect(columns, contains('window_games'));
-        expect(progress, hasLength(9));
+        expect(progress, hasLength(16));
         expect(progress.first.unlocked, isTrue);
         expect(progress.every((item) => item.gamesInWindow == 0), isTrue);
       },
     );
 
     test(
-      'v2 -> v4 migration preserves preferences and adopts Cburnett and Brown',
+      'v2 -> v5 migration preserves preferences and adopts Cburnett and Brown',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
@@ -203,6 +210,12 @@ void main() {
                   black_time_ms INTEGER
                 )
               ''')
+                ..execute(
+                  'CREATE TABLE difficulty_progress (rating INTEGER NOT NULL PRIMARY KEY, valid_wins INTEGER NOT NULL DEFAULT 0, window_games INTEGER NOT NULL DEFAULT 0, unlocked INTEGER NOT NULL DEFAULT 0, updated_at_utc INTEGER NOT NULL)',
+                )
+                ..execute(
+                  'CREATE TABLE rating_history (id TEXT NOT NULL PRIMARY KEY, game_id TEXT NOT NULL UNIQUE, recorded_at_utc INTEGER NOT NULL, rating REAL NOT NULL)',
+                )
                 ..execute('PRAGMA user_version = 2');
             },
           ),
@@ -274,7 +287,7 @@ void main() {
       final ongoing = _ongoingGame(
         'campaign',
         ['e2e4'],
-        levelRating: 1100,
+        levelRating: 600,
         playerSide: Side.white,
         campaignMode: true,
       );
@@ -469,22 +482,22 @@ void main() {
         EvaluatedGameSummary(
           gameId: 'rebuild-a-win',
           completedAtUtc: DateTime.utc(2026, 8, 5, 13),
-          levelRating: 1100,
+          levelRating: 600,
           outcome: PlayerGameOutcome.win,
           campaignMode: true,
         ),
         EvaluatedGameSummary(
           gameId: 'rebuild-b-loss',
           completedAtUtc: DateTime.utc(2026, 8, 5, 14),
-          levelRating: 1100,
+          levelRating: 600,
           outcome: PlayerGameOutcome.loss,
           campaignMode: true,
         ),
       ]);
 
       expect(stats.evaluatedGames, 2);
-      expect(stats.resultsByLevel[1100]?.wins, 1);
-      expect(stats.resultsByLevel[1100]?.losses, 1);
+      expect(stats.resultsByLevel[600]?.wins, 1);
+      expect(stats.resultsByLevel[600]?.losses, 1);
       expect(
         stats.estimatedRating,
         closeTo(expected.estimatedRating, 0.000001),
@@ -626,7 +639,7 @@ Future<void> _campaignResult(
     _ongoingGame(
       id,
       const [],
-      levelRating: 1100,
+      levelRating: 600,
       playerSide: Side.white,
       campaignMode: true,
     ),

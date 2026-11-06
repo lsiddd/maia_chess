@@ -11,7 +11,7 @@ dependencies inside presentation widgets.
 | Area | Implementation and responsibility |
 | --- | --- |
 | Rules and live state | `dartchess`, `GameState`, and `GameController`: legality, SAN/UCI, turn management, undo, and termination |
-| Maia opponent | `Lc0Service` and the local `leela_chess_zero` FFI plugin, using bundled networks and a one-node search |
+| Maia opponent | `MaiaService`, with one bundled Maia-3 79M FP32 model and Dart ONNX Runtime FFI |
 | Assistance | `StockfishService`: single-move hints and up to three MultiPV opponent plans; geometric attack detection is separate |
 | Persistence | `AppDatabase` and Drift repositories: autosave, archived games, settings, campaign progress, and rating history |
 | Replay and exchange | `GameReplayer` validates stored moves/FENs; `PgnService` validates and exports PGN; `PgnFileService` handles Android files/sharing |
@@ -42,7 +42,7 @@ waits for the commit to finish. Startup and cleanup are serialised so cancelled
 requests cannot create a late engine over a newer game.
 
 Maia replies in the live turn flow use a random 500–1,100 ms minimum wait
-that runs alongside the existing one-node search. A search that takes longer
+that runs alongside the model inference. A search that takes longer
 can play as soon as its result arrives. Invalidating the current game cancels
 any pending wait, and the controller checks the position before playing.
 
@@ -76,27 +76,32 @@ this app.
 
 ## Native engines
 
-Both engines run in-process on isolates through Dart FFI. Native wrapper ready
-states indicate bootstrap completion; service readiness additionally requires
-`isready`/`readyok`. Maia weights are extracted to application support storage
-before lc0 loads them. The file is rewritten only if absent or a different size.
+Maia-3 uses one ONNX session on a dedicated Dart isolate. Dart constructs eight
+historical square-token frames, pads short histories with the earliest frame,
+and passes the chosen rating as both self and opponent Elo. The policy is
+masked to legal moves and sampled at temperature 1, top-p 1. The same loaded
+session serves every rating. Restoring or undoing uses the current game history,
+so there is no hidden engine history to reset. See [model provenance](../assets/maia3/NOTICE.md).
 
-Each native package permits one active engine instance. Disposal sends `quit`
-and waits within bounded timeouts; there is no force-kill API. A failed hint or
-plan disposes Stockfish when necessary without disposing Maia. Android can warm
-up Stockfish in the background; failure is retried on a later request. See the
-[plugin architecture](../native/leela_chess_zero/architecture.md) for private UCI
-pipes, native build configuration, and generated headers.
+Android exposes APK paths through a small metadata channel. Dart streams the
+bundled model from the APK into application support storage, validates size and
+SHA-256, and renames it atomically. Building and verifying the bundled model
+require no Python. The final artifact is versioned with Git LFS; its initial
+conversion happened outside the repository.
 
-The lc0 wrapper retains its singleton until both the engine and stdout reader
-report isolate exit. Shutdown during bootstrap is deferred until commands can
-be sent, and partial startup failures close unused pipe ends. Native pipe
-initialisation also rejects descriptors left by an earlier instance.
+Initialization, tensor allocation, inference and native disposal run on a Dart
+worker. Cancellation signals ONNX Runtime's thread-safe RunOptions termination;
+resources are retained until the worker has finished. The controller also rejects
+stale generations and positions. Failed initialization or inference can be retried.
+
+Stockfish retains its UCI handshake and isolated native implementation. It loads
+on demand for assistance and review; background warmup defaults to disabled to
+reduce memory use with the 79M model. A Stockfish failure does not dispose Maia-3.
 
 ## Storage and eligibility
 
 SQLite lives in `maia_chess.sqlite` in the application documents directory and
-runs through `NativeDatabase.createInBackground`. Schema version 4 contains
+runs through `NativeDatabase.createInBackground`. Schema version 5 contains
 `games`, `game_moves`, `difficulty_progress`, `rating_history`, and `app_settings`.
 Foreign keys are enabled; deleting a game cascades to its moves and rating rows.
 Opening the database also ensures a library index on modification time and ID.
@@ -125,7 +130,7 @@ PGN validation run on workers. Imports are limited to 4 MiB, 20,000 plies across
 mainline and variations, and 64 nested variation levels. File reads have a byte
 cap even if the file grows after its size check.
 
-Android backup and device transfer exclude only the extracted `maia_weights`
+Android backup and device transfer exclude the extracted `maia3` and legacy `maia_weights`
 directory in application support storage. SQLite games, progress, rating history,
 and settings retain their default backup eligibility.
 

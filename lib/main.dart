@@ -130,7 +130,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                     }),
               icon: const Icon(Icons.flag_outlined),
-              label: const Text('Maia campaign'),
+              label: const Text('Maia-3 campaign'),
             ),
             const SizedBox(height: AppSpacing.m),
             FilledButton.tonalIcon(
@@ -138,7 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ? null
                   : () => _openGame(() => _openNewAiGame(context, ref)),
               icon: const Icon(Icons.psychology_outlined),
-              label: const Text('Free play against Maia'),
+              label: const Text('Free play against Maia-3'),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
@@ -326,7 +326,7 @@ class _HomeHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                const Text('Offline chess against a human-style AI (Maia)'),
+                const Text('Offline chess against a human-style AI (Maia-3)'),
               ],
             ),
           ),

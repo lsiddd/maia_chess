@@ -11,9 +11,10 @@ implements. Update relevant tests and user-facing English text together. Keep
 identifiers, stored enum names, asset paths, UCI commands, PGN tags, and migration
 contracts stable unless the change explicitly requires a migration.
 
-The `native/leela_chess_zero` package is a local fork. Avoid unrelated changes to
-its lc0 and Eigen snapshots. Native fixes need Android integration validation;
-unit tests with fake engines cannot establish native lifecycle correctness.
+The Maia-3 model is tracked by Git LFS. Run `git lfs pull` and
+`dart run tool/verify_maia3.dart` before building. Model handling lives in Dart;
+no Python conversion tools or sources are required. Native inference changes
+need Android integration validation; fake engines cannot establish FFI safety.
 
 ## Checks
 
@@ -22,32 +23,35 @@ Use Flutter 3.47.4 / Dart 3.13.3, matching CI. When changing the SDK pin, update
 
 ```sh
 flutter pub get
-dart format lib test integration_test test_driver
+dart run tool/verify_maia3.dart
+dart format lib test integration_test test_driver tool
 flutter analyze --no-fatal-infos
-dart format --output=none --set-exit-if-changed lib test integration_test test_driver
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver tool
 flutter test --coverage
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 CI checks formatting without applying it and uploads `coverage/lcov.info`.
 Analysis excludes `native/`, `build/`, and `android/`; formatting covers only app
-Dart code and tests. Review native changes separately. The Python tests exercise
-signing configuration and APK contents without requiring real signing secrets.
+Dart code, tests, and tools. Review native changes separately. The Python tests exercise
+signing configuration without requiring real signing secrets. APK and model
+checks live in Dart under `tool/`.
 
 ## Android tests
 
-Connect an ARM64 or x86_64 Android device/emulator, obtain its ID with
+Connect an ARM64 Android device/emulator, obtain its ID with
 `flutter devices`, and substitute it for `DEVICE`:
 
 ```sh
-flutter test integration_test/android_acceptance_test.dart -d DEVICE
-flutter test integration_test/phase_0_3_android_test.dart -d DEVICE
+flutter test integration_test/maia3_acceptance_test.dart -d DEVICE
 ```
 
 The consolidated suite imports board/promotion/result regressions, persistence,
-campaign/statistics, game-screen flows, and native MultiPV tests. The second
-suite covers Maia level changes, hints/cancellation, and recovery after invalid
-weights. Individual targets remain available in `integration_test/`. CI does
+campaign/statistics, game-screen flows, native MultiPV tests, Maia-3 level changes,
+hints/cancellation, and recovery after invalid models. Its parity test compares
+Android inference with the official PyTorch reference fixtures, including all
+levels and special moves. Individual targets remain available in
+`integration_test/`. The bundled runtime does not include x86_64. CI does
 not launch an emulator or run these tests.
 
 For the screen matrix, vary emulator orientation, display size, font scale, and
@@ -69,7 +73,7 @@ dart run build_runner build --delete-conflicting-outputs
 
 Include the generated changes, review whether `schemaVersion` and migration
 steps need updating, and run persistence and worker tests. Do not regenerate
-Dart or native protobuf headers solely to edit prose.
+generated sources solely to edit prose.
 
 ## Profile measurements
 

@@ -86,19 +86,21 @@ and other Java properties characters when entering passwords manually. Keep
 both files out of Git.
 
 ```sh
+git lfs pull
 flutter pub get
+dart run tool/verify_maia3.dart
 flutter build apk --release --split-per-abi --target-platform android-arm64
-python3 scripts/verify_apk.py build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+dart run tool/verify_apk.dart build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
-The content verifier requires Flutter libraries, lc0, Stockfish, all nine Maia
-networks, no other ABI, no duplicate plugin Maia 1900 asset, and valid ZIP
-entries. CI executes that verifier and `apksigner`; ZIP alignment is an
-additional local check, not a current CI step. The Python verifier accepts only
-an ARM64 APK. To build a separate x86_64 emulator APK, use
-`--target-platform android-x64`; do not pass it to the ARM64 verifier.
+The Dart content verifier requires Flutter libraries, ONNX Runtime, Stockfish,
+exactly one Maia-3 model with the repository SHA-256, no legacy lc0/weights,
+and ARM64 ELF LOAD segments aligned to at least 16 KB. CI fetches Git LFS and
+runs the source-model verifier before building, then verifies the APK and its
+signature and ZIP alignment. The verifier accepts only ARM64 APKs; emulator
+builds must use the matching ABI.
 
 Without `key.properties`, Gradle warns and uses debug signing even for
 `--release`. That is useful for testing and does not produce a distribution-key

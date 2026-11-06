@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:dartchess/dartchess.dart';
@@ -8,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/difficulty_levels.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
-import '../../../engine_ffi/lc0_engine/lc0_service.dart';
+import '../../../engine_ffi/maia_engine/maia_service.dart';
+import '../../../engine_ffi/maia_engine/maia_model_asset.dart';
 import '../../../engine_ffi/stockfish_engine/stockfish_analysis.dart';
 import '../../../engine_ffi/stockfish_engine/stockfish_service.dart';
 import '../../history/domain/game_replayer.dart';
@@ -18,9 +18,9 @@ import '../../tactics/domain/tactical_analysis.dart';
 import 'game_state.dart';
 import 'move_feedback.dart';
 
-typedef Lc0EngineFactory = Lc0Engine Function();
+typedef MaiaEngineFactory = MaiaEngine Function();
 typedef StockfishEngineFactory = StockfishEngine Function();
-typedef MaiaWeightsResolver = Future<String> Function(DifficultyLevel level);
+typedef MaiaModelResolver = Future<String> Function();
 typedef _HintCacheKey = ({int gameGeneration, String fen, int movetimeMs});
 
 /// Cancellation is accepted until the replacement transaction reaches its
@@ -47,24 +47,21 @@ class GameStartRequest {
 
 /// Inject engine contracts and weights extraction so controller flows can be
 /// tested without native FFI.
-final lc0EngineFactoryProvider = Provider<Lc0EngineFactory>(
-  (ref) => Lc0Service.new,
+final maiaEngineFactoryProvider = Provider<MaiaEngineFactory>(
+  (ref) => MaiaService.new,
 );
 final stockfishEngineFactoryProvider = Provider<StockfishEngineFactory>(
   (ref) => StockfishService.new,
 );
-final maiaWeightsResolverProvider = Provider<MaiaWeightsResolver>(
-  (ref) =>
-      (level) => Lc0Service.extractWeightsAsset(level.weightsAsset),
+final maiaModelResolverProvider = Provider<MaiaModelResolver>(
+  (ref) => MaiaModelAsset.resolve,
 );
 final hintTotalTimeoutProvider = Provider<Duration>(
   (ref) => const Duration(seconds: 120),
 );
-final stockfishWarmupEnabledProvider = Provider<bool>(
-  (ref) => Platform.isAndroid,
-);
+final stockfishWarmupEnabledProvider = Provider<bool>((ref) => false);
 
-/// Coordinate rules, persistence, and engines. Maia selects opponent moves;
+/// Coordinate rules, persistence, and engines. Maia-3 selects opponent moves;
 /// Stockfish calculates hints and opponent plans. Attack highlights use
 /// geometric board analysis.
 class GameController extends Notifier<GameState> {
@@ -73,8 +70,7 @@ class GameController extends Notifier<GameState> {
 
   final _random = Random();
   void Function()? _cancelMaiaReplyDelay;
-  Lc0Engine? _lc0;
-  int? _loadedLevelRating;
+  MaiaEngine? _maia;
   StockfishEngine? _stockfish;
   Future<StockfishEngine>? _stockfishStartup;
 
@@ -130,9 +126,9 @@ class GameController extends Notifier<GameState> {
     await _beginPersistedGame();
   }
 
-  /// Start an AI game with [humanSide] against Maia at [levelRating]
-  /// (1100–1900). Load the corresponding network and play the opening move
-  /// immediately when Maia is White.
+  /// Start an AI game with [humanSide] against Maia-3 at [levelRating]
+  /// (600–2600). Load the shared Maia-3 model and play the opening move
+  /// immediately when Maia-3 is White.
   Future<bool> startVsAi({
     required Side humanSide,
     required int levelRating,
@@ -151,11 +147,11 @@ class GameController extends Notifier<GameState> {
       if (state.aiThinking || (state.isAiTurn && !state.isGameOver)) {
         state = state.copyWith(
           aiThinking: false,
-          engineError: 'Maia reply interrupted. Try again to continue.',
+          engineError: 'Maia-3 reply interrupted. Try again to continue.',
         );
       }
       unawaited(
-        _discardLc0().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        _discardMaia().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
       );
     };
     final operation = _gameStartTail.then(
@@ -200,11 +196,11 @@ class GameController extends Notifier<GameState> {
     await _cancelHint('A new game was started.');
     if (!active()) return false;
     if (state.aiThinking) {
-      await _discardLc0();
+      await _discardMaia();
       if (!active()) return false;
       state = state.copyWith(
         aiThinking: false,
-        engineError: 'Maia reply interrupted. Try again to continue.',
+        engineError: 'Maia-3 reply interrupted. Try again to continue.',
       );
     }
 
@@ -221,12 +217,16 @@ class GameController extends Notifier<GameState> {
       candidate = candidate.copyWith(startedAtUtc: DateTime.now().toUtc());
       if (candidate.isAiTurn) {
         final uci = await cancellable(
-          _lc0!.getBestMove(candidate.position.fen, nodes: 1),
+          _maia!.getMove(
+            [candidate.position],
+            selfElo: levelRating,
+            opponentElo: levelRating,
+          ),
         );
         if (!active()) return false;
         final move = Move.parse(uci);
         if (move == null) {
-          throw StateError('lc0 returned an invalid move: "$uci"');
+          throw StateError('Maia-3 returned an invalid move: "$uci"');
         }
         candidate = _stateAfterMove(candidate, move, actor: GameMoveActor.maia);
       }
@@ -262,17 +262,17 @@ class GameController extends Notifier<GameState> {
                 aiThinking: false,
                 persistenceError: 'Could not start autosave: $error',
               )
-            : state.copyWith(aiThinking: false, engineError: 'Maia: $error');
+            : state.copyWith(aiThinking: false, engineError: 'Maia-3: $error');
       }
       return false;
     } finally {
-      if (!persisted) await _discardLc0();
+      if (!persisted) await _discardMaia();
     }
   }
 
   /// Restore the sole active autosave. Replay every UCI move and check
   /// intermediate FENs before exposing state. If only the human move was
-  /// saved, Maia responds once; an already saved Maia reply is not
+  /// saved, Maia-3 responds once; an already saved Maia-3 reply is not
   /// duplicated.
   Future<bool> restoreActiveGame() async {
     _activeStart?.cancel();
@@ -351,7 +351,7 @@ class GameController extends Notifier<GameState> {
         if (_isCurrentGame(generation)) {
           state = state.copyWith(
             aiThinking: false,
-            engineError: 'Maia: $error',
+            engineError: 'Maia-3: $error',
           );
         }
         return false;
@@ -522,7 +522,7 @@ class GameController extends Notifier<GameState> {
   }
 
   /// Undo one ply in local play, or return to the previous human decision
-  /// against Maia in free play. Mark the game unrated, excluding it from
+  /// against Maia-3 in free play. Mark the game unrated, excluding it from
   /// rating and streaks.
   Future<void> undo() async {
     if (state.isGameOver || !state.canUndo || state.aiThinking) {
@@ -548,7 +548,7 @@ class GameController extends Notifier<GameState> {
     actorHistory.removeLast();
     timeHistory.removeLast();
 
-    // Against Maia, keep undoing until the turn returns to the human player.
+    // Against Maia-3, keep undoing until the turn returns to the human player.
     if (state.aiSide != null) {
       while (history.isNotEmpty && previousPosition.turn == state.aiSide) {
         previousPosition = history.removeLast();
@@ -765,7 +765,7 @@ class GameController extends Notifier<GameState> {
       } on HintCancelledException {
         rethrow;
       } catch (_) {
-        // An analysis failure must not dispose Maia while it may be replying.
+        // An analysis failure must not dispose Maia-3 while it may be replying.
         final currentRequest =
             generation == _threatGeneration &&
             gameGeneration == _gameGeneration;
@@ -903,7 +903,7 @@ class GameController extends Notifier<GameState> {
     await _cancelHint('The game was restarted.');
     if (!_isCurrentGame(generation)) return;
     if (state.aiThinking) {
-      await _discardLc0();
+      await _discardMaia();
       if (!_isCurrentGame(generation)) return;
     }
     state = GameState.initial().copyWith(
@@ -965,10 +965,14 @@ class GameController extends Notifier<GameState> {
         stillNeeded: () => _isCurrentGame(gameGeneration),
       );
       if (!_isCurrentGame(gameGeneration)) return false;
-      final uci = await _lc0!.getBestMove(fen, nodes: 1);
+      final uci = await _maia!.getMove(
+        [...state.positionHistory, state.position],
+        selfElo: levelRating,
+        opponentElo: levelRating,
+      );
       final move = Move.parse(uci);
       if (move == null) {
-        throw StateError('lc0 returned an invalid move: "$uci"');
+        throw StateError('Maia-3 returned an invalid move: "$uci"');
       }
       await replyDelay.future;
       // Check generation and FEN as well as turn, so a late reply cannot
@@ -982,14 +986,13 @@ class GameController extends Notifier<GameState> {
       return false;
     } catch (e) {
       if (_isCurrentGame(gameGeneration)) {
-        final failedEngine = _lc0;
-        _lc0 = null;
-        _loadedLevelRating = null;
+        final failedEngine = _maia;
+        _maia = null;
         if (failedEngine != null) {
           await _trackEngineDisposal([failedEngine.dispose()]);
         }
         if (!_isCurrentGame(gameGeneration)) return false;
-        state = state.copyWith(engineError: 'Maia: $e');
+        state = state.copyWith(engineError: 'Maia-3: $e');
       }
       return false;
     } finally {
@@ -1015,35 +1018,32 @@ class GameController extends Notifier<GameState> {
     final disposal = _engineDisposal;
     if (disposal != null) await disposal;
     ensureActive();
-    if (_lc0?.isReady == true && _loadedLevelRating == levelRating) return;
+    if (_maia?.isReady == true) return;
 
-    final previous = _lc0;
-    _lc0 = null;
-    _loadedLevelRating = null;
+    final previous = _maia;
+    _maia = null;
     if (previous != null) {
       await _trackEngineDisposal([previous.dispose()]);
     }
     ensureActive();
 
-    final level = DifficultyLevel.byRating(levelRating);
-    final engine = ref.read(lc0EngineFactoryProvider)();
-    _lc0 = engine;
+    DifficultyLevel.byRating(levelRating);
+    final engine = ref.read(maiaEngineFactoryProvider)();
+    _maia = engine;
     try {
-      final weightsPath = await ref.read(maiaWeightsResolverProvider)(level);
+      final weightsPath = await ref.read(maiaModelResolverProvider)();
       ensureActive();
-      if (!identical(_lc0, engine)) {
-        throw StateError('Maia engine was disposed during startup');
+      if (!identical(_maia, engine)) {
+        throw StateError('Maia-3 engine was disposed during startup');
       }
       await engine.init(weightsPath);
       ensureActive();
-      if (!identical(_lc0, engine) || !engine.isReady) {
-        throw StateError('Maia engine was not ready after startup');
+      if (!identical(_maia, engine) || !engine.isReady) {
+        throw StateError('Maia-3 engine was not ready after startup');
       }
-      _loadedLevelRating = levelRating;
     } catch (_) {
-      if (identical(_lc0, engine)) {
-        _lc0 = null;
-        _loadedLevelRating = null;
+      if (identical(_maia, engine)) {
+        _maia = null;
         await _trackEngineDisposal([engine.dispose()]);
       }
       rethrow;
@@ -1158,16 +1158,15 @@ class GameController extends Notifier<GameState> {
   }
 
   Future<void> _disposeEngines() {
-    final lc0 = _lc0;
+    final maia = _maia;
     final stockfish = _stockfish;
-    _lc0 = null;
+    _maia = null;
     _stockfish = null;
     _stockfishStartup = null;
-    _loadedLevelRating = null;
     _cachedHint = null;
     _cachedThreats = null;
     return _trackEngineDisposal([
-      if (lc0 != null) lc0.dispose(),
+      if (maia != null) maia.dispose(),
       if (stockfish != null) stockfish.dispose(),
     ]);
   }
@@ -1185,11 +1184,10 @@ class GameController extends Notifier<GameState> {
     return disposal;
   }
 
-  Future<void> _discardLc0() {
-    final lc0 = _lc0;
-    _lc0 = null;
-    _loadedLevelRating = null;
-    return _trackEngineDisposal([if (lc0 != null) lc0.dispose()]);
+  Future<void> _discardMaia() {
+    final maia = _maia;
+    _maia = null;
+    return _trackEngineDisposal([if (maia != null) maia.dispose()]);
   }
 
   Future<bool> _beginPersistedGame({Side? playerSide}) async {

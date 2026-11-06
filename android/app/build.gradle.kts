@@ -30,7 +30,7 @@ if (hasReleaseKeystore) {
 android {
     namespace = "com.maiachess.maia_chess"
     compileSdk = flutter.compileSdkVersion
-    // Match the lc0 plugin's FFI/CMake toolchain.
+    // Pinned native toolchain for release reproducibility.
     ndkVersion = "28.2.13676358"
 
     compileOptions {
@@ -44,18 +44,17 @@ android {
 
     defaultConfig {
         applicationId = "com.maiachess.maia_chess"
-        // lc0 requires Android API 24 or later.
+        // Bundled ONNX Runtime requires Android API 24 or later.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         ndk {
-            // arm64-v8a for devices; x86_64 for development emulators.
-            // The lc0 plugin enables only these 64-bit ABIs.
+            // Maia-3's bundled runtime supports ARM64 devices and emulators.
             // Flutter configures ABI splits itself when requested; AGP rejects
             // combining those splits with defaultConfig ABI filters.
             if (project.findProperty("split-per-abi") != "true") {
-                abiFilters += listOf("arm64-v8a", "x86_64")
+                abiFilters += listOf("arm64-v8a")
             }
         }
     }

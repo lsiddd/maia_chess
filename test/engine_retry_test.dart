@@ -8,25 +8,25 @@ import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
 
-import 'game_controller_test.dart' show FakeGameRepository, FakeLc0Engine;
+import 'game_controller_test.dart' show FakeGameRepository, FakeMaiaEngine;
 
 void main() {
   testWidgets('Try again preserves the game and retries the AI move', (
     tester,
   ) async {
     final repository = FakeGameRepository();
-    final engines = <FakeLc0Engine>[];
+    final engines = <FakeMaiaEngine>[];
     final answer = Completer<String>();
     final container = ProviderContainer(
       overrides: [
         gameRepositoryProvider.overrideWithValue(repository),
         gameIdFactoryProvider.overrideWithValue(() => 'retry-game'),
-        maiaWeightsResolverProvider.overrideWithValue(
-          (level) async => level.weightsAsset,
+        maiaModelResolverProvider.overrideWithValue(
+          () async => 'assets/maia3/maia3-79m-fp32.onnx',
         ),
-        lc0EngineFactoryProvider.overrideWithValue(() {
+        maiaEngineFactoryProvider.overrideWithValue(() {
           final attempt = engines.length;
-          final engine = FakeLc0Engine(
+          final engine = FakeMaiaEngine(
             onMove: (_, _) async {
               if (attempt < 2) throw StateError('search failed');
               return answer.future;
@@ -79,7 +79,7 @@ void main() {
     await tester.pump();
     expect(container.read(gameControllerProvider).aiThinking, isTrue);
     expect(find.byTooltip('Try again'), findsNothing);
-    expect(find.text('Maia to move'), findsOneWidget);
+    expect(find.text('Maia-3 to move'), findsOneWidget);
     expect(engines, hasLength(3));
     expect(engines.last.requestedFens, [before.position.fen]);
 

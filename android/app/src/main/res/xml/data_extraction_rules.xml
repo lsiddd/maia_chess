@@ -2,8 +2,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="maia_weights" />
+        <exclude domain="file" path="maia3" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="maia_weights" />
+        <exclude domain="file" path="maia3" />
     </device-transfer>
 </data-extraction-rules>

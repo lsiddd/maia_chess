@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/core/constants/difficulty_levels.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
-import 'package:maia_chess/engine_ffi/lc0_engine/lc0_service.dart';
+import 'package:maia_chess/engine_ffi/maia_engine/maia_service.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_service.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_analysis.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
@@ -165,11 +165,11 @@ void main() {
   });
 
   group('AI game flow with injected engines', () {
-    testWidgets('a fast Maia reply leaves the player move visible first', (
+    testWidgets('a fast Maia-3 reply leaves the player move visible first', (
       tester,
     ) async {
-      final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
-      final container = _engineContainer(lc0Factory: () => maia);
+      final maia = FakeMaiaEngine(onMove: (_, _) async => 'e7e5');
+      final container = _engineContainer(maiaFactory: () => maia);
       addTearDown(container.dispose);
       final controller = container.read(gameControllerProvider.notifier);
       await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
@@ -195,40 +195,41 @@ void main() {
       await reply;
     });
 
-    testWidgets('a slow Maia search applies its reply as soon as it returns', (
+    testWidgets(
+      'a slow Maia-3 search applies its reply as soon as it returns',
+      (tester) async {
+        final answer = Completer<String>();
+        final maia = FakeMaiaEngine(onMove: (_, _) => answer.future);
+        final container = _engineContainer(maiaFactory: () => maia);
+        addTearDown(container.dispose);
+        final controller = container.read(gameControllerProvider.notifier);
+        await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
+
+        final reply = controller.attemptDragMove(
+          Square.e2,
+          Square.e4,
+          onPromotion: noPromotion,
+        );
+        await tester.pump();
+        expect(maia.requestedFens, hasLength(1));
+        await tester.pump(const Duration(milliseconds: 1200));
+        expect(container.read(gameControllerProvider).uciHistory, ['e2e4']);
+
+        answer.complete('e7e5');
+        await tester.pump();
+        expect(container.read(gameControllerProvider).uciHistory, [
+          'e2e4',
+          'e7e5',
+        ]);
+        await reply;
+      },
+    );
+
+    testWidgets('restarting cancels a delayed Maia-3 reply immediately', (
       tester,
     ) async {
-      final answer = Completer<String>();
-      final maia = FakeLc0Engine(onMove: (_, _) => answer.future);
-      final container = _engineContainer(lc0Factory: () => maia);
-      addTearDown(container.dispose);
-      final controller = container.read(gameControllerProvider.notifier);
-      await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
-
-      final reply = controller.attemptDragMove(
-        Square.e2,
-        Square.e4,
-        onPromotion: noPromotion,
-      );
-      await tester.pump();
-      expect(maia.requestedFens, hasLength(1));
-      await tester.pump(const Duration(milliseconds: 1200));
-      expect(container.read(gameControllerProvider).uciHistory, ['e2e4']);
-
-      answer.complete('e7e5');
-      await tester.pump();
-      expect(container.read(gameControllerProvider).uciHistory, [
-        'e2e4',
-        'e7e5',
-      ]);
-      await reply;
-    });
-
-    testWidgets('restarting cancels a delayed Maia reply immediately', (
-      tester,
-    ) async {
-      final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
-      final container = _engineContainer(lc0Factory: () => maia);
+      final maia = FakeMaiaEngine(onMove: (_, _) async => 'e7e5');
+      final container = _engineContainer(maiaFactory: () => maia);
       addTearDown(container.dispose);
       final controller = container.read(gameControllerProvider.notifier);
       await controller.startVsAi(humanSide: Side.white, levelRating: 1100);
@@ -258,8 +259,8 @@ void main() {
     test(
       'undo takes back the human and AI pair and sets evaluated=false',
       () async {
-        final maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
-        final container = _engineContainer(lc0Factory: () => maia);
+        final maia = FakeMaiaEngine(onMove: (_, _) async => 'e7e5');
+        final container = _engineContainer(maiaFactory: () => maia);
         addTearDown(() async {
           await container
               .read(gameControllerProvider.notifier)
@@ -294,10 +295,10 @@ void main() {
     );
 
     test(
-      'a player choosing Black receives the automatic opening Maia move',
+      'a player choosing Black receives the automatic opening Maia-3 move',
       () async {
-        final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
-        final container = _engineContainer(lc0Factory: () => maia);
+        final maia = FakeMaiaEngine(onMove: (_, _) async => 'e2e4');
+        final container = _engineContainer(maiaFactory: () => maia);
         addTearDown(() async {
           await container
               .read(gameControllerProvider.notifier)
@@ -330,7 +331,7 @@ void main() {
         final repository = FakeGameRepository();
         var stockfishStarts = 0;
         final container = _engineContainer(
-          lc0Factory: () => FakeLc0Engine(onMove: (_, _) async => 'e7e5'),
+          maiaFactory: () => FakeMaiaEngine(onMove: (_, _) async => 'e7e5'),
           stockfishFactory: () {
             stockfishStarts++;
             return FakeStockfishEngine(onMove: (_, _) async => 'g1f3');
@@ -396,9 +397,9 @@ void main() {
       'resume replays autosave without duplicating the automatic opening',
       () async {
         final repository = FakeGameRepository();
-        final firstMaia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
+        final firstMaia = FakeMaiaEngine(onMove: (_, _) async => 'e2e4');
         final firstContainer = _engineContainer(
-          lc0Factory: () => firstMaia,
+          maiaFactory: () => firstMaia,
           repository: repository,
         );
         final firstController = firstContainer.read(
@@ -414,9 +415,9 @@ void main() {
         await firstController.shutdownEngines();
         firstContainer.dispose();
 
-        final restoredMaia = FakeLc0Engine(onMove: (_, _) async => 'd2d4');
+        final restoredMaia = FakeMaiaEngine(onMove: (_, _) async => 'd2d4');
         final restoredContainer = _engineContainer(
-          lc0Factory: () => restoredMaia,
+          maiaFactory: () => restoredMaia,
           repository: repository,
         );
         addTearDown(() async {
@@ -446,7 +447,7 @@ void main() {
           activeError: StateError('database unavailable'),
         );
         final container = _engineContainer(
-          lc0Factory: () => FakeLc0Engine(onMove: (_, _) async => 'e2e4'),
+          maiaFactory: () => FakeMaiaEngine(onMove: (_, _) async => 'e2e4'),
           repository: repository,
         );
         addTearDown(container.dispose);
@@ -463,12 +464,12 @@ void main() {
     );
 
     test(
-      'switching 1100 -> 1900 -> 1100 disposes and recreates Maia',
+      'switching 1100 -> 1900 -> 1100 reuses one model and passes both Elos',
       () async {
-        final engines = <FakeLc0Engine>[];
+        final engines = <FakeMaiaEngine>[];
         final container = _engineContainer(
-          lc0Factory: () {
-            final engine = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
+          maiaFactory: () {
+            final engine = FakeMaiaEngine(onMove: (_, _) async => 'e2e4');
             engines.add(engine);
             return engine;
           },
@@ -484,21 +485,18 @@ void main() {
         for (final rating in [1100, 1900, 1100]) {
           expect(
             await controller.startVsAi(
-              humanSide: Side.white,
+              humanSide: Side.black,
               levelRating: rating,
             ),
             isTrue,
           );
         }
 
-        expect(engines, hasLength(3));
-        expect(engines[0].disposeCount, 1);
-        expect(engines[1].disposeCount, 1);
-        expect(engines.map((engine) => engine.initPaths.single), [
-          'assets/maia_weights/maia-1100.pb.gz',
-          'assets/maia_weights/maia-1900.pb.gz',
-          'assets/maia_weights/maia-1100.pb.gz',
-        ]);
+        expect(engines, hasLength(1));
+        expect(engines.single.disposeCount, 0);
+        expect(engines.single.initPaths, ['assets/maia3/maia3-79m-fp32.onnx']);
+        expect(engines.single.requestedElos, [1100, 1900, 1100]);
+        expect(engines.single.opponentElos, [1100, 1900, 1100]);
       },
     );
 
@@ -506,11 +504,11 @@ void main() {
       'a new game cancels the old search without applying a delayed response',
       () async {
         final oldMove = Completer<String>();
-        final engines = <FakeLc0Engine>[];
+        final engines = <FakeMaiaEngine>[];
         final container = _engineContainer(
-          lc0Factory: () {
+          maiaFactory: () {
             final isFirst = engines.isEmpty;
-            final engine = FakeLc0Engine(
+            final engine = FakeMaiaEngine(
               onMove: (_, _) => isFirst ? oldMove.future : Future.value('e2e4'),
             );
             engines.add(engine);
@@ -550,10 +548,10 @@ void main() {
     );
 
     test('engine startup failure allows a later retry', () async {
-      final engines = <FakeLc0Engine>[];
+      final engines = <FakeMaiaEngine>[];
       final container = _engineContainer(
-        lc0Factory: () {
-          final engine = FakeLc0Engine(
+        maiaFactory: () {
+          final engine = FakeMaiaEngine(
             initError: engines.isEmpty ? StateError('native failure') : null,
             onMove: (_, _) async => 'e2e4',
           );
@@ -587,17 +585,88 @@ void main() {
   });
 
   group('DifficultyLevel', () {
-    test('has exactly 9 levels, from 1100 to 1900', () {
-      expect(DifficultyLevel.all.length, 9);
-      expect(DifficultyLevel.all.first.rating, 1100);
-      expect(DifficultyLevel.all.last.rating, 1900);
+    test('has all 16 Maia-3 levels from 600 to 2600', () {
+      expect(DifficultyLevel.all.length, 16);
+      expect(DifficultyLevel.all.first.rating, 600);
+      expect(DifficultyLevel.all.last.rating, 2600);
     });
 
-    test('byRating finds the correct level and asset', () {
+    test('byRating finds the skill input', () {
       final level = DifficultyLevel.byRating(1500);
-      expect(level.weightsAsset, 'assets/maia_weights/maia-1500.pb.gz');
+      expect(level.rating, 1500);
+      expect(level.toString(), 'Maia-3 1500');
     });
   });
+
+  test(
+    'Maia-3 receives rebuilt history after undo and autosave restore',
+    () async {
+      final repository = FakeGameRepository();
+      var reply = 'e7e5';
+      final maia = FakeMaiaEngine(onMove: (_, _) async => reply);
+      final container = _engineContainer(
+        maiaFactory: () => maia,
+        repository: repository,
+      );
+      final controller = container.read(gameControllerProvider.notifier);
+      try {
+        await controller.startVsAi(humanSide: Side.white, levelRating: 2600);
+        await controller.attemptDragMove(
+          Square.e2,
+          Square.e4,
+          onPromotion: () async => null,
+        );
+        expect(maia.requestedHistories.single.length, 2);
+        expect(maia.requestedHistories.single.first.fen, Chess.initial.fen);
+        await controller.undo();
+        reply = 'd7d5';
+        await controller.attemptDragMove(
+          Square.d2,
+          Square.d4,
+          onPromotion: () async => null,
+        );
+        expect(maia.requestedHistories.last.length, 2);
+        expect(
+          maia.requestedHistories.last.last.board.pieceAt(Square.e2)?.role,
+          Role.pawn,
+        );
+        await controller.flushPersistence();
+      } finally {
+        await controller.shutdownEngines();
+        container.dispose();
+      }
+      final restoredMaia = FakeMaiaEngine(onMove: (_, _) async => 'g8f6');
+      final restored = _engineContainer(
+        maiaFactory: () => restoredMaia,
+        repository: repository,
+      );
+      final resumed = restored.read(gameControllerProvider.notifier);
+      try {
+        expect(await resumed.restoreActiveGame(), isTrue);
+        await resumed.attemptDragMove(
+          Square.g1,
+          Square.f3,
+          onPromotion: () async => null,
+        );
+        expect(restoredMaia.requestedHistories.single.length, 4);
+        expect(
+          restoredMaia.requestedHistories.single.first.fen,
+          Chess.initial.fen,
+        );
+        expect(restoredMaia.requestedElos, [2600]);
+        expect(restoredMaia.opponentElos, [2600]);
+        expect(restored.read(gameControllerProvider).uciHistory, [
+          'd2d4',
+          'd7d5',
+          'g1f3',
+          'g8f6',
+        ]);
+      } finally {
+        await resumed.shutdownEngines();
+        restored.dispose();
+      }
+    },
+  );
 }
 
 GameState _stateFromFen(String fen) => GameState(
@@ -610,7 +679,7 @@ GameState _stateFromFen(String fen) => GameState(
 );
 
 ProviderContainer _engineContainer({
-  required Lc0EngineFactory lc0Factory,
+  required MaiaEngineFactory maiaFactory,
   StockfishEngineFactory? stockfishFactory,
   bool? warmup,
   Duration timeout = const Duration(seconds: 2),
@@ -620,15 +689,15 @@ ProviderContainer _engineContainer({
   var nextId = 0;
   return ProviderContainer(
     overrides: [
-      lc0EngineFactoryProvider.overrideWithValue(lc0Factory),
+      maiaEngineFactoryProvider.overrideWithValue(maiaFactory),
       stockfishEngineFactoryProvider.overrideWithValue(
         stockfishFactory ??
             () => FakeStockfishEngine(onMove: (_, _) async => 'e2e4'),
       ),
       if (warmup != null)
         stockfishWarmupEnabledProvider.overrideWithValue(warmup),
-      maiaWeightsResolverProvider.overrideWithValue(
-        (level) async => level.weightsAsset,
+      maiaModelResolverProvider.overrideWithValue(
+        () async => 'assets/maia3/maia3-79m-fp32.onnx',
       ),
       hintTotalTimeoutProvider.overrideWithValue(timeout),
       gameRepositoryProvider.overrideWithValue(persistence),
@@ -699,42 +768,49 @@ class FakeGameRepository implements GameRepository {
   }
 }
 
-class FakeLc0Engine implements Lc0Engine {
-  FakeLc0Engine({required this.onMove, this.initError});
-
-  final Future<String> Function(String fen, int nodes) onMove;
+class FakeMaiaEngine implements MaiaEngine {
+  FakeMaiaEngine({required this.onMove, this.initError});
+  final Future<String> Function(String fen, int elo) onMove;
   final Object? initError;
   final List<String> initPaths = [];
   final List<String> requestedFens = [];
+  final List<List<Chess>> requestedHistories = [];
+  final List<int> requestedElos = [];
+  final List<int> opponentElos = [];
   int disposeCount = 0;
+  int cancelCount = 0;
   bool _ready = false;
-  String? _loadedWeightsPath;
-
   @override
   bool get isReady => _ready;
-
   @override
-  String? get loadedWeightsPath => _loadedWeightsPath;
-
-  @override
-  Future<void> init(String weightsFilePath) async {
-    initPaths.add(weightsFilePath);
+  Future<void> init(String modelPath) async {
+    initPaths.add(modelPath);
     if (initError != null) throw initError!;
-    _loadedWeightsPath = weightsFilePath;
     _ready = true;
   }
 
   @override
-  Future<String> getBestMove(String fen, {int nodes = 1}) {
-    requestedFens.add(fen);
-    return onMove(fen, nodes);
+  Future<String> getMove(
+    List<Chess> positions, {
+    required int selfElo,
+    required int opponentElo,
+  }) {
+    requestedFens.add(positions.last.fen);
+    requestedHistories.add(List.of(positions));
+    requestedElos.add(selfElo);
+    opponentElos.add(opponentElo);
+    return onMove(positions.last.fen, selfElo);
+  }
+
+  @override
+  void cancel() {
+    cancelCount++;
   }
 
   @override
   Future<void> dispose() async {
     disposeCount++;
     _ready = false;
-    _loadedWeightsPath = null;
   }
 }
 

@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'package:maia_chess/engine_ffi/lc0_engine/lc0_service.dart';
+import 'package:maia_chess/engine_ffi/maia_engine/maia_service.dart';
+import 'package:maia_chess/engine_ffi/maia_engine/maia_model_asset.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 
 void main() {
@@ -64,30 +65,29 @@ void main() {
     }
   }, timeout: const Timeout(Duration(minutes: 8)));
 
-  testWidgets('native Android: lc0 recovers after a native weights failure', (
+  testWidgets('native Android: Maia-3 recovers after a native model failure', (
     tester,
   ) async {
-    final engine = Lc0Service();
+    final engine = MaiaService();
     final temporaryDirectory = await getTemporaryDirectory();
     final invalidWeights = io.File(
-      '${temporaryDirectory.path}/maia-corrompido.pb.gz',
+      '${temporaryDirectory.path}/maia-invalid.onnx',
     );
     await invalidWeights.writeAsBytes([0x6e, 0x61, 0x6f, 0x2d, 0x67, 0x7a]);
     try {
-      await engine.init(invalidWeights.path);
-      await expectLater(
-        engine.getBestMove(Chess.initial.fen, nodes: 1),
-        throwsA(anything),
-      );
+      await expectLater(engine.init(invalidWeights.path), throwsA(anything));
+      await engine.dispose();
       expect(engine.isReady, isFalse);
 
-      final validWeights = await Lc0Service.extractWeightsAsset(
-        'assets/maia_weights/maia-1100.pb.gz',
-      );
+      final validWeights = await MaiaModelAsset.resolve();
       await engine.init(validWeights);
       expect(engine.isReady, isTrue);
 
-      final move = await engine.getBestMove(Chess.initial.fen, nodes: 1);
+      final move = await engine.getMove(
+        [Chess.initial],
+        selfElo: 600,
+        opponentElo: 600,
+      );
       expect(Move.parse(move), isNotNull);
     } finally {
       await engine.dispose();

@@ -9,7 +9,7 @@ import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/application/game_state.dart';
 
 import 'game_controller_test.dart'
-    show FakeGameRepository, FakeStockfishEngine, FakeLc0Engine;
+    show FakeGameRepository, FakeStockfishEngine, FakeMaiaEngine;
 
 class MultiPvEngine extends FakeStockfishEngine {
   MultiPvEngine({this.onAnalysis}) : super(onMove: (_, _) async => 'e2e4');
@@ -61,14 +61,14 @@ void main() {
           gameControllerProvider.overrideWith(() => PositionedController(fen)),
         stockfishEngineFactoryProvider.overrideWithValue(factory),
         stockfishWarmupEnabledProvider.overrideWithValue(false),
-        lc0EngineFactoryProvider.overrideWithValue(
-          () => FakeLc0Engine(
+        maiaEngineFactoryProvider.overrideWithValue(
+          () => FakeMaiaEngine(
             onMove: (fen, _) async =>
                 fen.split(' ')[1] == 'b' ? 'e7e5' : 'e2e4',
           ),
         ),
-        maiaWeightsResolverProvider.overrideWithValue(
-          (level) async => level.weightsAsset,
+        maiaModelResolverProvider.overrideWithValue(
+          () async => 'assets/maia3/maia3-79m-fp32.onnx',
         ),
         hintTotalTimeoutProvider.overrideWithValue(timeout),
         gameRepositoryProvider.overrideWithValue(FakeGameRepository()),

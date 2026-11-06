@@ -1,4 +1,4 @@
-// Test side/level selection and the error path when Maia fails to start.
+// Test side/level selection and the error path when Maia-3 fails to start.
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
-import 'package:maia_chess/engine_ffi/lc0_engine/lc0_service.dart';
+import 'package:maia_chess/engine_ffi/maia_engine/maia_service.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_service.dart';
 import 'package:maia_chess/features/difficulty/presentation/new_game_vs_ai_screen.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
@@ -27,7 +27,7 @@ void main() {
           .selected,
       {Side.white},
     );
-    expect(_isChipSelected(tester, '1100'), isTrue);
+    expect(_isChipSelected(tester, '600'), isTrue);
     expect(_isChipSelected(tester, '1300'), isFalse);
 
     await tester.tap(find.text('Black'));
@@ -42,20 +42,22 @@ void main() {
     await tester.tap(find.text('1300'));
     await tester.pump();
     expect(_isChipSelected(tester, '1300'), isTrue);
-    expect(_isChipSelected(tester, '1100'), isFalse);
+    expect(_isChipSelected(tester, '600'), isFalse);
   });
 
-  testWidgets('shows an error when Maia fails to start', (tester) async {
+  testWidgets('shows an error when Maia-3 fails to start', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           gameRepositoryProvider.overrideWithValue(_FakeGameRepository()),
-          lc0EngineFactoryProvider.overrideWithValue(() => _FailingLc0Engine()),
+          maiaEngineFactoryProvider.overrideWithValue(
+            () => _FailingMaiaEngine(),
+          ),
           stockfishEngineFactoryProvider.overrideWithValue(
             () => _FailingStockfishEngine(),
           ),
-          maiaWeightsResolverProvider.overrideWithValue(
-            (level) async => level.weightsAsset,
+          maiaModelResolverProvider.overrideWithValue(
+            () async => 'assets/maia3/maia3-79m-fp32.onnx',
           ),
         ],
         child: const MaterialApp(home: NewGameVsAiScreen()),
@@ -67,9 +69,9 @@ void main() {
     // without depending on wall-clock timing.
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Maia:'), findsOneWidget);
+    expect(find.textContaining('Maia-3:'), findsOneWidget);
     expect(find.byType(GameScreen), findsNothing);
-    expect(find.text('Play against Maia'), findsOneWidget);
+    expect(find.text('Play against Maia-3'), findsOneWidget);
   });
 }
 
@@ -82,13 +84,13 @@ bool _isChipSelected(WidgetTester tester, String label) {
 
 class _FakeGameRepository extends Fake implements GameRepository {}
 
-class _FailingLc0Engine extends Fake implements Lc0Engine {
+class _FailingMaiaEngine extends Fake implements MaiaEngine {
   @override
   bool get isReady => false;
 
   @override
   Future<void> init(String weightsFilePath) async {
-    throw StateError('lc0 failed to start (test)');
+    throw StateError('Maia-3 failed to start (test)');
   }
 
   @override

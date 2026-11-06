@@ -173,7 +173,7 @@ class _RatingHero extends StatelessWidget {
               child: const Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Complete a rated game against Maia to start '
+                  'Complete a rated game against Maia-3 to start '
                   'your rating history.',
                   textAlign: TextAlign.center,
                 ),

@@ -6,7 +6,7 @@
 
 **A human-style opponent, wherever you play.**
 
-Offline chess for Android. Nine Maia opponents, Stockfish game review, and a campaign to climb.
+Offline chess for Android. Sixteen Maia-3 levels, Stockfish game review, and a campaign to climb.
 
 [![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#get-the-app)
 [![Works offline](https://img.shields.io/badge/Play-Offline-187B80)](#why-maia)
@@ -25,8 +25,7 @@ on your phone. Open the app and play, even when you're offline.
 
 **[Download the Android APK →](https://github.com/lsiddd/maia_chess/releases/latest)**
 
-You'll need **Android 7.0 or newer on a 64-bit ARM device (ARM64)**. All nine
-Maia networks come bundled with the app.
+You'll need **Android 7.0 or newer on a 64-bit ARM device (ARM64)**. The Maia-3 79M model comes bundled with the app.
 
 1. Open the download page and select the `.apk` file under **Assets**.
 2. Open the downloaded file. If Android asks, allow installation from your
@@ -53,10 +52,9 @@ updated after changes to `main` pass CI.
 
 ## Why Maia?
 
-[Maia](https://github.com/CSSLab/maia-chess) learns from real human games to model
-how people play at different rating bands. This app brings the original nine
-Maia networks to your phone, with levels from **1100 to 1900**. Each level
-represents a different style of human play.
+[Maia-3](https://github.com/CSSLab/maia3) learns from real human games to model
+how people play at different rating bands. This app runs the **Maia-3 79M** model on your phone, with 16 levels from
+**600 to 2600**. One shared model uses the selected Elo to predict human play.
 
 Maia is your opponent; **Stockfish** powers the hints and opponent-plan tools.
 Both run locally, so you can practise on the train, on a trip, or anywhere you
@@ -64,8 +62,8 @@ want a game.
 
 | What you want to do | What Maia Chess offers |
 | --- | --- |
-| ♟️ Find an opponent | Choose any of nine Maia levels and play as White or Black. |
-| 🏁 Work toward a goal | Start at Maia 1100 and unlock higher campaign levels as you win. |
+| ♟️ Find an opponent | Choose any of 16 Maia-3 levels and play as White or Black. |
+| 🏁 Work toward a goal | Start at Maia-3 600 and unlock higher campaign levels as you win. |
 | 💡 Explore a position | Ask for a hint, inspect attacked pieces, or view possible opponent plans. |
 | 🔍 Learn from a game | Review key moments with Stockfish, explore alternatives, and retry mistakes offline. |
 | 🤝 Play with a friend | Two players, one phone. Tap or drag pieces and rotate the board. |
@@ -77,9 +75,9 @@ want a game.
 
 From the home screen, choose how you'd like to play:
 
-- **Free play against Maia:** pick your colour, select any level from 1100 to
-  1900, and tap **Start game**.
-- **Maia campaign:** start with level 1100. Win two games in a window of three
+- **Free play against Maia:** pick your colour, select any level from 600 to
+  2600, and tap **Start game**.
+- **Maia campaign:** start with level 600. Win two games in a window of three
   rated campaign games at a level to unlock the next opponent. Campaign games
   disable hints, attacks, plans, and undo.
 - **Play (2 local players):** share the phone with a friend and take turns on
@@ -149,8 +147,8 @@ your games with you using PGN export.
 <details>
 <summary><strong>Need a hand?</strong></summary>
 
-- **Maia takes a moment to start:** the first game at a level loads that
-  network. Give it a few seconds; use **Try again** if the app offers it.
+- **Maia takes a moment to start:** the first AI game loads the 79M
+  model. Give it a few seconds; use **Try again** if the app offers it.
 - **A hint or plan needs another try:** tap **Hint** again, or switch **Plans**
   off and on.
 - **Android won't install an update:** updates need the same signing key as
@@ -163,7 +161,7 @@ your games with you using PGN export.
 
 ## Build from source
 
-Made with **Flutter and Dart**, with **lc0** running Maia and **Stockfish**
+Made with **Flutter and Dart**, with **ONNX Runtime** running Maia-3 and **Stockfish**
 providing assistance. **Riverpod** manages app state and **Drift/SQLite** stores
 your games locally.
 
@@ -186,23 +184,26 @@ Install Flutter and the Android SDK, add their tools to `PATH`, and configure
 ```sh
 git clone https://github.com/lsiddd/maia_chess.git
 cd maia_chess
+git lfs install
+git lfs pull
 sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
 flutter doctor --android-licenses
 flutter doctor -v
 flutter pub get
+dart run tool/verify_maia3.dart
 flutter devices
 flutter run -d DEVICE
 ```
 
-Replace `DEVICE` with your connected Android device or 64-bit emulator ID.
-Dependency setup and the native build use the internet, including fetching
-Eigen 3.4.0. The Maia networks are already included in the repository.
+Replace `DEVICE` with your connected ARM64 Android device or emulator ID.
+Dependency setup and the native build use the internet, for Flutter and native dependencies. The final ONNX model is versioned in
+Git LFS; no Python or model conversion is required to build or run the app.
 
 To build an ARM64 APK:
 
 ```sh
 flutter build apk --release --split-per-abi --target-platform android-arm64
-python3 scripts/verify_apk.py build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+dart run tool/verify_apk.dart build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
 The APK is written to `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`.
@@ -224,6 +225,7 @@ find it.
 - [Contributing](CONTRIBUTING.md): checks, tests, code generation, and contribution conventions.
 - [Architecture](docs/architecture.md): app state, storage, and engine integration.
 - [Android releases](docs/android-releases.md): build, signing, and release workflow.
+- [Maia-3 validation](docs/maia3-validation.md): numerical parity, offline tests, and measured emulator results.
 
 ## Licence and credits
 
@@ -231,8 +233,8 @@ Copyright (C) 2026 Maia Chess contributors. Original project code, documentation
 and assets are licensed under the **GNU Affero General Public License, version 3
 or any later version (`AGPL-3.0-or-later`)**. See [LICENSE](LICENSE).
 
-Built with the work of the [Maia researchers](https://github.com/CSSLab/maia-chess),
-[Leela Chess Zero](https://github.com/LeelaChessZero/lc0),
+Built with the work of the [Maia researchers](https://github.com/CSSLab/maia3),
+[ONNX Runtime](https://github.com/microsoft/onnxruntime),
 [Stockfish](https://github.com/official-stockfish/Stockfish), and
 [dartchess](https://github.com/lichess-org/dartchess). Board themes come from
 Lichess and pirouetti; the piece set is by Colin M. L. Burnett.

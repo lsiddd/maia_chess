@@ -364,7 +364,7 @@ class PgnService {
 
   String _playerName(StoredGame game, Side side) {
     if (game.levelRating == null) return 'Local player';
-    return game.playerSide == side ? 'Player' : 'Maia ${game.levelRating}';
+    return game.playerSide == side ? 'Player' : 'Maia-3 ${game.levelRating}';
   }
 
   String _resultToken(StoredGameResult result) => switch (result) {

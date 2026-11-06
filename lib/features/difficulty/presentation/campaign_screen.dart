@@ -123,7 +123,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
   Widget build(BuildContext context) {
     final progress = ref.watch(difficultyProgressProvider);
     final scaffold = Scaffold(
-      appBar: AppBar(title: const Text('Maia campaign')),
+      appBar: AppBar(title: const Text('Maia-3 campaign')),
       body: MaxWidthBody(
         child: progress.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -222,7 +222,7 @@ class _CampaignHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Climb through all nine Maia levels',
+                      'Climb through all 16 Maia-3 levels',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
                             fontFamily: AppTypography.accentFontFamily,
@@ -303,7 +303,7 @@ class _CampaignLevelCard extends StatelessWidget {
               '${progress.gamesInWindow}/${progress.windowSize} games';
 
     return Semantics(
-      label: 'Maia ${progress.rating}, $status',
+      label: 'Maia-3 ${progress.rating}, $status',
       child: Card(
         elevation: progress.unlocked ? 1 : 0,
         color: progress.unlocked
@@ -348,7 +348,7 @@ class _CampaignLevelCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            'Maia ${progress.rating}',
+                            'Maia-3 ${progress.rating}',
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontFamily: AppTypography.accentFontFamily,
                               fontWeight: FontWeight.w700,

@@ -166,7 +166,7 @@ void main() {
   }, timeout: const Timeout(Duration(minutes: 5)));
 
   testWidgets(
-    'game screen: real Maia free play, Stockfish hint, paired undo, and resume',
+    'game screen: real Maia-3 free play, Stockfish hint, paired undo, and resume',
     (tester) async {
       var container = ProviderContainer();
       try {

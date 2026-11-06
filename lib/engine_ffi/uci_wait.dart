@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-/// Generic waiters shared by lc0 and Stockfish services. Their listenable and
+/// Generic waiters used by the Stockfish service. Their listenable and
 /// stream contracts can be tested without loading native libraries; actual
 /// engine startup and shutdown require Android integration tests.
 

@@ -231,7 +231,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   String _title(StoredGame game) {
     final mode = game.levelRating == null
         ? 'Local game'
-        : 'Against Maia ${game.levelRating}';
+        : 'Against Maia-3 ${game.levelRating}';
     if (game.status == StoredGameStatus.ongoing) return '$mode — ongoing';
     return '$mode — ${_resultLabel(game.result)}';
   }
