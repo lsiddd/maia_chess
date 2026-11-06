@@ -48,6 +48,27 @@ analyse a copy with the side to move reversed and en passant cleared; this copy
 never enters game history. Requests are serialised through the one Stockfish
 instance, and results for stale positions are discarded.
 
+## Game review
+
+Review analyzes a replay with the same local Stockfish instance as live-game
+assistance. It passes the reversible move history with each position so the
+engine can detect repetition. Known terminal positions use their exact result.
+Review and trial moves use separate positions and leave the stored game and its
+rating unchanged.
+
+The full scan covers up to 400 half-moves, searching each position for 160 ms.
+If Stockfish returns no usable line, the scan retries that position once with
+a 400 ms single-line search. A three-minute limit bounds the scan between
+searches. Cancellation discards any in-flight result and stops queuing searches.
+Individual positions and trial moves can still be analyzed in longer games.
+
+Scores are normalized to White's perspective. Move labels depend on the loss in
+estimated winning chances. Review blends a volatility-weighted average of move
+accuracy with a harmonic mean and reports average centipawn loss separately.
+The [Lichess accuracy guide](https://lichess.org/page/accuracy) describes the
+underlying metric. The search budget and classification thresholds are local to
+this app.
+
 ## Native engines
 
 Both engines run in-process on isolates through Dart FFI. Native wrapper ready

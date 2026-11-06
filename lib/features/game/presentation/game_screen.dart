@@ -5,8 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theming/app_page_route.dart';
 import '../../../data/providers.dart';
+import '../../../data/repositories/game_repository.dart';
 import '../../../data/repositories/settings_repository.dart';
 import '../../hints/application/visual_hint_controller.dart';
+import '../../history/domain/game_replayer.dart';
+import '../../review/presentation/game_review_screen.dart';
 import '../../settings/presentation/appearance_screen.dart';
 import '../../tactics/application/live_threat_controller.dart';
 import '../application/game_controller.dart';
@@ -28,6 +31,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   late final LiveThreatController _plans;
   bool _flipped = false;
   bool _savingSettings = false;
+  bool _postGameActionPending = false;
   int _planIndex = 0;
   String? _noticeText;
   Timer? _noticeTimer;
@@ -299,6 +303,25 @@ class _GameScreenState extends ConsumerState<GameScreen>
         title: Text(
           game.aiSide == null ? 'Local game' : 'Maia ${game.levelRating}',
         ),
+        actions: [
+          if (game.isGameOver &&
+              game.gameId != null &&
+              game.sanHistory.isNotEmpty) ...[
+            TextButton(
+              onPressed: _postGameActionPending
+                  ? null
+                  : () => _afterGame(review: true),
+              child: const Text('Review game'),
+            ),
+            IconButton(
+              tooltip: 'Rematch',
+              onPressed: _postGameActionPending
+                  ? null
+                  : () => _afterGame(review: false),
+              icon: const Icon(Icons.replay),
+            ),
+          ],
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -340,6 +363,49 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _afterGame({required bool review}) async {
+    if (_postGameActionPending) return;
+    final game = ref.read(gameControllerProvider);
+    final id = game.gameId;
+    if (id == null || !game.isGameOver) return;
+    setState(() => _postGameActionPending = true);
+    try {
+      await _controller.flushPersistence();
+      if (!mounted || ref.read(gameControllerProvider).gameId != id) return;
+      if (ref.read(gameControllerProvider).persistenceError != null) {
+        await _controller.saveGame();
+        if (!mounted || ref.read(gameControllerProvider).gameId != id) return;
+        final error = ref.read(gameControllerProvider).persistenceError;
+        if (error != null) {
+          _notice(error);
+          return;
+        }
+      }
+      if (!review) {
+        await _controller.reset();
+        return;
+      }
+      final saved = await ref.read(gameRepositoryProvider).getGame(id);
+      if (!mounted || ref.read(gameControllerProvider).gameId != id) return;
+      if (saved == null || saved.status != StoredGameStatus.completed) {
+        _notice('The completed game could not be loaded.');
+        return;
+      }
+      final replayed = const GameReplayer().replay(saved);
+      await Navigator.of(context).push(
+        AppPageRoute<void>(
+          builder: (_) => GameReviewScreen(game: saved, replayed: replayed),
+        ),
+      );
+    } catch (error) {
+      _notice(
+        'Could not ${review ? 'open the review' : 'start a rematch'}: $error',
+      );
+    } finally {
+      if (mounted) setState(() => _postGameActionPending = false);
+    }
   }
 
   Future<void> _more() async {

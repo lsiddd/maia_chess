@@ -812,18 +812,28 @@ class _FittedSquare extends StatelessWidget {
   }
 }
 
-/// Read-only board used by game replay.
+/// Board for replay and analysis, independent of the live game controller.
 class StaticChessBoardWidget extends StatelessWidget {
   const StaticChessBoardWidget({
     required this.position,
     super.key,
     this.orientation = Side.white,
     this.boardTheme,
+    this.selectedSquare,
+    this.legalTargets = const {},
+    this.lastMove,
+    this.onSquareTap,
+    this.overlay,
   });
 
   final Chess position;
   final Side orientation;
   final BoardTheme? boardTheme;
+  final Square? selectedSquare;
+  final Set<Square> legalTargets;
+  final NormalMove? lastMove;
+  final ValueChanged<Square>? onSquareTap;
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
@@ -846,24 +856,48 @@ class StaticChessBoardWidget extends StatelessWidget {
               final displayCol = index % 8;
               final square = _squareAt(displayRow, displayCol, orientation);
               final piece = position.board.pieceAt(square);
+              final selected = square == selectedSquare;
+              final legalTarget = legalTargets.contains(square);
+              final canTap =
+                  onSquareTap != null &&
+                  (selected || legalTarget || piece?.color == position.turn);
+              final label = boardSquareLabel(square, piece);
               return Semantics(
+                key: onSquareTap == null
+                    ? null
+                    : ValueKey('review-square-${square.name}'),
                 container: true,
                 excludeSemantics: true,
-                label: boardSquareLabel(square, piece),
-                child: _SquareVisual(
-                  piece: piece,
-                  pieceKey: piece == null
+                button: canTap,
+                selected: selected ? true : null,
+                label: legalTarget ? '$label, legal destination' : label,
+                onTap: canTap ? () => onSquareTap!(square) : null,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  excludeFromSemantics: true,
+                  onTap: onSquareTap == null
                       ? null
-                      : ValueKey('static-piece-$displayRow-$displayCol'),
-                  isSelected: false,
-                  isLegalTarget: false,
-                  isLastMove: false,
-                  isCheck: false,
-                  instantExit: false,
+                      : () => onSquareTap!(square),
+                  child: _SquareVisual(
+                    piece: piece,
+                    pieceKey: piece == null
+                        ? null
+                        : ValueKey('static-piece-$displayRow-$displayCol'),
+                    isSelected: selected,
+                    isLegalTarget: legalTarget,
+                    isLastMove:
+                        square == lastMove?.from || square == lastMove?.to,
+                    isCheck:
+                        position.isCheck &&
+                        square == position.board.kingOf(position.turn),
+                    instantExit: false,
+                  ),
                 ),
               );
             },
           ),
+          if (overlay != null)
+            Positioned.fill(child: IgnorePointer(child: overlay!)),
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(

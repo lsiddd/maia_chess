@@ -6,7 +6,7 @@
 
 **A human-style opponent, wherever you play.**
 
-Offline chess for Android. Nine Maia opponents, Stockfish practice tools, and a campaign to climb.
+Offline chess for Android. Nine Maia opponents, Stockfish game review, and a campaign to climb.
 
 [![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#get-the-app)
 [![Works offline](https://img.shields.io/badge/Play-Offline-187B80)](#why-maia)
@@ -67,6 +67,7 @@ want a game.
 | ♟️ Find an opponent | Choose any of nine Maia levels and play as White or Black. |
 | 🏁 Work toward a goal | Start at Maia 1100 and unlock higher campaign levels as you win. |
 | 💡 Explore a position | Ask for a hint, inspect attacked pieces, or view possible opponent plans. |
+| 🔍 Learn from a game | Review key moments with Stockfish, explore alternatives, and retry mistakes offline. |
 | 🤝 Play with a friend | Two players, one phone. Tap or drag pieces and rotate the board. |
 | 📚 Revisit a game | Resume your autosave, replay saved games, and import or share PGN files. |
 | 📈 Follow your progress | See your personal in-app rating, winning streaks, and results by Maia level. |
@@ -113,6 +114,15 @@ Open **Saved games and PGN** to replay your games move by move. Import a PGN
 from your files, or export a game to share it with a friend or open it in another
 chess app. During a live game, tap the move history to review the position;
 **Current position** brings you back to play.
+
+Choose **Review game** after a game or from the replay of a completed or
+imported game. Stockfish scans the game on the device and shows an evaluation
+graph, accuracy and average centipawn loss by side, and annotated moves.
+Jump to a key move to compare the best move with the played continuation.
+You can play alternative moves on the board, analyze a position more deeply,
+retry mistakes for either side, or export the review as an annotated PGN.
+Full review supports up to 400 half-moves. Longer games still support
+individual position analysis.
 
 The library shows 50 games per page. PGN imports accept a single game up to
 4 MiB, with at most 20,000 moves including variations and 64 nested variation
