@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/data/providers.dart';
+import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
+import 'package:maia_chess/features/game/application/game_state.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
+import 'package:maia_chess/features/game/presentation/game_toolbar.dart';
 import 'package:maia_chess/features/tactics/presentation/threat_arrows.dart';
 import 'package:maia_chess/features/tactics/application/live_threat_controller.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_analysis.dart';
@@ -17,6 +20,55 @@ import 'game_controller_test.dart' show FakeGameRepository;
 import 'opponent_threats_test.dart' show PositionedController, MultiPvEngine;
 
 void main() {
+  testWidgets('campaign locks tools without changing attack preferences', (
+    tester,
+  ) async {
+    final settings = MemorySettings(
+      const StoredAppSettings(showAttackedPieces: true),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        settingsRepositoryProvider.overrideWithValue(settings),
+        gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
+        gameControllerProvider.overrideWith(_CampaignPositionController.new),
+      ],
+    );
+    addTearDown(() async {
+      container.dispose();
+      await settings.close();
+    });
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: GameScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final label in ['Undo', 'Hint', 'Attacks', 'Plans']) {
+      final button = tester.widget<GameToolButton>(
+        find.widgetWithText(GameToolButton, label),
+      );
+      expect(button.onPressed, isNull, reason: label);
+      expect(button.active, isFalse, reason: label);
+    }
+    final plans = container.read(liveThreatControllerProvider.notifier);
+    plans.setEnabled(true);
+    await tester.pumpAndSettle();
+    expect(container.read(liveThreatControllerProvider).enabled, isFalse);
+    expect(find.byKey(const Key('attacked-piece-indicator')), findsNothing);
+    expect(find.byKey(const Key('opponent-threat-arrows')), findsNothing);
+    expect(container.read(gameControllerProvider).evaluated, isTrue);
+    expect(settings.value.showAttackedPieces, isTrue);
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Attacks:'), findsNothing);
+    expect(find.text('Tool help'), findsNothing);
+    expect(find.text('Rotate board'), findsOneWidget);
+    expect(find.text('Restart'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'preference filters own pieces and distinguishes defence from attack',
     (tester) async {
@@ -327,6 +379,26 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await container.read(gameControllerProvider.notifier).shutdownEngines();
   });
+}
+
+class _CampaignPositionController extends GameController {
+  @override
+  GameState build() {
+    const e4 = NormalMove(from: Square.e2, to: Square.e4);
+    const d5 = NormalMove(from: Square.d7, to: Square.d5);
+    final afterE4 = Chess.initial.play(e4) as Chess;
+    return super.build().copyWith(
+      position: afterE4.play(d5) as Chess,
+      positionHistory: [Chess.initial, afterE4],
+      sanHistory: const ['e4', 'd5'],
+      uciHistory: [e4.uci, d5.uci],
+      moveActorHistory: const [GameMoveActor.player, GameMoveActor.maia],
+      moveTimeHistoryUtc: [DateTime.utc(2026), DateTime.utc(2026)],
+      aiSide: Side.black,
+      levelRating: 1100,
+      campaignMode: true,
+    );
+  }
 }
 
 ThreatArrowPainter painter(WidgetTester tester) =>

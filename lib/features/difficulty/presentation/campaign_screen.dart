@@ -234,6 +234,8 @@ class _CampaignHeader extends StatelessWidget {
                       'Win 2 games in any window of 3 rated campaign games '
                       'to unlock the next level.',
                     ),
+                    const SizedBox(height: 4),
+                    const Text('Campaign games are played without assistance.'),
                   ],
                 ),
               ),

@@ -148,6 +148,8 @@ class GameState {
   final int? whiteTimeMs;
   final int? blackTimeMs;
 
+  bool get allowsAssistance => !campaignMode;
+
   /// The rules library handles mate, stalemate, and insufficient material.
   /// This state additionally adjudicates the fifty-move rule and threefold
   /// repetition using game history.
@@ -179,7 +181,7 @@ class GameState {
       isDrawByThreefoldRepetition;
 
   bool get canUndo {
-    if (positionHistory.isEmpty) return false;
+    if (!allowsAssistance || positionHistory.isEmpty) return false;
     if (aiSide == null) return true;
 
     // If Maia opened as White and the human has not moved, there is no human

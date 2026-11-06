@@ -9,6 +9,7 @@ import 'package:maia_chess/data/repositories/settings_repository.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/presentation/chess_board_widget.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
+import 'package:maia_chess/features/game/presentation/game_toolbar.dart';
 import 'package:maia_chess/features/hints/application/visual_hint_controller.dart';
 import 'package:maia_chess/features/tactics/application/live_threat_controller.dart';
 import 'package:maia_chess/features/tactics/presentation/threat_arrows.dart';
@@ -165,7 +166,7 @@ void main() {
   }, timeout: const Timeout(Duration(minutes: 5)));
 
   testWidgets(
-    'game screen: real Maia, Stockfish hint, paired undo, and resume',
+    'game screen: real Maia free play, Stockfish hint, paired undo, and resume',
     (tester) async {
       var container = ProviderContainer();
       try {
@@ -174,11 +175,7 @@ void main() {
             .save(const StoredAppSettings());
         var game = container.read(gameControllerProvider.notifier);
         expect(
-          await game.startVsAi(
-            humanSide: Side.white,
-            levelRating: 1100,
-            campaignMode: true,
-          ),
+          await game.startVsAi(humanSide: Side.white, levelRating: 1100),
           isTrue,
         );
         await _showGame(tester, container);
@@ -212,7 +209,7 @@ void main() {
         expect(await game.restoreActiveGame(), isTrue);
         expect(container.read(gameControllerProvider).position.fen, fen);
         expect(container.read(gameControllerProvider).evaluated, isFalse);
-        expect(container.read(gameControllerProvider).campaignMode, isTrue);
+        expect(container.read(gameControllerProvider).campaignMode, isFalse);
         await _showGame(tester, container);
         await tester.tap(find.text('Undo'));
         await tester.pumpAndSettle();
@@ -230,6 +227,56 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 5)),
   );
+
+  testWidgets('campaign preserves rating with saved attack preference', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    final game = container.read(gameControllerProvider.notifier);
+    final settings = container.read(settingsRepositoryProvider);
+    final previousSettings = await settings.get();
+    try {
+      await settings.save(previousSettings.copyWith(showAttackedPieces: true));
+      expect(
+        await game.startVsAi(
+          humanSide: Side.white,
+          levelRating: 1100,
+          campaignMode: true,
+        ),
+        isTrue,
+      );
+      await _showGame(tester, container);
+      await _move(tester, 'e2', 'e4');
+      await _until(
+        tester,
+        () => container.read(gameControllerProvider).uciHistory.length == 2,
+      );
+      for (final label in ['Undo', 'Hint', 'Attacks', 'Plans']) {
+        final button = tester.widget<GameToolButton>(
+          find.widgetWithText(GameToolButton, label),
+        );
+        expect(button.onPressed, isNull, reason: label);
+      }
+      final board = tester.widget<ChessBoardWidget>(
+        find.byType(ChessBoardWidget),
+      );
+      expect(board.showAttackedPieces, isFalse);
+      expect((await settings.get()).showAttackedPieces, isTrue);
+      expect(container.read(gameControllerProvider).evaluated, isTrue);
+      await game.flushPersistence();
+      final saved = await container
+          .read(gameRepositoryProvider)
+          .getActiveGame();
+      expect(saved!.campaignMode, isTrue);
+      expect(saved.evaluated, isTrue);
+      expect(saved.moves, hasLength(2));
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await settings.save(previousSettings);
+      await game.shutdownEngines();
+      container.dispose();
+    }
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }
 
 Future<void> _showGame(WidgetTester tester, ProviderContainer container) async {

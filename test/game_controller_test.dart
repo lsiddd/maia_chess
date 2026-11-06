@@ -234,31 +234,73 @@ void main() {
       },
     );
 
-    test('campaign mode is preserved in state and autosave', () async {
-      final repository = FakeGameRepository();
-      final container = _engineContainer(
-        lc0Factory: () => FakeLc0Engine(onMove: (_, _) async => 'e2e4'),
-        repository: repository,
-      );
-      addTearDown(() async {
-        await container.read(gameControllerProvider.notifier).shutdownEngines();
-        container.dispose();
-      });
+    test(
+      'campaign cannot undo, request analysis, or lose eligibility',
+      () async {
+        final repository = FakeGameRepository();
+        var stockfishStarts = 0;
+        final container = _engineContainer(
+          lc0Factory: () => FakeLc0Engine(onMove: (_, _) async => 'e7e5'),
+          stockfishFactory: () {
+            stockfishStarts++;
+            return FakeStockfishEngine(onMove: (_, _) async => 'g1f3');
+          },
+          warmup: true,
+          repository: repository,
+        );
+        addTearDown(() async {
+          await container
+              .read(gameControllerProvider.notifier)
+              .shutdownEngines();
+          container.dispose();
+        });
+        final controller = container.read(gameControllerProvider.notifier);
 
-      expect(
-        await container
-            .read(gameControllerProvider.notifier)
-            .startVsAi(
-              humanSide: Side.white,
-              levelRating: 1100,
-              campaignMode: true,
-            ),
-        isTrue,
-      );
+        expect(
+          await controller.startVsAi(
+            humanSide: Side.white,
+            levelRating: 1100,
+            campaignMode: true,
+          ),
+          isTrue,
+        );
+        await controller.attemptDragMove(
+          Square.e2,
+          Square.e4,
+          onPromotion: noPromotion,
+        );
+        final before = container.read(gameControllerProvider);
+        expect(before.campaignMode, isTrue);
+        expect(before.canUndo, isFalse);
+        expect(before.sanHistory, ['e4', 'e5']);
 
-      expect(container.read(gameControllerProvider).campaignMode, isTrue);
-      expect((await repository.getActiveGame())?.campaignMode, isTrue);
-    });
+        await controller.undo();
+        await controller.markAsNotEvaluated();
+        await expectLater(controller.getHint(), throwsStateError);
+        await expectLater(controller.getOpponentThreats(), throwsStateError);
+
+        expect(container.read(gameControllerProvider), same(before));
+        expect(stockfishStarts, 0);
+        final saved = (await repository.getActiveGame())!;
+        expect(saved.campaignMode, isTrue);
+        expect(saved.evaluated, isTrue);
+        expect(saved.moves.map((move) => move.san), ['e4', 'e5']);
+
+        // A save made unrated by an older app stays unrated after an update.
+        await repository.saveOngoing(saved.copyWith(evaluated: false));
+        expect(await controller.restoreActiveGame(), isTrue);
+        expect(container.read(gameControllerProvider).canUndo, isFalse);
+        expect(container.read(gameControllerProvider).evaluated, isFalse);
+
+        await controller.reset();
+        final restarted = (await repository.getActiveGame())!;
+        expect(restarted.id, isNot(saved.id));
+        expect(restarted.campaignMode, isTrue);
+        expect(restarted.evaluated, isTrue);
+        expect(restarted.moves, isEmpty);
+        expect(stockfishStarts, 0);
+      },
+    );
 
     test(
       'resume replays autosave without duplicating the automatic opening',
@@ -480,6 +522,7 @@ GameState _stateFromFen(String fen) => GameState(
 ProviderContainer _engineContainer({
   required Lc0EngineFactory lc0Factory,
   StockfishEngineFactory? stockfishFactory,
+  bool? warmup,
   Duration timeout = const Duration(seconds: 2),
   FakeGameRepository? repository,
 }) {
@@ -492,6 +535,8 @@ ProviderContainer _engineContainer({
         stockfishFactory ??
             () => FakeStockfishEngine(onMove: (_, _) async => 'e2e4'),
       ),
+      if (warmup != null)
+        stockfishWarmupEnabledProvider.overrideWithValue(warmup),
       maiaWeightsResolverProvider.overrideWithValue(
         (level) async => level.weightsAsset,
       ),
