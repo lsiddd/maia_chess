@@ -79,7 +79,8 @@ From the home screen, choose how you'd like to play:
 - **Free play against Maia:** pick your colour, select any level from 1100 to
   1900, and tap **Start game**.
 - **Maia campaign:** start with level 1100. Win two games in a window of three
-  rated campaign games at a level to unlock the next opponent.
+  rated campaign games at a level to unlock the next opponent. Campaign games
+  disable hints, attacks, plans, and undo.
 - **Play (2 local players):** share the phone with a friend and take turns on
   the same board.
 
@@ -101,9 +102,10 @@ The toolbar keeps useful tools within reach:
 | **Plans** | Explore up to three possible opponent continuations. Tap the counter to cycle through them. |
 | **More** | Rotate, restart, save, customise the board, or open the tool guide. |
 
-Your in-app rating and campaign progress track completed, unassisted games
-against Maia. Use hints, attacks, plans, and undo whenever you'd like a practice
-game.
+Your in-app rating tracks completed, unassisted games against Maia. Campaign
+progress uses eligible campaign games. In free play against Maia, hints,
+attacks, plans, and undo make the game unrated. The tools are also available in
+local two-player games.
 
 ### Keep a chess notebook
 

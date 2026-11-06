@@ -38,7 +38,8 @@ class LiveThreatController extends AutoDisposeNotifier<LiveThreatState> {
   LiveThreatState build() {
     _game = ref.read(gameControllerProvider.notifier);
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
-      if (previous?.gameId != next.gameId) {
+      if (previous?.gameId != next.gameId ||
+          previous?.allowsAssistance != next.allowsAssistance) {
         setEnabled(false);
       } else if (previous?.position.fen != next.position.fen ||
           (previous != null && _available(previous) != _available(next))) {
@@ -54,6 +55,7 @@ class LiveThreatController extends AutoDisposeNotifier<LiveThreatState> {
   }
 
   static bool _available(GameState game) =>
+      game.allowsAssistance &&
       !game.isGameOver &&
       !game.position.isCheck &&
       !game.isAiTurn &&
@@ -61,6 +63,7 @@ class LiveThreatController extends AutoDisposeNotifier<LiveThreatState> {
       !game.hintThinking;
 
   void setEnabled(bool enabled) {
+    if (enabled && !ref.read(gameControllerProvider).allowsAssistance) return;
     state = LiveThreatState(enabled: enabled, paused: state.paused);
     _refresh();
   }

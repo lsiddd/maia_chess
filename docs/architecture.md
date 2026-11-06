@@ -88,9 +88,11 @@ unbounded `watchLibrary()` remains available for existing callers. Library and
 statistics providers dispose their subscriptions when unused.
 
 Statistics include completed AI games with a human side, a known result, and
-`evaluated == true`. Assistance and undo clear that flag. Campaign progression
-uses only eligible campaign games. Imported games are completed and unrated;
-only their mainline is persisted for replay, while the stored PGN preserves
+`evaluated == true`. Outside the campaign, assistance and undo clear that flag.
+Campaign games disable these tools and ignore the saved attack overlay setting.
+Previously saved campaign games keep their recorded eligibility. Campaign
+progression uses only eligible campaign games. Imported games are completed and
+unrated. Only their mainline is persisted for replay, while the stored PGN preserves
 parsed headers, comments, and variations. Validation checks mainline and
 variation legality before writing anything. Android file reading/decoding and
 PGN validation run on workers. Imports are limited to 4 MiB, 20,000 plies across

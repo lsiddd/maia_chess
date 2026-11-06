@@ -75,7 +75,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _hint() async {
-    if (ref.read(gameControllerProvider).isGameOver) {
+    final game = ref.read(gameControllerProvider);
+    if (!game.allowsAssistance) return;
+    if (game.isGameOver) {
       _notice('Game over: no move is available.');
       return;
     }
@@ -89,7 +91,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _settings({bool? attacks, bool? ownOnly}) async {
-    if (_savingSettings) return;
+    if (_savingSettings || !ref.read(gameControllerProvider).allowsAssistance) {
+      return;
+    }
     setState(() => _savingSettings = true);
     try {
       final repository = ref.read(settingsRepositoryProvider);
@@ -111,11 +115,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
     scheduleMicrotask(() {
       if (!mounted ||
           ref.read(appSettingsProvider).valueOrNull?.showAttackedPieces !=
-              true ||
-          ref.read(gameControllerProvider).isGameOver) {
+              true) {
         return;
       }
-      unawaited(_controller.markAsNotEvaluated());
+      final game = ref.read(gameControllerProvider);
+      if (game.allowsAssistance && !game.isGameOver) {
+        unawaited(_controller.markAsNotEvaluated());
+      }
     });
   }
 
@@ -128,7 +134,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ref.watch(appSettingsProvider).valueOrNull ?? const StoredAppSettings();
     final base = game.aiSide?.opposite ?? Side.white;
     final orientation = _flipped ? base.opposite : base;
-    final candidates = plans.result?.threats ?? const [];
+    final showAttacks = game.allowsAssistance && settings.showAttackedPieces;
+    final candidates = game.allowsAssistance
+        ? plans.result?.threats ?? const []
+        : const [];
     final selectedPlan = candidates.isEmpty
         ? null
         : candidates[_planIndex % candidates.length];
@@ -152,6 +161,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _notice(gameResultDescription(next));
       }
       if (previous?.gameId != next.gameId &&
+          next.allowsAssistance &&
           settings.showAttackedPieces &&
           !next.isGameOver) {
         _markAttackAssistance();
@@ -163,6 +173,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       }
     });
     final busy = game.aiThinking;
+    const campaignToolTip = 'Unavailable in the campaign';
     final toolbar = SizedBox(
       height: 64,
       child: Row(
@@ -171,9 +182,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
           GameToolButton(
             label: 'Undo',
             icon: Icons.undo,
-            tooltip: game.campaignMode
-                ? 'Undo: this game will no longer count toward the campaign'
-                : 'Undo',
+            tooltip: game.allowsAssistance ? null : 'Undo · $campaignToolTip',
             onPressed: game.canUndo && !busy && !game.isGameOver
                 ? _controller.undo
                 : null,
@@ -182,11 +191,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
             key: const Key('hint-button'),
             label: 'Hint',
             icon: Icons.lightbulb_outline,
-            active: hint != null,
-            loading: game.hintThinking,
-            tooltip:
-                'Stockfish hint: highlights only the piece; makes the game unrated',
-            onPressed: game.isGameOver || (!busy && !game.isAiTurn)
+            active: game.allowsAssistance && hint != null,
+            loading: game.allowsAssistance && game.hintThinking,
+            tooltip: game.allowsAssistance
+                ? 'Show the piece suggested by Stockfish. This makes the game unrated.'
+                : 'Hint · $campaignToolTip',
+            onPressed:
+                game.allowsAssistance &&
+                    (game.isGameOver || (!busy && !game.isAiTurn))
                 ? _hint
                 : null,
           ),
@@ -194,12 +206,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
             key: const Key('toggle-attacked-pieces'),
             label: 'Attacks',
             icon: Icons.crop_free,
-            active: settings.showAttackedPieces,
-            onPressed: _savingSettings
+            active: showAttacks,
+            tooltip: game.allowsAssistance
+                ? null
+                : 'Attacks · $campaignToolTip',
+            onPressed: !game.allowsAssistance || _savingSettings
                 ? null
                 : () {
-                    unawaited(_settings(attacks: !settings.showAttackedPieces));
-                    if (!settings.showAttackedPieces && !game.isGameOver) {
+                    unawaited(_settings(attacks: !showAttacks));
+                    if (!showAttacks && !game.isGameOver) {
                       unawaited(_controller.markAsNotEvaluated());
                     }
                   },
@@ -208,16 +223,22 @@ class _GameScreenState extends ConsumerState<GameScreen>
             key: const Key('show-opponent-threats'),
             label: 'Plans',
             icon: Icons.trending_up,
-            tooltip: 'Opponent plans',
-            active: plans.enabled,
-            loading: plans.loading,
-            onPressed: () {
-              _planIndex = 0;
-              _plans.setEnabled(!plans.enabled);
-              if (!plans.enabled && game.position.isCheck) {
-                _notice('Get out of check before viewing opponent plans.');
-              }
-            },
+            tooltip: game.allowsAssistance
+                ? 'Opponent plans'
+                : 'Plans · $campaignToolTip',
+            active: game.allowsAssistance && plans.enabled,
+            loading: game.allowsAssistance && plans.loading,
+            onPressed: game.allowsAssistance
+                ? () {
+                    _planIndex = 0;
+                    _plans.setEnabled(!plans.enabled);
+                    if (!plans.enabled && game.position.isCheck) {
+                      _notice(
+                        'Get out of check before viewing opponent plans.',
+                      );
+                    }
+                  }
+                : null,
           ),
           GameToolButton(
             label: 'More',
@@ -232,11 +253,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 640),
         child: ChessBoardWidget(
           orientation: orientation,
-          showAttackedPieces: settings.showAttackedPieces,
+          showAttackedPieces: showAttacks,
           attackedSide: settings.ownAttackedPiecesOnly
               ? game.aiSide?.opposite ?? game.position.turn
               : null,
-          hintSquare: hint,
+          hintSquare: game.allowsAssistance ? hint : null,
           threats: selectedPlan == null ? const [] : [selectedPlan],
         ),
       ),
@@ -339,14 +360,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 ('flip', Icons.swap_vert, 'Rotate board'),
                 ('save', Icons.save_outlined, 'Save game'),
                 ('settings', Icons.tune, 'Settings'),
-                (
-                  'filter',
-                  Icons.filter_alt_outlined,
-                  settings.ownAttackedPiecesOnly
-                      ? 'Attacks: show all pieces'
-                      : 'Attacks: my pieces only',
-                ),
-                ('help', Icons.help_outline, 'Tool help'),
+                if (game.allowsAssistance) ...[
+                  (
+                    'filter',
+                    Icons.filter_alt_outlined,
+                    settings.ownAttackedPiecesOnly
+                        ? 'Attacks: show all pieces'
+                        : 'Attacks: my pieces only',
+                  ),
+                  ('help', Icons.help_outline, 'Tool help'),
+                ],
                 ('reset', Icons.restart_alt, 'Restart'),
               ])
                 ListTile(
@@ -357,8 +380,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  game.campaignMode
-                      ? 'Hints, attacks, plans, and undo make the game unrated: it does not count toward campaign progress.'
+                  !game.allowsAssistance
+                      ? 'Hints, attacks, plans, and undo are unavailable in the campaign.'
                       : 'The game is saved automatically after every move. Assistance and undo make it unrated.',
                 ),
               ),
@@ -392,7 +415,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 'Hint: an amber outline marks only the piece suggested by Stockfish. Tap again to hide it.\n\n'
                 'Attacks: a solid orange border marks an attacked piece without geometric defence; a double blue border marks an attacked, defended piece. This does not guarantee a material gain or loss: pins and exchanges require tactical analysis.\n\n'
                 'Opponent plans: an arrow shows one Stockfish option if the opponent could move now. It is not a proven threat. Use the counter to switch plans.\n\n'
-                'Undo: against Maia, returns to your previous decision; in local play, takes back one move. Assistance and undo make the game unrated and ineligible for campaign progress.',
+                'Undo: against Maia, returns to your previous decision. In local play, it takes back one move. Assistance and undo make the game unrated.',
               ),
             ),
             actions: [
@@ -510,8 +533,9 @@ class _TurnStatus extends StatelessWidget {
               ),
             Flexible(
               child: Tooltip(
-                message:
-                    'Assistance and undo make the game unrated and ineligible for campaign progress.',
+                message: game.allowsAssistance
+                    ? 'Assistance and undo make the game unrated.'
+                    : 'Assistance and undo are unavailable in the campaign.',
                 child: Text(
                   '$mode${game.evaluated ? '' : ' · Unrated'}',
                   maxLines: 1,

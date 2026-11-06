@@ -510,16 +510,19 @@ class GameController extends Notifier<GameState> {
   }
 
   /// Undo one ply in local play, or return to the previous human decision
-  /// against Maia. Mark the game unrated, excluding it from rating, streaks,
-  /// and campaign progress.
+  /// against Maia in free play. Mark the game unrated, excluding it from
+  /// rating and streaks.
   Future<void> undo() async {
     if (state.isGameOver || !state.canUndo || state.aiThinking) {
       return;
     }
     if (_hintInFlight != null) {
       final position = state.position;
+      final generation = _gameGeneration;
       await cancelHint();
-      if (_isDisposed || !identical(position, state.position)) return;
+      if (!_isCurrentGame(generation) || !identical(position, state.position)) {
+        return;
+      }
     }
     final history = [...state.positionHistory];
     final sanHistory = [...state.sanHistory];
@@ -560,7 +563,7 @@ class GameController extends Notifier<GameState> {
   /// Mark the game unrated without changing the board; persist the
   /// eligibility change before assistance is delivered.
   Future<void> markAsNotEvaluated() async {
-    if (!state.evaluated) return;
+    if (!state.allowsAssistance || !state.evaluated) return;
     state = state.copyWith(evaluated: false);
     await _persistCurrentGame();
   }
@@ -570,6 +573,9 @@ class GameController extends Notifier<GameState> {
   Future<HintResult> getHint({
     int stockfishMovetimeMs = StockfishEngine.defaultMovetimeMs,
   }) {
+    if (!state.allowsAssistance) {
+      return Future.error(StateError('Hints are unavailable in the campaign.'));
+    }
     final existing = _hintInFlight;
     if (existing != null) return existing;
     if (stockfishMovetimeMs <= 0) {
@@ -638,6 +644,11 @@ class GameController extends Notifier<GameState> {
   /// moves. Discard stale results and serialise Stockfish searches, including
   /// hints requested during analysis.
   Future<ThreatResult> getOpponentThreats() {
+    if (!state.allowsAssistance) {
+      return Future.error(
+        StateError('Opponent plans are unavailable in the campaign.'),
+      );
+    }
     if (_promotionPending ||
         state.aiThinking ||
         state.hintThinking ||
@@ -984,7 +995,11 @@ class GameController extends Notifier<GameState> {
   /// game. An optional warmup failure does not interrupt play; the next hint
   /// retries startup.
   Future<void> _warmUpStockfish() async {
-    if (_isDisposed || !ref.read(stockfishWarmupEnabledProvider)) return;
+    if (_isDisposed ||
+        !state.allowsAssistance ||
+        !ref.read(stockfishWarmupEnabledProvider)) {
+      return;
+    }
     try {
       await _ensureStockfishLoaded();
     } on Object {
