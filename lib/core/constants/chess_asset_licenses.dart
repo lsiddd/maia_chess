@@ -4,6 +4,12 @@ import 'package:flutter/services.dart';
 void registerChessAssetLicenses() {
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(const [
+      'Microsoft ONNX Runtime',
+    ], await rootBundle.loadString('assets/maia3/LICENSE-ONNX-Runtime.txt'));
+    yield LicenseEntryWithLineBreaks(const [
+      'Maia-3 79M model and inference encoding',
+    ], await rootBundle.loadString('assets/maia3/LICENSE-AGPL-3.0.txt'));
+    yield LicenseEntryWithLineBreaks(const [
       'Cburnett chess pieces',
     ], await rootBundle.loadString('assets/chess_pieces/LICENSE-GPL-2.0.txt'));
     yield LicenseEntryWithLineBreaks(const [

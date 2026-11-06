@@ -108,7 +108,7 @@ class PlayerStatsCalculator {
   static const double initialRating = 1500;
   static const double kFactor = 32;
   static const double minimumRating = 600;
-  static const double maximumRating = 2400;
+  static const double maximumRating = 2600;
 
   PlayerStatsSnapshot calculate(Iterable<EvaluatedGameSummary> games) {
     final ordered = games.toList(growable: false)

@@ -30,7 +30,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Play (2 local players)'), findsOneWidget);
-    expect(find.text('Maia campaign'), findsOneWidget);
+    expect(find.text('Maia-3 campaign'), findsOneWidget);
     expect(find.text('My performance'), findsOneWidget);
     expect(find.text('Saved games and PGN'), findsOneWidget);
     expect(find.text('Technical diagnostic (Phase 0)'), findsNothing);

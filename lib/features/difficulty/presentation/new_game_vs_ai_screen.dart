@@ -11,7 +11,7 @@ import '../../../core/widgets/max_width_body.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 
-/// Configure the human side and Maia level for free play. Campaign selection
+/// Configure the human side and Maia-3 level for free play. Campaign selection
 /// lives in `CampaignScreen`.
 class NewGameVsAiScreen extends ConsumerStatefulWidget {
   const NewGameVsAiScreen({super.key});
@@ -69,7 +69,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
         final error =
             ref.read(gameControllerProvider).engineError ??
             ref.read(gameControllerProvider).persistenceError ??
-            'Could not start the Maia engine.';
+            'Could not start the Maia-3 engine.';
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error)));
@@ -93,7 +93,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   @override
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
-      appBar: AppBar(title: const Text('Play against Maia')),
+      appBar: AppBar(title: const Text('Play against Maia-3')),
       body: MaxWidthBody(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.l),
@@ -135,7 +135,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                   children: [
                     const _SectionLabel(
                       icon: Icons.psychology_outlined,
-                      label: 'Level (Maia style)',
+                      label: 'Level (Maia-3 style)',
                     ),
                     const SizedBox(height: AppSpacing.m),
                     Wrap(
@@ -177,7 +177,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
             if (_starting) ...[
               const SizedBox(height: AppSpacing.m),
               Text(
-                'Loading Maia $_levelRating weights... '
+                'Loading Maia-3 79M... '
                 'This may take a few seconds the first time.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,

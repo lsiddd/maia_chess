@@ -7,7 +7,7 @@ import '../uci_wait.dart';
 import 'stockfish_analysis.dart';
 
 /// High-level Stockfish contract for hints and opponent plans, independent of
-/// the selected Maia level. The `stockfish` package runs UCI in-process
+/// the selected Maia-3 level. The `stockfish` package runs UCI in-process
 /// through Dart FFI on background isolates.
 abstract interface class StockfishEngine {
   static const defaultMovetimeMs = 500;

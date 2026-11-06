@@ -1,5 +1,5 @@
 name: maia_chess
-description: "Offline chess against human-style Maia opponents via lc0, with Stockfish hints and local game history."
+description: "Offline chess against human-style Maia opponents via Maia-3 79M, with Stockfish hints and local game history."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -16,10 +16,6 @@ dependencies:
   flutter_svg: ^2.3.0
   # Chess rules, legal moves, and FEN/SAN notation.
   dartchess: ^0.13.1
-  # Local fork with generated protobuf headers and private UCI pipes for
-  # coexistence with Stockfish. See native/leela_chess_zero/architecture.md.
-  leela_chess_zero:
-    path: native/leela_chess_zero
   stockfish: ^1.8.1
   path_provider: ^2.1.6
   path: ^1.9.1
@@ -28,6 +24,9 @@ dependencies:
   file_picker: ^11.0.3
   uuid: ^4.6.0
   wakelock_plus: ^1.5.2
+  onnxruntime_plus: 1.5.0
+  crypto: ^3.0.6
+  archive: ^4.0.7
 
 dev_dependencies:
   flutter_test:
@@ -41,17 +40,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Nine official Maia networks (1100–1900). Provenance and licensing are
-  # recorded in assets/maia_weights/NOTICE.md.
+  # Maia-3 79M FP32 is versioned in Git LFS; no conversion step at build time.
   assets:
     - assets/chess_pieces/
     - assets/chess_boards/
-    - assets/maia_weights/maia-1100.pb.gz
-    - assets/maia_weights/maia-1200.pb.gz
-    - assets/maia_weights/maia-1300.pb.gz
-    - assets/maia_weights/maia-1400.pb.gz
-    - assets/maia_weights/maia-1500.pb.gz
-    - assets/maia_weights/maia-1600.pb.gz
-    - assets/maia_weights/maia-1700.pb.gz
-    - assets/maia_weights/maia-1800.pb.gz
-    - assets/maia_weights/maia-1900.pb.gz
+    - assets/maia3/

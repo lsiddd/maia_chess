@@ -5,12 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'game_controller_test.dart'
-    show FakeGameRepository, FakeLc0Engine, FakeStockfishEngine;
+    show FakeGameRepository, FakeMaiaEngine, FakeStockfishEngine;
 
 void main() {
   test('background warmup neither blocks play nor duplicates init', () async {
     final ready = Completer<void>();
-    final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
+    final maia = FakeMaiaEngine(onMove: (_, _) async => 'e2e4');
     final stockfish = _DelayedStockfishEngine(ready.future);
     final container = _container(
       maiaFactory: () => maia,
@@ -40,7 +40,7 @@ void main() {
   test(
     'warmup failure preserves the game and the hint retries startup',
     () async {
-      final maia = FakeLc0Engine(onMove: (_, _) async => 'e2e4');
+      final maia = FakeMaiaEngine(onMove: (_, _) async => 'e2e4');
       final stockfishEngines = <FakeStockfishEngine>[];
       final container = _container(
         maiaFactory: () => maia,
@@ -73,7 +73,7 @@ void main() {
     },
   );
 
-  late FakeLc0Engine maia;
+  late FakeMaiaEngine maia;
   late List<FakeStockfishEngine> engines;
   late ProviderContainer container;
   late GameController game;
@@ -81,15 +81,15 @@ void main() {
     Future<String> Function(String, int) move, {
     Duration timeout = const Duration(seconds: 2),
   }) {
-    maia = FakeLc0Engine(onMove: (_, _) async => 'e7e5');
+    maia = FakeMaiaEngine(onMove: (_, _) async => 'e7e5');
     engines = [];
     container = ProviderContainer(
       overrides: [
         gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
-        maiaWeightsResolverProvider.overrideWithValue(
-          (level) async => level.weightsAsset,
+        maiaModelResolverProvider.overrideWithValue(
+          () async => 'assets/maia3/maia3-79m-fp32.onnx',
         ),
-        lc0EngineFactoryProvider.overrideWithValue(() => maia),
+        maiaEngineFactoryProvider.overrideWithValue(() => maia),
         stockfishWarmupEnabledProvider.overrideWithValue(false),
         stockfishEngineFactoryProvider.overrideWithValue(() {
           final engine = FakeStockfishEngine(onMove: move);
@@ -229,18 +229,18 @@ void main() {
 }
 
 ProviderContainer _container({
-  required Lc0EngineFactory maiaFactory,
+  required MaiaEngineFactory maiaFactory,
   required StockfishEngineFactory stockfishFactory,
   bool warmup = false,
 }) {
   var gameId = 0;
   final container = ProviderContainer(
     overrides: [
-      lc0EngineFactoryProvider.overrideWithValue(maiaFactory),
+      maiaEngineFactoryProvider.overrideWithValue(maiaFactory),
       stockfishEngineFactoryProvider.overrideWithValue(stockfishFactory),
       stockfishWarmupEnabledProvider.overrideWithValue(warmup),
-      maiaWeightsResolverProvider.overrideWithValue(
-        (level) async => level.weightsAsset,
+      maiaModelResolverProvider.overrideWithValue(
+        () async => 'assets/maia3/maia3-79m-fp32.onnx',
       ),
       gameRepositoryProvider.overrideWithValue(FakeGameRepository()),
       gameIdFactoryProvider.overrideWithValue(() => 'hint-perf-${gameId++}'),

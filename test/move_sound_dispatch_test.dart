@@ -6,7 +6,7 @@ import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/application/move_feedback.dart';
 
-import 'game_controller_test.dart' show FakeGameRepository, FakeLc0Engine;
+import 'game_controller_test.dart' show FakeGameRepository, FakeMaiaEngine;
 
 class _FailingGameRepository extends FakeGameRepository {
   @override
@@ -25,14 +25,14 @@ void main() {
         gameRepositoryProvider.overrideWithValue(
           repository ?? FakeGameRepository(),
         ),
-        lc0EngineFactoryProvider.overrideWithValue(
-          () => FakeLc0Engine(
+        maiaEngineFactoryProvider.overrideWithValue(
+          () => FakeMaiaEngine(
             onMove: (fen, _) async =>
                 fen == Chess.initial.fen ? 'e2e4' : 'e4d5',
           ),
         ),
-        maiaWeightsResolverProvider.overrideWithValue(
-          (level) async => level.weightsAsset,
+        maiaModelResolverProvider.overrideWithValue(
+          () async => 'assets/maia3/maia3-79m-fp32.onnx',
         ),
         stockfishWarmupEnabledProvider.overrideWithValue(false),
         moveSoundPlayerProvider.overrideWithValue((san) async {
@@ -47,7 +47,7 @@ void main() {
     return container;
   }
 
-  test('sounds dispatch once per accepted player or Maia move', () async {
+  test('sounds dispatch once per accepted player or Maia-3 move', () async {
     final sounds = <String>[];
     final controller = createContainer(
       sounds,

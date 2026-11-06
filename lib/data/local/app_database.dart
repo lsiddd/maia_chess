@@ -114,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.connect(DatabaseConnection super.connection);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -148,6 +148,10 @@ class AppDatabase extends _$AppDatabase {
           "UPDATE app_settings SET piece_set = 'cburnett' WHERE piece_set = 'classic'",
         );
       }
+      if (from < 5) {
+        await _seedDefaults();
+        await _rebuildDerivedState();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -160,11 +164,11 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _seedDefaults() async {
     final now = DateTime.now().toUtc();
-    for (var rating = 1100; rating <= 1900; rating += 100) {
+    for (final level in DifficultyLevel.all) {
       await into(difficultyProgress).insert(
         DifficultyProgressCompanion.insert(
-          rating: Value(rating),
-          unlocked: Value(rating == 1100),
+          rating: Value(level.rating),
+          unlocked: Value(level == DifficultyLevel.all.first),
           updatedAtUtc: now,
         ),
         mode: InsertMode.insertOrIgnore,

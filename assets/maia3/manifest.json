@@ -1,0 +1,60 @@
+{
+  "model": "Maia-3 79M",
+  "file": "maia3-79m-fp32.onnx",
+  "precision": "FP32",
+  "sha256": "b9545e27f45247fb842c9c82ccbc1a27a5517a86c44b3e59d20503f81eafc2e6",
+  "bytes": 307514441,
+  "source_commit": "1e13597c42d4858b7cfd7cfdae01e297263364b2",
+  "checkpoint_revision": "a107d6ceb7b298cb04ae1da4edffe2939858b894",
+  "checkpoint_sha256": "3fc6181d5db789b45a15305732148757ae74efa3e0028e81ba335b462dac45c2",
+  "checkpoint_url": "https://huggingface.co/UofTCSSLab/Maia3-79M/resolve/a107d6ceb7b298cb04ae1da4edffe2939858b894/maia3-79m.pt",
+  "recipe_sha256": "dca2cc1372c668d38649dce220a765b37e6e78bd8e01e41430ab6d83c11fc624",
+  "levels": [
+    600,
+    800,
+    1000,
+    1100,
+    1200,
+    1300,
+    1400,
+    1500,
+    1600,
+    1700,
+    1800,
+    1900,
+    2000,
+    2200,
+    2400,
+    2600
+  ],
+  "inputs": {
+    "tokens": [
+      1,
+      64,
+      96
+    ],
+    "self_elo": [
+      1
+    ],
+    "opponent_elo": [
+      1
+    ]
+  },
+  "output": {
+    "policy": [
+      1,
+      4352
+    ]
+  },
+  "validation": {
+    "comparisons": 224,
+    "max_probability_error": 1.099705696105957e-05,
+    "tolerance": 0.0001
+  },
+  "versions": {
+    "torch": "2.7.1",
+    "onnx": "1.18.0",
+    "onnxruntime": "1.31.1",
+    "numpy": "2.2.6"
+  }
+}

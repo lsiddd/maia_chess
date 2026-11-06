@@ -7,58 +7,61 @@ import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 
-import 'game_controller_test.dart' show FakeGameRepository, FakeLc0Engine;
+import 'game_controller_test.dart' show FakeGameRepository, FakeMaiaEngine;
 
 void main() {
-  test('cancelling the Maia opening preserves the previous autosave', () async {
-    final answer = Completer<String>();
-    final searchStarted = Completer<void>();
-    final repository = FakeGameRepository();
-    final engine = FakeLc0Engine(
-      onMove: (_, _) {
-        searchStarted.complete();
-        return answer.future;
-      },
-    );
-    final container = ProviderContainer(
-      overrides: [
-        gameRepositoryProvider.overrideWithValue(repository),
-        maiaWeightsResolverProvider.overrideWithValue(
-          (level) async => level.weightsAsset,
-        ),
-        lc0EngineFactoryProvider.overrideWithValue(() => engine),
-        stockfishWarmupEnabledProvider.overrideWithValue(false),
-      ],
-    );
-    final controller = container.read(gameControllerProvider.notifier);
-    addTearDown(() async {
-      if (!answer.isCompleted) answer.complete('e2e4');
+  test(
+    'cancelling the Maia-3 opening preserves the previous autosave',
+    () async {
+      final answer = Completer<String>();
+      final searchStarted = Completer<void>();
+      final repository = FakeGameRepository();
+      final engine = FakeMaiaEngine(
+        onMove: (_, _) {
+          searchStarted.complete();
+          return answer.future;
+        },
+      );
+      final container = ProviderContainer(
+        overrides: [
+          gameRepositoryProvider.overrideWithValue(repository),
+          maiaModelResolverProvider.overrideWithValue(
+            () async => 'assets/maia3/maia3-79m-fp32.onnx',
+          ),
+          maiaEngineFactoryProvider.overrideWithValue(() => engine),
+          stockfishWarmupEnabledProvider.overrideWithValue(false),
+        ],
+      );
+      final controller = container.read(gameControllerProvider.notifier);
+      addTearDown(() async {
+        if (!answer.isCompleted) answer.complete('e2e4');
+        await controller.shutdownEngines();
+        container.dispose();
+      });
+      await controller.startTwoPlayers();
+      await controller.attemptDragMove(
+        Square.d2,
+        Square.d4,
+        onPromotion: () async => null,
+      );
+      final previous = repository.games.values.single;
+      final request = GameStartRequest();
+      final starting = controller.startVsAi(
+        humanSide: Side.black,
+        levelRating: 1100,
+        request: request,
+      );
+      await searchStarted.future;
+      request.cancel();
+      expect(await starting, isFalse);
+      answer.complete('e2e4');
       await controller.shutdownEngines();
-      container.dispose();
-    });
-    await controller.startTwoPlayers();
-    await controller.attemptDragMove(
-      Square.d2,
-      Square.d4,
-      onPromotion: () async => null,
-    );
-    final previous = repository.games.values.single;
-    final request = GameStartRequest();
-    final starting = controller.startVsAi(
-      humanSide: Side.black,
-      levelRating: 1100,
-      request: request,
-    );
-    await searchStarted.future;
-    request.cancel();
-    expect(await starting, isFalse);
-    answer.complete('e2e4');
-    await controller.shutdownEngines();
-    expect(repository.games.values.single, same(previous));
-    expect(container.read(gameControllerProvider).gameId, previous.id);
-    expect(container.read(gameControllerProvider).uciHistory, ['d2d4']);
-    expect(engine.disposeCount, 1);
-  });
+      expect(repository.games.values.single, same(previous));
+      expect(container.read(gameControllerProvider).gameId, previous.id);
+      expect(container.read(gameControllerProvider).uciHistory, ['d2d4']);
+      expect(engine.disposeCount, 1);
+    },
+  );
 
   for (final response in ['saved', 'error', 'missing']) {
     test('delayed restore ($response) preserves the new game', () async {
@@ -105,12 +108,12 @@ void main() {
   }
 
   test(
-    'a Maia response after disposal does not persist another move',
+    'a Maia-3 response after disposal does not persist another move',
     () async {
       final answer = Completer<String>();
       final searchStarted = Completer<void>();
       final repository = FakeGameRepository();
-      final engine = FakeLc0Engine(
+      final engine = FakeMaiaEngine(
         onMove: (_, _) {
           searchStarted.complete();
           return answer.future;
@@ -119,10 +122,10 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           gameRepositoryProvider.overrideWithValue(repository),
-          maiaWeightsResolverProvider.overrideWithValue(
-            (level) async => level.weightsAsset,
+          maiaModelResolverProvider.overrideWithValue(
+            () async => 'assets/maia3/maia3-79m-fp32.onnx',
           ),
-          lc0EngineFactoryProvider.overrideWithValue(() => engine),
+          maiaEngineFactoryProvider.overrideWithValue(() => engine),
           stockfishWarmupEnabledProvider.overrideWithValue(false),
         ],
       );

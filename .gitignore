@@ -49,8 +49,7 @@ app.*.map.json
 /android/app/*.jks
 /android/app/*.keystore
 
-# Ignore local native build caches and example artifacts, while keeping
-# vendored sources and generated ios/lc0/build/proto/*.pb.h headers tracked.
+# Ignore local native build caches and example artifacts while keeping sources.
 native/**/.cxx/
 native/**/example/build/
 native/**/example/.dart_tool/

@@ -13,7 +13,7 @@ enum GameResult { emAndamento, vitoriaBrancas, vitoriaPretas, empate }
 /// [position] supplies rules through `dartchess`; [positionHistory] supports
 /// undo and [sanHistory] supplies move notation.
 ///
-/// [aiSide] is null in local two-player games, otherwise it identifies Maia.
+/// [aiSide] is null in local two-player games, otherwise it identifies Maia-3.
 /// The human plays the opposite side.
 class GameState {
   GameState({
@@ -118,13 +118,13 @@ class GameState {
   /// excluded from rating, streaks, and campaign progress.
   final bool evaluated;
 
-  /// Side played by Maia via lc0, or null in local two-player games.
+  /// Side played by Maia-3 via ONNX Runtime, or null in local two-player games.
   final Side? aiSide;
 
-  /// Maia level (1100–1900), or null outside AI play.
+  /// Maia-3 level (600–2600), or null outside AI play.
   final int? levelRating;
 
-  /// True while Maia calculates its next move; disables human moves and
+  /// True while Maia-3 calculates its next move; disables human moves and
   /// drives the progress indicator.
   final bool aiThinking;
 
@@ -185,7 +185,7 @@ class GameState {
     if (!allowsAssistance || positionHistory.isEmpty) return false;
     if (aiSide == null) return true;
 
-    // If Maia opened as White and the human has not moved, there is no human
+    // If Maia-3 opened as White and the human has not moved, there is no human
     // decision to undo. Reverting the opening alone would leave the AI turn
     // without triggering a reply.
     var index = positionHistory.length - 1;
@@ -198,7 +198,7 @@ class GameState {
     return true;
   }
 
-  /// Whether the side to move is Maia, which blocks human moves.
+  /// Whether the side to move is Maia-3, which blocks human moves.
   bool get isAiTurn => aiSide != null && position.turn == aiSide;
 
   GameResult get result {

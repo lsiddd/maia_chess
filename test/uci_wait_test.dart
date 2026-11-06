@@ -129,7 +129,7 @@ void main() {
           stdout: controller.stream,
           predicate: (line) => line.trim() == 'readyok',
           onStreamDone: () =>
-              StateError('lc0 exited before responding with readyok'),
+              StateError('Stockfish exited before responding with readyok'),
         );
 
         controller.add('info string still loading');
@@ -141,7 +141,7 @@ void main() {
             isA<StateError>().having(
               (e) => e.message,
               'message',
-              'lc0 exited before responding with readyok',
+              'Stockfish exited before responding with readyok',
             ),
           ),
         );

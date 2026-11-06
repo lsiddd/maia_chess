@@ -11,10 +11,26 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var moveSounds: MoveSounds? = null
     private var soundChannel: MethodChannel? = null
+    private var packageAssetsChannel: MethodChannel? = null
     private var audioActive = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Only package metadata crosses this channel. Model extraction,
+        // integrity checks and inference are implemented in Dart.
+        packageAssetsChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "maia_chess/package_assets",
+        ).apply {
+            setMethodCallHandler { call, result ->
+                if (call.method == "apkPaths") {
+                    result.success(listOf(applicationInfo.sourceDir) +
+                        (applicationInfo.splitSourceDirs?.toList() ?: emptyList()))
+                } else {
+                    result.notImplemented()
+                }
+            }
+        }
         volumeControlStream = AudioManager.STREAM_MUSIC
         val sounds = MoveSounds(applicationContext)
         moveSounds = sounds
@@ -44,6 +60,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        packageAssetsChannel?.setMethodCallHandler(null)
+        packageAssetsChannel = null
         soundChannel?.setMethodCallHandler(null)
         soundChannel = null
         moveSounds?.release()

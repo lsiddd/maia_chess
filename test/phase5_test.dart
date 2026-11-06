@@ -186,7 +186,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Climb through all nine Maia levels'), findsOneWidget);
+    expect(find.text('Climb through all 16 Maia-3 levels'), findsOneWidget);
     expect(find.text('1/2 wins • 2/3 games'), findsOneWidget);
     expect(find.text('Locked'), findsOneWidget);
     expect(find.text('Play level'), findsOneWidget);

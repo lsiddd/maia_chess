@@ -77,8 +77,8 @@ void main() {
         levels = await progress.getAll();
         expect(snapshot.evaluatedGames, 3);
         expect(snapshot.ratingHistory, hasLength(3));
-        expect(snapshot.resultsByLevel[1100]?.wins, 2);
-        expect(snapshot.resultsByLevel[1100]?.losses, 1);
+        expect(snapshot.resultsByLevel[600]?.wins, 2);
+        expect(snapshot.resultsByLevel[600]?.losses, 1);
         expect(levels.first.levelCompleted, isTrue);
         expect(levels.first.gamesInWindow, 3);
         expect(levels[1].unlocked, isTrue);
@@ -90,10 +90,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Climb through all nine Maia levels'), findsOneWidget);
+        expect(find.text('Climb through all 16 Maia-3 levels'), findsOneWidget);
         expect(find.text('Level completed'), findsOneWidget);
         expect(find.text('Play again'), findsOneWidget);
-        expect(find.text('Maia 1200'), findsOneWidget);
+        expect(find.text('Maia-3 800'), findsOneWidget);
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -122,8 +122,8 @@ void main() {
         levels = await progress.getAll();
         expect(snapshot.evaluatedGames, 2);
         expect(snapshot.ratingHistory, hasLength(2));
-        expect(snapshot.resultsByLevel[1100]?.wins, 1);
-        expect(snapshot.resultsByLevel[1100]?.losses, 1);
+        expect(snapshot.resultsByLevel[600]?.wins, 1);
+        expect(snapshot.resultsByLevel[600]?.losses, 1);
         expect(levels.first.validWins, 1);
         expect(levels.first.gamesInWindow, 2);
         expect(levels[1].unlocked, isFalse);
@@ -171,7 +171,7 @@ void main() {
     startedAtUtc: startedAt,
     lastModifiedAtUtc: startedAt,
     status: StoredGameStatus.ongoing,
-    levelRating: 1100,
+    levelRating: 600,
     playerSide: Side.white,
     result: StoredGameResult.ongoing,
     evaluated: true,
