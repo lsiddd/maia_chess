@@ -33,6 +33,10 @@ the version name from `pubspec.yaml`. Nightly and stable APKs use the same relea
 key. Publication fails if the stable release already exists; use a new version
 tag for a new publication.
 
+Manual tag retries check out the full tag ref even if a branch has the same
+name. Manual and tag-push publication share the same concurrency group. Before
+publication, CI checks that the tag still points to the commit used for the APK.
+
 Both release bodies use English templates with source and CI links. Stable
 notes link to the SHA actually checked out, including manual tag retries. They
 do not derive summaries from historical commit or PR titles. A maintainer can
