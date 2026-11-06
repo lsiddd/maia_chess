@@ -122,7 +122,10 @@ class StockfishService implements StockfishEngine {
     String fen, {
     int movetimeMs = StockfishEngine.defaultMovetimeMs,
   }) async {
-    return (await _search(fen, movetimeMs: movetimeMs)).bestMove;
+    return (await _search(
+      'position fen $fen',
+      movetimeMs: movetimeMs,
+    )).bestMove;
   }
 
   @override
@@ -130,15 +133,40 @@ class StockfishService implements StockfishEngine {
     String fen, {
     int count = 3,
     int movetimeMs = 1000,
+  }) => _getLines('position fen $fen', count: count, movetimeMs: movetimeMs);
+
+  /// Send the reversible move history so Stockfish can evaluate repetitions.
+  Future<List<StockfishLine>> getTopMovesWithHistory(
+    String initialFen,
+    List<String> moves, {
+    required int count,
+    required int movetimeMs,
+  }) {
+    final history = moves.isEmpty ? '' : ' moves ${moves.join(' ')}';
+    return _getLines(
+      'position fen $initialFen$history',
+      count: count,
+      movetimeMs: movetimeMs,
+    );
+  }
+
+  Future<List<StockfishLine>> _getLines(
+    String positionCommand, {
+    required int count,
+    required int movetimeMs,
   }) async {
     if (count < 1 || count > 3) {
       throw ArgumentError.value(count, 'count', 'must be between 1 and 3');
     }
-    return (await _search(fen, movetimeMs: movetimeMs, count: count)).lines;
+    return (await _search(
+      positionCommand,
+      movetimeMs: movetimeMs,
+      count: count,
+    )).lines;
   }
 
   Future<({String bestMove, List<StockfishLine> lines})> _search(
-    String fen, {
+    String positionCommand, {
     required int movetimeMs,
     int count = 1,
   }) async {
@@ -171,7 +199,7 @@ class StockfishService implements StockfishEngine {
         name: 'StockfishService',
       );
       engine.stdin = 'setoption name MultiPV value $count';
-      engine.stdin = 'position fen $fen';
+      engine.stdin = positionCommand;
       engine.stdin = 'go movetime $movetimeMs';
 
       try {

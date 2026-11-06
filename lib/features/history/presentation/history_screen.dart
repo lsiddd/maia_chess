@@ -9,6 +9,7 @@ import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../game/presentation/chess_board_widget.dart';
 import '../../pgn/application/pgn_service.dart';
+import '../../review/presentation/game_review_screen.dart';
 import '../domain/game_replayer.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -416,6 +417,23 @@ class _ReplayViewState extends State<_ReplayView> {
                     '${widget.replayed.positions[_ply - 1].turn == Side.white ? '.' : '...'} '
                     '${game.moves[_ply - 1].san}',
                     style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              if (game.status == StoredGameStatus.completed &&
+                  game.moves.isNotEmpty)
+                Center(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      AppPageRoute<void>(
+                        builder: (_) => GameReviewScreen(
+                          game: game,
+                          replayed: widget.replayed,
+                          initialPly: _ply,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.insights),
+                    label: const Text('Review game'),
                   ),
                 ),
             ],

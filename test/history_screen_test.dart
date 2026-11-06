@@ -53,9 +53,37 @@ void main() {
     expect(find.text('Move 0 of 2'), findsOneWidget);
     expect(boardFen(), game.initialFen);
   });
+
+  testWidgets('completed replays offer review and campaign autosaves do not', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(400, 850);
+    addTearDown(tester.view.reset);
+
+    for (final ongoing in [false, true]) {
+      final game = _savedGame(ongoing: ongoing);
+      await tester.pumpWidget(
+        ProviderScope(
+          key: ValueKey(ongoing),
+          overrides: [
+            gameRepositoryProvider.overrideWithValue(
+              _SingleGameRepository(game),
+            ),
+          ],
+          child: MaterialApp(home: ReplayScreen(gameId: game.id)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(FilledButton, 'Review game'),
+        ongoing ? findsNothing : findsOneWidget,
+      );
+    }
+  });
 }
 
-StoredGame _savedGame() {
+StoredGame _savedGame({bool ongoing = false}) {
   var position = Chess.initial;
   final moves = <StoredGameMove>[];
   for (final (index, uci) in ['e2e4', 'e7e5'].indexed) {
@@ -76,13 +104,13 @@ StoredGame _savedGame() {
   return StoredGame(
     id: 'history',
     startedAtUtc: DateTime.utc(2026, 8, 5),
-    endedAtUtc: DateTime.utc(2026, 8, 5, 1),
+    endedAtUtc: ongoing ? null : DateTime.utc(2026, 8, 5, 1),
     lastModifiedAtUtc: DateTime.utc(2026, 8, 5, 1),
-    status: StoredGameStatus.completed,
-    result: StoredGameResult.draw,
-    termination: GameTermination.unknown,
+    status: ongoing ? StoredGameStatus.ongoing : StoredGameStatus.completed,
+    result: ongoing ? StoredGameResult.ongoing : StoredGameResult.draw,
+    termination: ongoing ? null : GameTermination.unknown,
     evaluated: true,
-    campaignMode: false,
+    campaignMode: ongoing,
     initialFen: Chess.initial.fen,
     currentFen: position.fen,
     moves: moves,

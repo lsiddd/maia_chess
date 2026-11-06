@@ -1,6 +1,7 @@
 import 'package:dartchess/dartchess.dart';
 
 import '../../../data/repositories/game_repository.dart';
+import 'chess_move_rules.dart';
 
 /// Game result by winning side. Player-relative outcomes are derived
 /// separately from the chosen side. Legacy enum names are retained for
@@ -235,33 +236,8 @@ class GameState {
 
   /// Legal destinations from [square], or none if it has no piece for the
   /// side to move.
-  Iterable<Square> legalDestinationsFrom(Square square) {
-    final destinations =
-        position.legalMoves[square]?.squares.toSet() ?? <Square>{};
-
-    // dartchess represents castling as king-to-rook for Chess960
-    // compatibility. This app uses standard chess destinations g/c, with
-    // final validation through `makeSan`.
-    final piece = position.board.pieceAt(square);
-    if (piece?.role == Role.king) {
-      final rank = piece!.color == Side.white ? Rank.first : Rank.eighth;
-      final kingSideRook = Square.fromCoords(File.h, rank);
-      final queenSideRook = Square.fromCoords(File.a, rank);
-      // A corner can also be a normal king move, check escape, or capture.
-      // Convert king-to-rook only if the square actually holds a friendly
-      // rook.
-      final ownRook = Piece(color: piece.color, role: Role.rook);
-      if (position.board.pieceAt(kingSideRook) == ownRook &&
-          destinations.remove(kingSideRook)) {
-        destinations.add(Square.fromCoords(File.g, rank));
-      }
-      if (position.board.pieceAt(queenSideRook) == ownRook &&
-          destinations.remove(queenSideRook)) {
-        destinations.add(Square.fromCoords(File.c, rank));
-      }
-    }
-    return destinations;
-  }
+  Iterable<Square> legalDestinationsFrom(Square square) =>
+      legalChessDestinations(position, square);
 
   /// Whether a pawn move from [from] to [to] reaches a promotion rank.
   bool isPromotion(Square from, Square to) {

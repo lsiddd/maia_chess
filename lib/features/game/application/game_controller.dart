@@ -8,6 +8,7 @@ import '../../../core/constants/difficulty_levels.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../../engine_ffi/lc0_engine/lc0_service.dart';
+import '../../../engine_ffi/stockfish_engine/stockfish_analysis.dart';
 import '../../../engine_ffi/stockfish_engine/stockfish_service.dart';
 import '../../history/domain/game_replayer.dart';
 import '../../hints/domain/hint_result.dart';
@@ -785,6 +786,33 @@ class GameController extends Notifier<GameState> {
     );
     return operation;
   }
+
+  /// Share the native singleton and queue without changing live-game state.
+  Future<List<StockfishLine>> searchStockfishForReview({
+    required String fen,
+    required String initialFen,
+    required List<String> moves,
+    required int count,
+    required int movetimeMs,
+    required void Function() ensureActive,
+  }) => _queueStockfishSearch(() async {
+    ensureActive();
+    final engine = await _ensureStockfishLoaded();
+    ensureActive();
+    final lines = await (engine is StockfishService
+        ? engine.getTopMovesWithHistory(
+            initialFen,
+            moves,
+            count: count,
+            movetimeMs: movetimeMs,
+          )
+        : engine.getTopMoves(fen, count: count, movetimeMs: movetimeMs));
+    ensureActive();
+    if (!identical(_stockfish, engine)) {
+      throw StateError('Stockfish became unavailable during review.');
+    }
+    return lines;
+  });
 
   Future<HintResult> _calculateHint({
     required Chess position,
