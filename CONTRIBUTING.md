@@ -54,8 +54,13 @@ campaign/statistics, game-screen flows, native MultiPV tests, Maia-3 level chang
 hints/cancellation, and recovery after invalid models. Its parity test compares
 Android inference with the official PyTorch reference fixtures, including all
 levels and special moves. Individual targets remain available in
-`integration_test/`. The bundled runtime does not include x86_64. CI does
-not launch an emulator or run these tests.
+`integration_test/`. CI runs the same acceptance suite on an x86_64 Android 35
+emulator and gates publication on success. Debug x86_64 builds resolve the
+official ONNX Runtime Android 1.22.0 AAR; release distribution remains ARM64.
+Use `scripts/test_android_emulator.sh SERIAL` for an explicit emulator-only run.
+The script refuses personal devices and keeps its output in
+`build/android-integration.log`. Native ARM64 parity still needs an ARM64
+emulator/device when changing inference or packaging.
 
 For the screen matrix, vary emulator orientation, display size, font scale, and
 navigation mode, then run `integration_test/section_2_android_test.dart`. Widget

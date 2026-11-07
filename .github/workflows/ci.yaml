@@ -1,7 +1,7 @@
 name: CI
 
 # Checks for pull requests and release builds. Android integration tests
-# require an emulator or device and are run separately; see CONTRIBUTING.md.
+# run on an x86_64 emulator with matching ORT, while distribution stays ARM64.
 
 on:
   push:
@@ -69,6 +69,61 @@ jobs:
         with:
           name: coverage-lcov
           path: coverage/lcov.info
+
+  android_integration:
+    name: Android native integration
+    needs: analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Prepare native SDK and KVM
+        run: |
+          sudo chmod 666 /dev/kvm
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          mkdir -p "$HOME/.gradle"
+          cat > "$HOME/.gradle/gradle.properties" <<'EOF'
+          org.gradle.jvmargs=-Xmx3G -XX:MaxMetaspaceSize=1G
+          org.gradle.workers.max=2
+          org.gradle.parallel=false
+          EOF
+          flutter pub get
+          dart run tool/verify_maia3.dart
+      - name: Run native acceptance on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          ram-size: 2048M
+          heap-size: 512M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/test_android_emulator.sh emulator-5554
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: android-integration-log
+          path: build/android-integration.log
+          if-no-files-found: warn
 
   apk:
     name: ARM64 release APK
@@ -173,7 +228,7 @@ jobs:
 
   nightly:
     name: Publish nightly
-    needs: apk
+    needs: [apk, android_integration]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || inputs.publish_nightly) && inputs.release_tag == ''
     runs-on: ubuntu-24.04
     permissions:
@@ -245,7 +300,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: apk
+    needs: [apk, android_integration]
     if: github.ref_type == 'tag' || inputs.release_tag != ''
     runs-on: ubuntu-24.04
     permissions:
