@@ -166,7 +166,18 @@ void main() {
     'annotated PGN preserves imported notes, alternatives and mainline',
     () async {
       final review = await analyzer.analyze(replayed, request: ReviewRequest());
-      final annotated = exportReviewedPgn(game, review);
+      final annotated = await exportReviewedPgnAsync(game, review);
+      final large = game.copyWith(
+        pgn: game.pgn!.replaceFirst(
+          'Original note',
+          'Original note ${'x' * 65536}',
+        ),
+      );
+      expect(
+        await exportReviewedPgnAsync(large, review),
+        exportReviewedPgn(large, review),
+        reason: 'Worker annotation must preserve large imported comments',
+      );
       expect(annotated, contains('Original note'));
       expect(annotated, contains('d4 d5'));
       expect(annotated, contains('Blunder. Stockfish preferred e4.'));

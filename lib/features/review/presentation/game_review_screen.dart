@@ -325,7 +325,7 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
     try {
       await const PgnFileService().sharePgn(
         gameId: '${widget.game.id}_review',
-        pgn: exportReviewedPgn(widget.game, review),
+        pgn: await exportReviewedPgnAsync(widget.game, review),
       );
     } catch (error) {
       if (mounted) {

@@ -38,19 +38,21 @@ final gameIdFactoryProvider = Provider<String Function()>(
   (ref) => const Uuid().v4,
 );
 
-final activeGameProvider = StreamProvider<StoredGame?>(
-  (ref) => ref.watch(gameRepositoryProvider).watchActiveGame(),
+final activeGameProvider = StreamProvider<GameSummary?>(
+  (ref) => ref.watch(gameRepositoryProvider).watchActiveSummary(),
 );
 
 const gameLibraryPageSize = 50;
 
 final gameLibraryPageProvider = StateProvider.autoDispose<int>((ref) => 0);
 
-final gameLibraryProvider = StreamProvider.autoDispose<List<StoredGame>>((ref) {
+final gameLibraryProvider = StreamProvider.autoDispose<List<GameSummary>>((
+  ref,
+) {
   final page = ref.watch(gameLibraryPageProvider);
   return ref
       .watch(gameRepositoryProvider)
-      .watchLibrary(
+      .watchLibrarySummaries(
         limit: gameLibraryPageSize + 1,
         offset: page * gameLibraryPageSize,
       );

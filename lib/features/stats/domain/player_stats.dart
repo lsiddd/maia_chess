@@ -110,6 +110,23 @@ class PlayerStatsCalculator {
   static const double minimumRating = 600;
   static const double maximumRating = 2600;
 
+  static double nextRating(
+    double rating,
+    int opponent,
+    PlayerGameOutcome outcome,
+  ) {
+    final score = switch (outcome) {
+      PlayerGameOutcome.win => 1.0,
+      PlayerGameOutcome.draw => 0.5,
+      PlayerGameOutcome.loss => 0.0,
+    };
+    final expected = 1 / (1 + math.pow(10, (opponent - rating) / 400));
+    return (rating + kFactor * (score - expected)).clamp(
+      minimumRating,
+      maximumRating,
+    );
+  }
+
   PlayerStatsSnapshot calculate(Iterable<EvaluatedGameSummary> games) {
     final ordered = games.toList(growable: false)
       ..sort((a, b) {
@@ -124,17 +141,7 @@ class PlayerStatsCalculator {
     final results = <int, LevelResults>{};
 
     for (final game in ordered) {
-      final score = switch (game.outcome) {
-        PlayerGameOutcome.win => 1.0,
-        PlayerGameOutcome.draw => 0.5,
-        PlayerGameOutcome.loss => 0.0,
-      };
-      final expected =
-          1 / (1 + math.pow(10, (game.levelRating - rating) / 400));
-      rating = (rating + kFactor * (score - expected)).clamp(
-        minimumRating,
-        maximumRating,
-      );
+      rating = nextRating(rating, game.levelRating, game.outcome);
       history.add(
         RatingPoint(
           gameId: game.gameId,

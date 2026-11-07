@@ -35,8 +35,11 @@ void main() {
           gameLibraryProvider.overrideWith(
             (ref) => Stream.value(
               ref.watch(gameLibraryPageProvider) == 0
-                  ? List.filled(gameLibraryPageSize + 1, _savedGame())
-                  : [_savedGame()],
+                  ? List.filled(
+                      gameLibraryPageSize + 1,
+                      GameSummary.fromGame(_savedGame()),
+                    )
+                  : [GameSummary.fromGame(_savedGame())],
             ),
           ),
         ],
@@ -127,7 +130,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          gameLibraryProvider.overrideWith((ref) => Stream.value([game])),
+          gameLibraryProvider.overrideWith(
+            (ref) => Stream.value([GameSummary.fromGame(game)]),
+          ),
           gameRepositoryProvider.overrideWithValue(repository),
         ],
         child: const MaterialApp(home: HistoryScreen()),
@@ -226,6 +231,19 @@ StoredGame _savedGame({bool ongoing = false}) {
 }
 
 class _SingleGameRepository implements GameRepository {
+  @override
+  Stream<List<GameSummary>> watchLibrarySummaries({
+    required int limit,
+    int offset = 0,
+  }) => watchLibrary(
+    limit: limit,
+    offset: offset,
+  ).map((rows) => rows.map(GameSummary.fromGame).toList());
+  @override
+  Stream<GameSummary?> watchActiveSummary() => watchActiveGame().map(
+    (game) => game == null ? null : GameSummary.fromGame(game),
+  );
+
   _SingleGameRepository(this.game);
 
   StoredGame? game;

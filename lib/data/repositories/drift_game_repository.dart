@@ -10,6 +10,64 @@ class DriftGameRepository implements GameRepository {
   final AppDatabase _db;
 
   @override
+  Stream<List<GameSummary>> watchLibrarySummaries({
+    required int limit,
+    int offset = 0,
+  }) {
+    if (limit < 1 || limit > 500 || offset < 0) {
+      throw ArgumentError('Invalid library page bounds.');
+    }
+    return _summaries(limit: limit, offset: offset);
+  }
+
+  @override
+  Stream<GameSummary?> watchActiveSummary() => _summaries(
+    limit: 1,
+    offset: 0,
+    active: true,
+  ).map((rows) => rows.firstOrNull);
+
+  Stream<List<GameSummary>> _summaries({
+    required int limit,
+    required int offset,
+    bool active = false,
+  }) => _db
+      .customSelect(
+        """SELECT g.id, g.last_modified_at_utc, g.status, g.result,
+      g.evaluated, g.campaign_mode, g.level_rating, g.player_side,
+      (SELECT COUNT(*) FROM game_moves m WHERE m.game_id = g.id) AS move_count
+      FROM games g ${active ? "WHERE g.status = 'ongoing'" : ''}
+      ORDER BY g.last_modified_at_utc DESC, g.id DESC LIMIT ? OFFSET ?""",
+        variables: [Variable.withInt(limit), Variable.withInt(offset)],
+        readsFrom: {_db.games, _db.gameMoves},
+      )
+      .watch()
+      .map(
+        (rows) => rows
+            .map((row) {
+              final side = row.readNullable<String>('player_side');
+              return GameSummary(
+                id: row.read<String>('id'),
+                lastModifiedAtUtc: row
+                    .read<DateTime>('last_modified_at_utc')
+                    .toUtc(),
+                status: StoredGameStatus.values.byName(
+                  row.read<String>('status'),
+                ),
+                result: StoredGameResult.values.byName(
+                  row.read<String>('result'),
+                ),
+                evaluated: row.read<bool>('evaluated'),
+                campaignMode: row.read<bool>('campaign_mode'),
+                levelRating: row.readNullable<int>('level_rating'),
+                playerSide: side == null ? null : Side.values.byName(side),
+                moveCount: row.read<int>('move_count'),
+              );
+            })
+            .toList(growable: false),
+      );
+
+  @override
   Stream<List<StoredGame>> watchLibrary({int? limit, int offset = 0}) {
     if (offset < 0 ||
         (limit == null && offset != 0) ||
@@ -129,7 +187,7 @@ class DriftGameRepository implements GameRepository {
       }
 
       await _replaceSnapshot(game);
-      await _db.rebuildDerivedState();
+      await _db.recordCompletion(game);
       return true;
     });
   }
@@ -155,8 +213,11 @@ class DriftGameRepository implements GameRepository {
   @override
   Future<void> deleteGame(String id) {
     return _db.transaction(() async {
+      final rated = await (_db.select(
+        _db.ratingHistory,
+      )..where((row) => row.gameId.equals(id))).getSingleOrNull();
       await (_db.delete(_db.games)..where((row) => row.id.equals(id))).go();
-      await _db.rebuildDerivedState();
+      if (rated != null) await _db.rebuildDerivedState();
     });
   }
 

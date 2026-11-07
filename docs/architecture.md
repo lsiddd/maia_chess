@@ -13,7 +13,7 @@ dependencies inside presentation widgets.
 | Rules and live state | `dartchess`, `GameState`, and `GameController`: legality, SAN/UCI, turn management, undo, and termination |
 | Maia opponent | `MaiaService`, with one bundled Maia-3 79M FP32 model and Dart ONNX Runtime FFI |
 | Assistance | `StockfishService`: single-move hints and up to three MultiPV opponent plans; geometric attack detection is separate |
-| Persistence | `AppDatabase` and Drift repositories: autosave, archived games, settings, campaign progress, and rating history |
+| Persistence | `GamePersistence` serializes snapshots and orders writes; `AppDatabase` and Drift repositories: autosave, archived games, settings, campaign progress, and rating history |
 | Replay and exchange | `GameReplayer` validates stored moves/FENs; `PgnService` validates and exports PGN; `PgnFileService` handles Android files/sharing |
 | Presentation | Feature screens, board widgets, shared themes, and accessibility announcements |
 
@@ -30,7 +30,7 @@ material. The app automatically adjudicates threefold repetition and the
 fifty-move rule, with checkmate taking precedence over draw counters.
 
 `GameController` uses generations and captured positions to discard stale
-restores, engine replies, hints, and plans. Writes are queued in order. A pending
+restores, engine replies, hints, and plans. Writes are queued in order by `GamePersistence`. A pending
 promotion cannot apply its result after a restart or another position change.
 The home screen blocks duplicate opening requests before the first await.
 
@@ -87,7 +87,10 @@ Android exposes APK paths through a small metadata channel. Dart streams the
 bundled model from the APK into application support storage, validates size and
 SHA-256, and renames it atomically. Building and verifying the bundled model
 require no Python. The final artifact is versioned with Git LFS; its initial
-conversion happened outside the repository.
+conversion happened outside the repository. A process-local verification cache
+reuses the extracted file only while its size and timestamps remain unchanged.
+Leaving the game route drains writes and releases native engines; restoring the
+autosave initializes them again without changing the game identity or moves.
 
 Initialization, tensor allocation, inference and native disposal run on a Dart
 worker. Cancellation signals ONNX Runtime's thread-safe RunOptions termination;
@@ -108,13 +111,17 @@ Opening the database also ensures a library index on modification time and ID.
 
 Only one ongoing autosave is retained. Starting a new game removes the old
 ongoing game transactionally. Saving compares move histories and writes only
-the changed suffix, including undo. Completion is idempotent. Completion and
-deletion rebuild rating/campaign state in the same transaction, using
-`computeWithDatabase` to share the executor and notifications with a worker.
+the changed suffix, including undo. Completion is idempotent. Normal chronological
+completions append a rating point and update the current
+campaign window in the same transaction. Retroactive completions and deletion of
+a rated game rebuild derived state with `computeWithDatabase`, sharing the
+executor and notifications with a worker. Unrated deletion needs no rebuild.
 Game reads hydrate metadata and moves within one read transaction. Reactive
 reads subscribe to updates before the initial snapshot and observe both tables.
 The library shows pages of 50 games, reading one extra row to determine whether
-another page exists. Metadata and page moves use two SELECTs. The repository's
+another page exists. The UI summary projection uses one SELECT and an indexed
+move count without
+loading move/FEN/PGN payloads; full snapshots are fetched on demand. The repository's
 unbounded `watchLibrary()` remains available for existing callers. Library and
 statistics providers dispose their subscriptions when unused.
 
@@ -125,8 +132,12 @@ Previously saved campaign games keep their recorded eligibility. Campaign
 progression uses only eligible campaign games. Imported games are completed and
 unrated. Only their mainline is persisted for replay, while the stored PGN preserves
 parsed headers, comments, and variations. Validation checks mainline and
-variation legality before writing anything. Android file reading/decoding and
-PGN validation run on workers. Imports are limited to 4 MiB, 20,000 plies across
+variation legality before writing anything. Android file content is streamed
+asynchronously with a byte cap; UTF-8 decoding
+and PGN validation run on workers. Replay and export move to a worker at 128
+plies, including restore and post-game review. Annotated export also uses a
+worker for PGNs of 65,536 characters or larger, even with a short mainline.
+Imports are limited to 4 MiB, 20,000 plies across
 mainline and variations, and 64 nested variation levels. File reads have a byte
 cap even if the file grows after its size check.
 
