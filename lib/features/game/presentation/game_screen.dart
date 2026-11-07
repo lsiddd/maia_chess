@@ -71,7 +71,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   @override
   void dispose() {
-    scheduleMicrotask(() => _controller.setClockPaused(true));
+    _controller.releaseAfterNavigation();
     _noticeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_controller.cancelHint());
@@ -420,7 +420,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _notice('The completed game could not be loaded.');
         return;
       }
-      final replayed = const GameReplayer().replay(saved);
+      final replayed = await const GameReplayer().replayAsync(saved);
+      if (!mounted || ref.read(gameControllerProvider).gameId != id) return;
       await Navigator.of(context).push(
         AppPageRoute<void>(
           builder: (_) => GameReviewScreen(game: saved, replayed: replayed),

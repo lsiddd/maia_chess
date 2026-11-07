@@ -13,7 +13,7 @@ import '../../../engine_ffi/stockfish_engine/stockfish_analysis.dart';
 import '../../../engine_ffi/stockfish_engine/stockfish_service.dart';
 import '../../history/domain/game_replayer.dart';
 import '../../hints/domain/hint_result.dart';
-import '../../pgn/application/pgn_service.dart';
+import 'game_persistence.dart';
 import '../../tactics/domain/tactical_analysis.dart';
 import 'game_clock.dart';
 import 'game_state.dart';
@@ -92,7 +92,9 @@ class GameController extends Notifier<GameState> {
   int _gameGeneration = 0;
   bool _promotionPending = false;
   bool _isDisposed = false;
-  Future<void> _persistenceTail = Future.value();
+  late final _persistence = GamePersistence(
+    () => ref.read(gameRepositoryProvider),
+  );
   Future<void>? _engineDisposal;
   Future<void> _gameStartTail = Future.value();
   GameStartRequest? _activeStart;
@@ -323,14 +325,16 @@ class GameController extends Notifier<GameState> {
     if (!_isCurrentGame(generation) || stored == null) return false;
     late final ReplayedGame replayed;
     try {
-      replayed = const GameReplayer().replay(stored);
+      replayed = await const GameReplayer().replayAsync(stored);
     } catch (error) {
+      if (!_isCurrentGame(generation)) return false;
       state = GameState.initial().copyWith(
         persistenceError: 'Could not restore the game: $error',
       );
       return false;
     }
 
+    if (!_isCurrentGame(generation)) return false;
     final aiSide = stored.levelRating == null
         ? null
         : stored.playerSide?.opposite;
@@ -1340,7 +1344,7 @@ class GameController extends Notifier<GameState> {
     if (state.gameId == null || state.startedAtUtc == null) return;
     final snapshotState = state;
     final completed = snapshotState.isGameOver;
-    var snapshot = _snapshot(
+    final snapshot = _snapshot(
       snapshotState,
       status: completed ? StoredGameStatus.completed : StoredGameStatus.ongoing,
       result: completed
@@ -1349,19 +1353,7 @@ class GameController extends Notifier<GameState> {
       termination: completed ? _termination(snapshotState) : null,
     );
     try {
-      await _queuePersistence(() async {
-        // Active games already store every move. Build PGN only at completion
-        // or on explicit export, rather than serializing the full game per move.
-        if (completed) {
-          snapshot = snapshot.copyWith(
-            pgn: const PgnService().export(snapshot),
-          );
-        }
-        final repository = ref.read(gameRepositoryProvider);
-        return completed
-            ? repository.completeGame(snapshot).then<void>((_) {})
-            : repository.saveOngoing(snapshot);
-      });
+      await _persistence.save(snapshot);
       if (!_isDisposed &&
           state.gameId == snapshot.id &&
           state.persistenceError != null) {
@@ -1375,69 +1367,19 @@ class GameController extends Notifier<GameState> {
   }
 
   StoredGame _snapshot(
-    GameState snapshotState, {
+    GameState game, {
     required StoredGameStatus status,
     required StoredGameResult result,
     GameTermination? termination,
-  }) {
-    final id = snapshotState.gameId;
-    final startedAt = snapshotState.startedAtUtc;
-    if (id == null || startedAt == null) {
-      throw StateError('The game does not yet have a persistent ID.');
-    }
-    final now = DateTime.now().toUtc();
-    final moves = <StoredGameMove>[];
-    for (var index = 0; index < snapshotState.sanHistory.length; index++) {
-      final fenAfter = index + 1 < snapshotState.positionHistory.length
-          ? snapshotState.positionHistory[index + 1].fen
-          : snapshotState.position.fen;
-      moves.add(
-        StoredGameMove(
-          ply: index + 1,
-          uci: snapshotState.uciHistory[index],
-          san: snapshotState.sanHistory[index],
-          fenAfter: fenAfter,
-          actor: snapshotState.moveActorHistory[index],
-          playedAtUtc: snapshotState.moveTimeHistoryUtc[index].toUtc(),
-        ),
-      );
-    }
-    return StoredGame(
-      id: id,
-      startedAtUtc: startedAt.toUtc(),
-      endedAtUtc: status == StoredGameStatus.completed ? now : null,
-      lastModifiedAtUtc: now,
-      status: status,
-      levelRating: snapshotState.levelRating,
-      playerSide: snapshotState.aiSide?.opposite,
-      result: result,
-      termination: termination,
-      evaluated: snapshotState.evaluated,
-      campaignMode: snapshotState.campaignMode,
-      initialFen: snapshotState.positionHistory.isEmpty
-          ? snapshotState.position.fen
-          : snapshotState.positionHistory.first.fen,
-      currentFen: snapshotState.position.fen,
-      clockEnabled: snapshotState.clockEnabled,
-      initialTimeMs: snapshotState.initialTimeMs,
-      incrementMs: snapshotState.incrementMs,
-      whiteTimeMs: snapshotState.whiteTimeMs,
-      blackTimeMs: snapshotState.blackTimeMs,
-      moves: List.unmodifiable(moves),
-    );
-  }
+  }) => _persistence.snapshot(
+    game,
+    status: status,
+    result: result,
+    termination: termination,
+  );
 
-  Future<void> _queuePersistence(Future<void> Function() action) {
-    final operation = _persistenceTail.then(
-      (_) => action(),
-      onError: (Object _, StackTrace stackTrace) => action(),
-    );
-    _persistenceTail = operation.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace stackTrace) {},
-    );
-    return operation;
-  }
+  Future<void> _queuePersistence(Future<void> Function() action) =>
+      _persistence.enqueue(action);
 
   StoredGameResult _storedResult(GameResult result) => switch (result) {
     GameResult.emAndamento => StoredGameResult.ongoing,
@@ -1462,11 +1404,33 @@ class GameController extends Notifier<GameState> {
 
   /// Wait for queued writes, for tests and flows requiring deterministic
   /// durability.
-  Future<void> flushPersistence() => _persistenceTail;
+  Future<void> flushPersistence() => _persistence.flush();
 
   /// Await cancellation and engine cleanup for integration tests and other
   /// flows using the native singletons. Service shutdown timeouts still
   /// apply.
+  void releaseAfterNavigation() {
+    final generation = _gameGeneration;
+    scheduleMicrotask(() {
+      if (_isCurrentGame(generation)) unawaited(releaseSessionResources());
+    });
+  }
+
+  Future<void> releaseSessionResources() async {
+    setClockPaused(true);
+    final generation = _gameGeneration;
+    await flushPersistence();
+    if (!_isCurrentGame(generation)) return;
+    state = state.copyWith(aiThinking: false);
+    try {
+      await shutdownEngines();
+    } catch (error) {
+      if (!_isDisposed && _gameGeneration == generation + 1) {
+        state = state.copyWith(engineError: 'Engine shutdown failed: $error');
+      }
+    }
+  }
+
   Future<void> shutdownEngines() async {
     _activeStart?.cancel();
     _invalidateCurrentGame();

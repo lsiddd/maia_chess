@@ -184,6 +184,107 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Append normal chronological completions without rewriting earlier ratings.
+  /// Retroactive changes use the full repair projection instead.
+  Future<void> recordCompletion(StoredGame game) async {
+    if (!game.evaluated ||
+        game.playerSide == null ||
+        game.levelRating == null ||
+        !{
+          StoredGameResult.whiteWin,
+          StoredGameResult.blackWin,
+          StoredGameResult.draw,
+        }.contains(game.result)) {
+      return;
+    }
+    final ended = (game.endedAtUtc ?? game.lastModifiedAtUtc).toUtc();
+    final last =
+        await (select(ratingHistory)
+              ..orderBy([
+                (row) => OrderingTerm.desc(row.recordedAtUtc),
+                (row) => OrderingTerm.desc(row.gameId),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (last != null &&
+        (ended.isBefore(last.recordedAtUtc) ||
+            (ended.isAtSameMomentAs(last.recordedAtUtc) &&
+                game.id.compareTo(last.gameId) <= 0))) {
+      await rebuildDerivedState();
+      return;
+    }
+    final value = PlayerStatsCalculator.nextRating(
+      last?.rating ?? PlayerStatsCalculator.initialRating,
+      game.levelRating!,
+      playerOutcome(game.result, game.playerSide!),
+    );
+    await into(ratingHistory).insert(
+      RatingHistoryCompanion.insert(
+        id: 'rating:${game.id}',
+        gameId: game.id,
+        recordedAtUtc: ended,
+        rating: value,
+      ),
+    );
+    if (!game.campaignMode) return;
+    final level = DifficultyLevel.byRating(game.levelRating!);
+    final progress = await (select(
+      difficultyProgress,
+    )..orderBy([(row) => OrderingTerm.asc(row.rating)])).get();
+    final current = progress.firstWhere((row) => row.rating == level.rating);
+    if (current.validWins >= level.winsRequired) return;
+    final recent =
+        await (select(games)
+              ..where(
+                (row) =>
+                    row.status.equals(StoredGameStatus.completed.name) &
+                    row.evaluated.equals(true) &
+                    row.campaignMode.equals(true) &
+                    row.levelRating.equals(level.rating) &
+                    row.playerSide.isNotNull() &
+                    row.result.isIn(['whiteWin', 'blackWin', 'draw']),
+              )
+              ..orderBy([
+                (row) => OrderingTerm(
+                  expression: const CustomExpression(
+                    'COALESCE(ended_at_utc, last_modified_at_utc)',
+                  ),
+                  mode: OrderingMode.desc,
+                ),
+                (row) => OrderingTerm.desc(row.id),
+              ])
+              ..limit(level.windowSize))
+            .get();
+    final window = evaluateCampaignWindow(
+      recent.reversed.map((row) => _evaluatedSummary(row).outcome),
+      winsRequired: level.winsRequired,
+      windowSize: level.windowSize,
+    );
+    var unlocked = true;
+    for (final item in progress) {
+      final rule = DifficultyLevel.byRating(item.rating);
+      final wins = item.rating == level.rating ? window.wins : item.validWins;
+      final count = item.rating == level.rating
+          ? window.games
+          : item.windowGames;
+      if (wins != item.validWins ||
+          count != item.windowGames ||
+          unlocked != item.unlocked) {
+        await (update(
+          difficultyProgress,
+        )..where((row) => row.rating.equals(item.rating))).write(
+          DifficultyProgressCompanion(
+            validWins: Value(wins),
+            windowGames: Value(count),
+            unlocked: Value(unlocked),
+            updatedAtUtc: Value(DateTime.now().toUtc()),
+          ),
+        );
+      }
+      unlocked = unlocked && wins >= rule.winsRequired;
+    }
+  }
+
   /// Rebuild rating history and campaign progress from `games`, the source of
   /// truth. Completion and deletion callers must use the same transaction so
   /// game data and derived state commit or roll back together.

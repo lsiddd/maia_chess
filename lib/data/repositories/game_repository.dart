@@ -119,7 +119,49 @@ class StoredGame {
   }
 }
 
+/// A list projection: never carries PGN, FEN history or move objects.
+class GameSummary {
+  const GameSummary({
+    required this.id,
+    required this.lastModifiedAtUtc,
+    required this.status,
+    required this.result,
+    required this.evaluated,
+    required this.campaignMode,
+    required this.levelRating,
+    required this.playerSide,
+    required this.moveCount,
+  });
+  final String id;
+  final DateTime lastModifiedAtUtc;
+  final StoredGameStatus status;
+  final StoredGameResult result;
+  final bool evaluated;
+  final bool campaignMode;
+  final int? levelRating;
+  final Side? playerSide;
+  final int moveCount;
+
+  factory GameSummary.fromGame(StoredGame game) => GameSummary(
+    id: game.id,
+    lastModifiedAtUtc: game.lastModifiedAtUtc,
+    status: game.status,
+    result: game.result,
+    evaluated: game.evaluated,
+    campaignMode: game.campaignMode,
+    levelRating: game.levelRating,
+    playerSide: game.playerSide,
+    moveCount: game.moves.length,
+  );
+}
+
 abstract interface class GameRepository {
+  Stream<List<GameSummary>> watchLibrarySummaries({
+    required int limit,
+    int offset = 0,
+  });
+  Stream<GameSummary?> watchActiveSummary();
+
   /// Read all games by default, or a bounded page when [limit] is supplied.
   Stream<List<StoredGame>> watchLibrary({int? limit, int offset = 0});
 

@@ -274,15 +274,19 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
   }
 
-  Future<void> _handleAction(StoredGame game, _HistoryAction action) async {
+  Future<void> _handleAction(GameSummary game, _HistoryAction action) async {
     if (_busyGameIds.contains(game.id)) return;
     setState(() => _busyGameIds.add(game.id));
     try {
       switch (action) {
         case _HistoryAction.export:
+          final stored = await ref
+              .read(gameRepositoryProvider)
+              .getGame(game.id);
+          if (stored == null) throw StateError('Game not found');
           await const PgnFileService().sharePgn(
             gameId: game.id,
-            pgn: game.pgn ?? const PgnService().export(game),
+            pgn: stored.pgn ?? await const PgnService().exportAsync(stored),
           );
         case _HistoryAction.delete:
           final confirmed = await showDialog<bool>(
@@ -323,7 +327,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
   }
 
-  String _title(StoredGame game) {
+  String _title(GameSummary game) {
     final mode = game.levelRating == null
         ? 'Local game'
         : 'Against Maia-3 ${game.levelRating}';
@@ -331,7 +335,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     return '$mode — ${_resultLabel(game.result)}';
   }
 
-  String _subtitle(StoredGame game) {
+  String _subtitle(GameSummary game) {
     final date = game.lastModifiedAtUtc.toLocal();
     final formatted =
         '${date.day.toString().padLeft(2, '0')}/'
@@ -342,7 +346,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         game.evaluated && game.levelRating != null && game.playerSide != null
         ? 'rated'
         : 'unrated';
-    return '$formatted • ${game.moves.length} moves • $evaluated';
+    return '$formatted • ${game.moveCount} moves • $evaluated';
   }
 }
 
@@ -356,25 +360,31 @@ class ReplayScreen extends ConsumerStatefulWidget {
 }
 
 class _ReplayScreenState extends ConsumerState<ReplayScreen> {
-  late Future<StoredGame?> _game;
+  late Future<({StoredGame game, ReplayedGame replayed})?> _game;
+
+  Future<({StoredGame game, ReplayedGame replayed})?> _load() async {
+    final game = await ref.read(gameRepositoryProvider).getGame(widget.gameId);
+    if (game == null) return null;
+    return (game: game, replayed: await const GameReplayer().replayAsync(game));
+  }
 
   @override
   void initState() {
     super.initState();
-    _game = ref.read(gameRepositoryProvider).getGame(widget.gameId);
+    _game = _load();
   }
 
   @override
   void didUpdateWidget(covariant ReplayScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.gameId != widget.gameId) {
-      _game = ref.read(gameRepositoryProvider).getGame(widget.gameId);
+      _game = _load();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<StoredGame?>(
+    return FutureBuilder<({StoredGame game, ReplayedGame replayed})?>(
       future: _game,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -395,11 +405,11 @@ class _ReplayScreenState extends ConsumerState<ReplayScreen> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(AppSpacing.l),
                   child: ErrorStateCard(
-                    message: 'This game could not be opened.',
+                    message: snapshot.error is GameReplayException
+                        ? 'This game contains invalid moves and cannot be replayed.'
+                        : 'This game could not be opened.',
                     onRetry: () {
-                      final game = ref
-                          .read(gameRepositoryProvider)
-                          .getGame(widget.gameId);
+                      final game = _load();
                       setState(() {
                         _game = game;
                       });
@@ -410,39 +420,22 @@ class _ReplayScreenState extends ConsumerState<ReplayScreen> {
             ),
           );
         }
-        final game = snapshot.data;
+        final loaded = snapshot.data;
+        final game = loaded?.game;
         if (game == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Replay')),
             body: const Center(child: Text('Game not found.')),
           );
         }
-        try {
-          return _ReplayView(game: game);
-        } catch (error) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Replay')),
-            body: const MaxWidthBody(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.l),
-                  child: ErrorStateCard(
-                    message:
-                        'This game contains invalid moves and cannot be replayed.',
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
+        return _ReplayView(game: game, replayed: loaded!.replayed);
       },
     );
   }
 }
 
 class _ReplayView extends StatefulWidget {
-  _ReplayView({required this.game})
-    : replayed = const GameReplayer().replay(game);
+  const _ReplayView({required this.game, required this.replayed});
 
   final StoredGame game;
   final ReplayedGame replayed;
@@ -481,7 +474,9 @@ class _ReplayViewState extends State<_ReplayView> {
                     try {
                       await const PgnFileService().sharePgn(
                         gameId: game.id,
-                        pgn: game.pgn ?? const PgnService().export(game),
+                        pgn:
+                            game.pgn ??
+                            await const PgnService().exportAsync(game),
                       );
                     } catch (error) {
                       if (!context.mounted) return;

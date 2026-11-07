@@ -707,6 +707,19 @@ ProviderContainer _engineContainer({
 }
 
 class FakeGameRepository implements GameRepository {
+  @override
+  Stream<List<GameSummary>> watchLibrarySummaries({
+    required int limit,
+    int offset = 0,
+  }) => watchLibrary(
+    limit: limit,
+    offset: offset,
+  ).map((rows) => rows.map(GameSummary.fromGame).toList());
+  @override
+  Stream<GameSummary?> watchActiveSummary() => watchActiveGame().map(
+    (game) => game == null ? null : GameSummary.fromGame(game),
+  );
+
   FakeGameRepository({this.activeError});
 
   final Object? activeError;

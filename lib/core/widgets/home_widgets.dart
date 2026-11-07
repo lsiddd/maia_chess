@@ -13,7 +13,7 @@ class HomeHero extends StatelessWidget {
     super.key,
   });
 
-  final StoredGame? savedGame;
+  final GameSummary? savedGame;
   final bool loading;
   final bool opening;
   final VoidCallback? onPlay;
@@ -73,7 +73,7 @@ class HomeHero extends StatelessWidget {
           Text(
             saved == null
                 ? 'Find your rhythm against an AI that plays like a person. Always offline.'
-                : '${saved.levelRating == null ? 'Local game' : 'Maia · ${saved.levelRating}'} · ${saved.moves.length} moves played. Pick up where you left off.',
+                : '${saved.levelRating == null ? 'Local game' : 'Maia · ${saved.levelRating}'} · ${saved.moveCount} moves played. Pick up where you left off.',
             style: text.bodyMedium?.copyWith(color: colors.onPrimaryContainer),
           ),
           const SizedBox(height: AppSpacing.xl),

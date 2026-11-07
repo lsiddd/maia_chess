@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dartchess/dartchess.dart';
 
 import '../../../data/repositories/game_repository.dart';
@@ -25,6 +26,12 @@ class GameReplayException implements Exception {
 
 class GameReplayer {
   const GameReplayer();
+
+  Future<ReplayedGame> replayAsync(StoredGame game) async {
+    // Keep tiny replays cheap; long imports must not monopolize a UI frame.
+    if (game.moves.length < 128) return replay(game);
+    return compute(_replayOnWorker, game);
+  }
 
   ReplayedGame replay(StoredGame game) {
     late Chess position;
@@ -77,3 +84,6 @@ class GameReplayer {
     );
   }
 }
+
+ReplayedGame _replayOnWorker(StoredGame game) =>
+    const GameReplayer().replay(game);

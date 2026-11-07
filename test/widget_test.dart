@@ -50,7 +50,9 @@ void main() {
       ProviderScope(
         overrides: [
           gameRepositoryProvider.overrideWithValue(_FakeGameRepository(active)),
-          activeGameProvider.overrideWith((ref) => Stream.value(active)),
+          activeGameProvider.overrideWith(
+            (ref) => Stream.value(GameSummary.fromGame(active)),
+          ),
           appSettingsProvider.overrideWith(
             (ref) => Stream.value(const StoredAppSettings()),
           ),
@@ -81,7 +83,9 @@ void main() {
       ProviderScope(
         overrides: [
           gameRepositoryProvider.overrideWithValue(repository),
-          activeGameProvider.overrideWith((ref) => Stream.value(_activeGame())),
+          activeGameProvider.overrideWith(
+            (ref) => Stream.value(GameSummary.fromGame(_activeGame())),
+          ),
           appSettingsProvider.overrideWith(
             (ref) => Stream.value(const StoredAppSettings()),
           ),

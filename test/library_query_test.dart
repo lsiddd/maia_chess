@@ -59,6 +59,16 @@ void main() {
           }
         });
         counter.reset();
+        final summaries = await repository
+            .watchLibrarySummaries(limit: 2)
+            .first;
+        expect(summaries, hasLength(2));
+        expect(summaries.first.moveCount, 3);
+        expect(summaries.first.id, 'game-${count - 1}');
+        expect(counter.selects, hasLength(1));
+        expect(counter.selects.single, isNot(contains('fen_after')));
+        expect(counter.selects.single, isNot(contains('g.pgn')));
+        counter.reset();
         final library = await repository.watchLibrary().first;
         expect(counter.selects, hasLength(2));
         expect(library, hasLength(count));

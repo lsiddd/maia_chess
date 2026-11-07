@@ -1,8 +1,19 @@
 import 'package:dartchess/dartchess.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../data/repositories/game_repository.dart';
 import '../../pgn/application/pgn_service.dart';
 import 'game_review.dart';
+
+Future<String> exportReviewedPgnAsync(StoredGame game, GameReview review) {
+  if (game.moves.length < 128 && (game.pgn?.length ?? 0) < 65536) {
+    return Future.value(exportReviewedPgn(game, review));
+  }
+  return compute(_exportReviewed, (game, review));
+}
+
+String _exportReviewed((StoredGame, GameReview) input) =>
+    exportReviewedPgn(input.$1, input.$2);
 
 /// Annotate a copy of the original PGN, preserving imported notes and branches.
 String exportReviewedPgn(StoredGame game, GameReview review) {
