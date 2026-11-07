@@ -157,6 +157,13 @@ class PgnService {
     );
   }
 
+  Future<String> exportAsync(StoredGame game) async {
+    if (game.moves.length < 128) return export(game);
+    return compute(_export, game, debugLabel: 'PGN export');
+  }
+
+  static String _export(StoredGame game) => const PgnService().export(game);
+
   String export(StoredGame game) {
     final headers = PgnGame.defaultHeaders()
       ..['Event'] = game.levelRating == null
@@ -390,52 +397,39 @@ class PgnService {
 }
 
 class PgnFileService {
-  const PgnFileService();
+  const PgnFileService({this.pickFile = _pickFile});
+
+  final Future<PlatformFile?> Function() pickFile;
+
+  static Future<PlatformFile?> _pickFile() => FilePicker.pickFile(
+    type: FileType.custom,
+    allowedExtensions: const ['pgn'],
+  );
 
   Future<String?> pickPgn() async {
-    final selected = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pgn'],
-      withData: false,
-    );
-    if (selected == null) return null;
-    final file = selected.files.single;
-    if (file.size > PgnService.maxImportBytes) {
+    final file = await pickFile();
+    if (file == null) return null;
+    final knownSize = file.lengthSync();
+    if (knownSize != null && knownSize > PgnService.maxImportBytes) {
       throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
     }
-    final bytes = file.bytes;
-    try {
-      if (bytes != null) return await compute(_decodePgn, bytes);
-      final path = file.path;
-      if (path == null) {
-        throw const PgnFormatException(
-          'Android did not provide access to the selected file.',
-        );
+    // Providers may omit or misreport the size. Bound the streamed content too,
+    // without reading an arbitrarily large file into memory first.
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in file.readAsByteStream()) {
+      if (bytes.length + chunk.length > PgnService.maxImportBytes) {
+        throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
       }
-      return await compute(_readPgn, path);
+      bytes.add(chunk);
+    }
+    try {
+      return await compute(_decodePgn, bytes.takeBytes());
     } on FormatException {
       throw const PgnFormatException('The PGN file is not UTF-8 encoded.');
     }
   }
 
-  static String _decodePgn(Uint8List bytes) {
-    if (bytes.length > PgnService.maxImportBytes) {
-      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
-    }
-    return utf8.decode(bytes);
-  }
-
-  static Future<String> _readPgn(String filename) async {
-    final file = io.File(filename);
-    if (await file.length() > PgnService.maxImportBytes) {
-      throw const PgnFormatException('PGN files must be 4 MiB or smaller.');
-    }
-    final bytes = BytesBuilder(copy: false);
-    await for (final chunk in file.openRead(0, PgnService.maxImportBytes + 1)) {
-      bytes.add(chunk);
-    }
-    return _decodePgn(bytes.takeBytes());
-  }
+  static String _decodePgn(Uint8List bytes) => utf8.decode(bytes);
 
   Future<void> sharePgn({required String gameId, required String pgn}) async {
     final cache = await getTemporaryDirectory();
