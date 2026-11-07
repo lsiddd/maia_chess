@@ -13,6 +13,7 @@ enum GameTermination {
   threefoldRepetition,
   fiftyMoveRule,
   imported,
+  timeout,
   unknown,
 }
 
@@ -55,6 +56,7 @@ class StoredGame {
     this.pgn,
     this.clockEnabled = false,
     this.initialTimeMs,
+    this.incrementMs = 0,
     this.whiteTimeMs,
     this.blackTimeMs,
   });
@@ -75,6 +77,7 @@ class StoredGame {
   final String? pgn;
   final bool clockEnabled;
   final int? initialTimeMs;
+  final int incrementMs;
   final int? whiteTimeMs;
   final int? blackTimeMs;
   final List<StoredGameMove> moves;
@@ -107,6 +110,7 @@ class StoredGame {
       pgn: pgn ?? this.pgn,
       clockEnabled: clockEnabled,
       initialTimeMs: initialTimeMs,
+      incrementMs: incrementMs,
       whiteTimeMs: whiteTimeMs,
       blackTimeMs: blackTimeMs,
       moves: moves ?? this.moves,

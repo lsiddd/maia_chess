@@ -2,6 +2,7 @@ import 'package:dartchess/dartchess.dart';
 
 import '../../../data/repositories/game_repository.dart';
 import 'chess_move_rules.dart';
+import 'time_control.dart';
 
 /// Game result by winning side. Player-relative outcomes are derived
 /// separately from the chosen side. Legacy enum names are retained for
@@ -36,6 +37,7 @@ class GameState {
     this.campaignMode = false,
     this.clockEnabled = false,
     this.initialTimeMs,
+    this.incrementMs = 0,
     this.whiteTimeMs,
     this.blackTimeMs,
   }) : positionHistory = List.unmodifiable(positionHistory),
@@ -68,6 +70,7 @@ class GameState {
     this.campaignMode = false,
     this.clockEnabled = false,
     this.initialTimeMs,
+    this.incrementMs = 0,
     this.whiteTimeMs,
     this.blackTimeMs,
   }) {
@@ -139,15 +142,28 @@ class GameState {
   /// the affected subsystem.
   final String? persistenceError;
 
-  /// Autosave identity, mode, and stored clock metadata. Clock fields do not
-  /// imply a running game timer.
+  /// Autosave identity, mode, and clock balances at the last checkpoint.
   final String? gameId;
   final DateTime? startedAtUtc;
   final bool campaignMode;
   final bool clockEnabled;
   final int? initialTimeMs;
+  final int incrementMs;
   final int? whiteTimeMs;
   final int? blackTimeMs;
+
+  TimeControl get timeControl => TimeControl(
+    enabled: clockEnabled,
+    minutes: (initialTimeMs ?? 600000) ~/ 60000,
+    incrementSeconds: incrementMs ~/ 1000,
+  );
+
+  Side? get flaggedSide {
+    if (!clockEnabled) return null;
+    if (whiteTimeMs == 0) return Side.white;
+    if (blackTimeMs == 0) return Side.black;
+    return null;
+  }
 
   bool get allowsAssistance => !campaignMode;
 
@@ -177,6 +193,7 @@ class GameState {
   }
 
   bool get isGameOver => _gameOver ??=
+      flaggedSide != null ||
       position.isGameOver ||
       isDrawByFiftyMoveRule ||
       isDrawByThreefoldRepetition;
@@ -203,6 +220,15 @@ class GameState {
 
   GameResult get result {
     if (!isGameOver) return GameResult.emAndamento;
+    final flagged = flaggedSide;
+    if (flagged != null) {
+      if (position.hasInsufficientMaterial(flagged.opposite)) {
+        return GameResult.empate;
+      }
+      return flagged == Side.white
+          ? GameResult.vitoriaPretas
+          : GameResult.vitoriaBrancas;
+    }
     if (position.isCheckmate) {
       return position.turn == Side.white
           ? GameResult.vitoriaPretas
@@ -222,6 +248,7 @@ class GameState {
   /// over draw counters; repetition and the fifty-move rule are handled here.
   GameTermination? get termination {
     if (!isGameOver) return null;
+    if (flaggedSide != null) return GameTermination.timeout;
     if (position.isCheckmate) return GameTermination.checkmate;
     if (isDrawByThreefoldRepetition) {
       return GameTermination.threefoldRepetition;
@@ -272,6 +299,7 @@ class GameState {
     bool? campaignMode,
     bool? clockEnabled,
     int? initialTimeMs,
+    int? incrementMs,
     int? whiteTimeMs,
     int? blackTimeMs,
   }) {
@@ -309,13 +337,14 @@ class GameState {
       campaignMode: campaignMode ?? this.campaignMode,
       clockEnabled: clockEnabled ?? this.clockEnabled,
       initialTimeMs: initialTimeMs ?? this.initialTimeMs,
+      incrementMs: incrementMs ?? this.incrementMs,
       whiteTimeMs: whiteTimeMs ?? this.whiteTimeMs,
       blackTimeMs: blackTimeMs ?? this.blackTimeMs,
     );
     if (identical(next.position, this.position) &&
         identical(next.positionHistory, this.positionHistory)) {
       next._threefoldRepetition = _threefoldRepetition;
-      next._gameOver = _gameOver;
+      if (next.flaggedSide == flaggedSide) next._gameOver = _gameOver;
     }
     return next;
   }

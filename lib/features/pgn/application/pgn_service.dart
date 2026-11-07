@@ -168,6 +168,12 @@ class PgnService {
       ..['Black'] = _playerName(game, Side.black)
       ..['Result'] = _resultToken(game.result)
       ..['Evaluated'] = game.evaluated ? 'true' : 'false';
+    headers['TimeControl'] = game.clockEnabled
+        ? '${(game.initialTimeMs ?? 0) ~/ 1000}+${game.incrementMs ~/ 1000}'
+        : '-';
+    if (game.termination == GameTermination.timeout) {
+      headers['Termination'] = 'time forfeit';
+    }
     if (game.levelRating != null) {
       headers['MaiaLevel'] = '${game.levelRating}';
     }

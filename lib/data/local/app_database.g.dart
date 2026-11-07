@@ -180,6 +180,18 @@ class $GamesTable extends Games with TableInfo<$GamesTable, GameRow> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _incrementMsMeta = const VerificationMeta(
+    'incrementMs',
+  );
+  @override
+  late final GeneratedColumn<int> incrementMs = GeneratedColumn<int>(
+    'increment_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _initialTimeMsMeta = const VerificationMeta(
     'initialTimeMs',
   );
@@ -230,6 +242,7 @@ class $GamesTable extends Games with TableInfo<$GamesTable, GameRow> {
     currentFen,
     pgn,
     clockEnabled,
+    incrementMs,
     initialTimeMs,
     whiteTimeMs,
     blackTimeMs,
@@ -364,6 +377,15 @@ class $GamesTable extends Games with TableInfo<$GamesTable, GameRow> {
         ),
       );
     }
+    if (data.containsKey('increment_ms')) {
+      context.handle(
+        _incrementMsMeta,
+        incrementMs.isAcceptableOrUnknown(
+          data['increment_ms']!,
+          _incrementMsMeta,
+        ),
+      );
+    }
     if (data.containsKey('initial_time_ms')) {
       context.handle(
         _initialTimeMsMeta,
@@ -460,6 +482,10 @@ class $GamesTable extends Games with TableInfo<$GamesTable, GameRow> {
         DriftSqlType.bool,
         data['${effectivePrefix}clock_enabled'],
       )!,
+      incrementMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}increment_ms'],
+      )!,
       initialTimeMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}initial_time_ms'],
@@ -497,6 +523,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
   final String currentFen;
   final String? pgn;
   final bool clockEnabled;
+  final int incrementMs;
   final int? initialTimeMs;
   final int? whiteTimeMs;
   final int? blackTimeMs;
@@ -516,6 +543,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
     required this.currentFen,
     this.pgn,
     required this.clockEnabled,
+    required this.incrementMs,
     this.initialTimeMs,
     this.whiteTimeMs,
     this.blackTimeMs,
@@ -548,6 +576,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
       map['pgn'] = Variable<String>(pgn);
     }
     map['clock_enabled'] = Variable<bool>(clockEnabled);
+    map['increment_ms'] = Variable<int>(incrementMs);
     if (!nullToAbsent || initialTimeMs != null) {
       map['initial_time_ms'] = Variable<int>(initialTimeMs);
     }
@@ -585,6 +614,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
       currentFen: Value(currentFen),
       pgn: pgn == null && nullToAbsent ? const Value.absent() : Value(pgn),
       clockEnabled: Value(clockEnabled),
+      incrementMs: Value(incrementMs),
       initialTimeMs: initialTimeMs == null && nullToAbsent
           ? const Value.absent()
           : Value(initialTimeMs),
@@ -620,6 +650,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
       currentFen: serializer.fromJson<String>(json['currentFen']),
       pgn: serializer.fromJson<String?>(json['pgn']),
       clockEnabled: serializer.fromJson<bool>(json['clockEnabled']),
+      incrementMs: serializer.fromJson<int>(json['incrementMs']),
       initialTimeMs: serializer.fromJson<int?>(json['initialTimeMs']),
       whiteTimeMs: serializer.fromJson<int?>(json['whiteTimeMs']),
       blackTimeMs: serializer.fromJson<int?>(json['blackTimeMs']),
@@ -644,6 +675,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
       'currentFen': serializer.toJson<String>(currentFen),
       'pgn': serializer.toJson<String?>(pgn),
       'clockEnabled': serializer.toJson<bool>(clockEnabled),
+      'incrementMs': serializer.toJson<int>(incrementMs),
       'initialTimeMs': serializer.toJson<int?>(initialTimeMs),
       'whiteTimeMs': serializer.toJson<int?>(whiteTimeMs),
       'blackTimeMs': serializer.toJson<int?>(blackTimeMs),
@@ -666,6 +698,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
     String? currentFen,
     Value<String?> pgn = const Value.absent(),
     bool? clockEnabled,
+    int? incrementMs,
     Value<int?> initialTimeMs = const Value.absent(),
     Value<int?> whiteTimeMs = const Value.absent(),
     Value<int?> blackTimeMs = const Value.absent(),
@@ -685,6 +718,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
     currentFen: currentFen ?? this.currentFen,
     pgn: pgn.present ? pgn.value : this.pgn,
     clockEnabled: clockEnabled ?? this.clockEnabled,
+    incrementMs: incrementMs ?? this.incrementMs,
     initialTimeMs: initialTimeMs.present
         ? initialTimeMs.value
         : this.initialTimeMs,
@@ -728,6 +762,9 @@ class GameRow extends DataClass implements Insertable<GameRow> {
       clockEnabled: data.clockEnabled.present
           ? data.clockEnabled.value
           : this.clockEnabled,
+      incrementMs: data.incrementMs.present
+          ? data.incrementMs.value
+          : this.incrementMs,
       initialTimeMs: data.initialTimeMs.present
           ? data.initialTimeMs.value
           : this.initialTimeMs,
@@ -758,6 +795,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
           ..write('currentFen: $currentFen, ')
           ..write('pgn: $pgn, ')
           ..write('clockEnabled: $clockEnabled, ')
+          ..write('incrementMs: $incrementMs, ')
           ..write('initialTimeMs: $initialTimeMs, ')
           ..write('whiteTimeMs: $whiteTimeMs, ')
           ..write('blackTimeMs: $blackTimeMs')
@@ -782,6 +820,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
     currentFen,
     pgn,
     clockEnabled,
+    incrementMs,
     initialTimeMs,
     whiteTimeMs,
     blackTimeMs,
@@ -805,6 +844,7 @@ class GameRow extends DataClass implements Insertable<GameRow> {
           other.currentFen == this.currentFen &&
           other.pgn == this.pgn &&
           other.clockEnabled == this.clockEnabled &&
+          other.incrementMs == this.incrementMs &&
           other.initialTimeMs == this.initialTimeMs &&
           other.whiteTimeMs == this.whiteTimeMs &&
           other.blackTimeMs == this.blackTimeMs);
@@ -826,6 +866,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
   final Value<String> currentFen;
   final Value<String?> pgn;
   final Value<bool> clockEnabled;
+  final Value<int> incrementMs;
   final Value<int?> initialTimeMs;
   final Value<int?> whiteTimeMs;
   final Value<int?> blackTimeMs;
@@ -846,6 +887,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
     this.currentFen = const Value.absent(),
     this.pgn = const Value.absent(),
     this.clockEnabled = const Value.absent(),
+    this.incrementMs = const Value.absent(),
     this.initialTimeMs = const Value.absent(),
     this.whiteTimeMs = const Value.absent(),
     this.blackTimeMs = const Value.absent(),
@@ -867,6 +909,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
     required String currentFen,
     this.pgn = const Value.absent(),
     this.clockEnabled = const Value.absent(),
+    this.incrementMs = const Value.absent(),
     this.initialTimeMs = const Value.absent(),
     this.whiteTimeMs = const Value.absent(),
     this.blackTimeMs = const Value.absent(),
@@ -892,6 +935,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
     Expression<String>? currentFen,
     Expression<String>? pgn,
     Expression<bool>? clockEnabled,
+    Expression<int>? incrementMs,
     Expression<int>? initialTimeMs,
     Expression<int>? whiteTimeMs,
     Expression<int>? blackTimeMs,
@@ -913,6 +957,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
       if (currentFen != null) 'current_fen': currentFen,
       if (pgn != null) 'pgn': pgn,
       if (clockEnabled != null) 'clock_enabled': clockEnabled,
+      if (incrementMs != null) 'increment_ms': incrementMs,
       if (initialTimeMs != null) 'initial_time_ms': initialTimeMs,
       if (whiteTimeMs != null) 'white_time_ms': whiteTimeMs,
       if (blackTimeMs != null) 'black_time_ms': blackTimeMs,
@@ -936,6 +981,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
     Value<String>? currentFen,
     Value<String?>? pgn,
     Value<bool>? clockEnabled,
+    Value<int>? incrementMs,
     Value<int?>? initialTimeMs,
     Value<int?>? whiteTimeMs,
     Value<int?>? blackTimeMs,
@@ -957,6 +1003,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
       currentFen: currentFen ?? this.currentFen,
       pgn: pgn ?? this.pgn,
       clockEnabled: clockEnabled ?? this.clockEnabled,
+      incrementMs: incrementMs ?? this.incrementMs,
       initialTimeMs: initialTimeMs ?? this.initialTimeMs,
       whiteTimeMs: whiteTimeMs ?? this.whiteTimeMs,
       blackTimeMs: blackTimeMs ?? this.blackTimeMs,
@@ -1012,6 +1059,9 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
     if (clockEnabled.present) {
       map['clock_enabled'] = Variable<bool>(clockEnabled.value);
     }
+    if (incrementMs.present) {
+      map['increment_ms'] = Variable<int>(incrementMs.value);
+    }
     if (initialTimeMs.present) {
       map['initial_time_ms'] = Variable<int>(initialTimeMs.value);
     }
@@ -1045,6 +1095,7 @@ class GamesCompanion extends UpdateCompanion<GameRow> {
           ..write('currentFen: $currentFen, ')
           ..write('pgn: $pgn, ')
           ..write('clockEnabled: $clockEnabled, ')
+          ..write('incrementMs: $incrementMs, ')
           ..write('initialTimeMs: $initialTimeMs, ')
           ..write('whiteTimeMs: $whiteTimeMs, ')
           ..write('blackTimeMs: $blackTimeMs, ')
@@ -2839,6 +2890,7 @@ typedef $$GamesTableCreateCompanionBuilder =
       required String currentFen,
       Value<String?> pgn,
       Value<bool> clockEnabled,
+      Value<int> incrementMs,
       Value<int?> initialTimeMs,
       Value<int?> whiteTimeMs,
       Value<int?> blackTimeMs,
@@ -2861,6 +2913,7 @@ typedef $$GamesTableUpdateCompanionBuilder =
       Value<String> currentFen,
       Value<String?> pgn,
       Value<bool> clockEnabled,
+      Value<int> incrementMs,
       Value<int?> initialTimeMs,
       Value<int?> whiteTimeMs,
       Value<int?> blackTimeMs,
@@ -2988,6 +3041,11 @@ class $$GamesTableFilterComposer extends Composer<_$AppDatabase, $GamesTable> {
 
   ColumnFilters<bool> get clockEnabled => $composableBuilder(
     column: $table.clockEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get incrementMs => $composableBuilder(
+    column: $table.incrementMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3141,6 +3199,11 @@ class $$GamesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get incrementMs => $composableBuilder(
+    column: $table.incrementMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get initialTimeMs => $composableBuilder(
     column: $table.initialTimeMs,
     builder: (column) => ColumnOrderings(column),
@@ -3228,6 +3291,11 @@ class $$GamesTableAnnotationComposer
 
   GeneratedColumn<bool> get clockEnabled => $composableBuilder(
     column: $table.clockEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get incrementMs => $composableBuilder(
+    column: $table.incrementMs,
     builder: (column) => column,
   );
 
@@ -3340,6 +3408,7 @@ class $$GamesTableTableManager
                 Value<String> currentFen = const Value.absent(),
                 Value<String?> pgn = const Value.absent(),
                 Value<bool> clockEnabled = const Value.absent(),
+                Value<int> incrementMs = const Value.absent(),
                 Value<int?> initialTimeMs = const Value.absent(),
                 Value<int?> whiteTimeMs = const Value.absent(),
                 Value<int?> blackTimeMs = const Value.absent(),
@@ -3360,6 +3429,7 @@ class $$GamesTableTableManager
                 currentFen: currentFen,
                 pgn: pgn,
                 clockEnabled: clockEnabled,
+                incrementMs: incrementMs,
                 initialTimeMs: initialTimeMs,
                 whiteTimeMs: whiteTimeMs,
                 blackTimeMs: blackTimeMs,
@@ -3382,6 +3452,7 @@ class $$GamesTableTableManager
                 required String currentFen,
                 Value<String?> pgn = const Value.absent(),
                 Value<bool> clockEnabled = const Value.absent(),
+                Value<int> incrementMs = const Value.absent(),
                 Value<int?> initialTimeMs = const Value.absent(),
                 Value<int?> whiteTimeMs = const Value.absent(),
                 Value<int?> blackTimeMs = const Value.absent(),
@@ -3402,6 +3473,7 @@ class $$GamesTableTableManager
                 currentFen: currentFen,
                 pgn: pgn,
                 clockEnabled: clockEnabled,
+                incrementMs: incrementMs,
                 initialTimeMs: initialTimeMs,
                 whiteTimeMs: whiteTimeMs,
                 blackTimeMs: blackTimeMs,

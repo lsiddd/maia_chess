@@ -64,6 +64,7 @@ void main() {
       ),
     );
 
+    await tester.scrollUntilVisible(find.text('Start game'), 300);
     await tester.tap(find.text('Start game'));
     // pumpAndSettle covers the loading frame and the catch/SnackBar frame
     // without depending on wall-clock timing.

@@ -101,7 +101,7 @@ reduce memory use with the 79M model. A Stockfish failure does not dispose Maia-
 ## Storage and eligibility
 
 SQLite lives in `maia_chess.sqlite` in the application documents directory and
-runs through `NativeDatabase.createInBackground`. Schema version 5 contains
+runs through `NativeDatabase.createInBackground`. Schema version 6 contains
 `games`, `game_moves`, `difficulty_progress`, `rating_history`, and `app_settings`.
 Foreign keys are enabled; deleting a game cascades to its moves and rating rows.
 Opening the database also ensures a library index on modification time and ID.
@@ -134,6 +134,20 @@ Android backup and device transfer exclude the extracted `maia3` and legacy `mai
 directory in application support storage. SQLite games, progress, rating history,
 and settings retain their default backup eligibility.
 
-Clock settings and times are stored but no countdown or timed-game flow runs.
+Time controls are shared by free play, campaign, and local setup. `TimeControl`
+validates 0–180 minutes and 0–180 seconds of Fischer increment, with unlimited
+play as the default. For 0+increment, each side starts with one increment.
+`GameController` uses a monotonic stopwatch; periodic ticks only update
+`gameClockProvider`, so the board is not rebuilt on every tick. Balances are
+checkpointed on moves, undo, save, backgrounding, and leaving the board. Engine
+startup and time away from the game are excluded. Engine failures pause the
+clock until retry. An in-flight reply can finish while paused.
+
+Flag fall is checked both on ticks and immediately before a move, invalidates
+pending engine/promotion results, and persists completion through the normal
+statistics/campaign transaction. Insufficient material for the opponent gives
+a draw. Undo keeps current balances; restart restores the chosen initial time.
+Schema 6 adds `games.increment_ms` with a zero default for older autosaves;
+PGN export records `TimeControl` and time-forfeit termination.
 Settings currently expose app theme, board theme, attack visibility, and its
 own-pieces filter. The only selectable piece set is Cburnett.

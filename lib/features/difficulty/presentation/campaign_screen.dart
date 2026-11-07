@@ -12,6 +12,8 @@ import '../../../data/providers.dart';
 import '../../../data/repositories/progress_repository.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
+import '../../game/presentation/time_control_picker.dart';
+import '../../game/application/time_control.dart';
 
 class CampaignScreen extends ConsumerStatefulWidget {
   const CampaignScreen({super.key});
@@ -22,6 +24,7 @@ class CampaignScreen extends ConsumerStatefulWidget {
 
 class _CampaignScreenState extends ConsumerState<CampaignScreen> {
   Side _humanSide = Side.white;
+  TimeControl _timeControl = const TimeControl();
   int? _startingRating;
   bool _leaving = false;
   GameStartRequest? _startRequest;
@@ -51,7 +54,12 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
   }
 
   Future<void> _startLevel(DifficultyProgressModel progress) async {
-    if (!progress.unlocked || _startingRating != null || _leaving) return;
+    if (!_timeControl.isValid ||
+        !progress.unlocked ||
+        _startingRating != null ||
+        _leaving) {
+      return;
+    }
     setState(() => _startingRating = progress.rating);
     final request = _startRequest = GameStartRequest();
     try {
@@ -86,6 +94,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
             humanSide: _humanSide,
             levelRating: progress.rating,
             campaignMode: true,
+            timeControl: _timeControl,
             request: request,
           );
       final started = await pending;
@@ -150,6 +159,17 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
                 ),
               ),
               SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                sliver: SliverToBoxAdapter(
+                  child: TimeControlPicker(
+                    value: _timeControl,
+                    onChanged: _startingRating != null
+                        ? null
+                        : (value) => setState(() => _timeControl = value),
+                  ),
+                ),
+              ),
+              SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 sliver: SliverList.separated(
                   itemCount: levels.length,
@@ -159,7 +179,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
                     return _CampaignLevelCard(
                       progress: item,
                       finalLevel: index == levels.length - 1,
-                      busy: _startingRating != null,
+                      busy: _startingRating != null || !_timeControl.isValid,
                       starting: _startingRating == item.rating,
                       onPlay: () => _startLevel(item),
                     );

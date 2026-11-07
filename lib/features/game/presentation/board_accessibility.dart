@@ -36,6 +36,11 @@ String gameResultDescription(GameState state) => switch (state.termination) {
     state.result == GameResult.vitoriaBrancas
         ? 'Checkmate! White wins.'
         : 'Checkmate! Black wins.',
+  GameTermination.timeout => switch (state.result) {
+    GameResult.vitoriaBrancas => 'Time is up! White wins.',
+    GameResult.vitoriaPretas => 'Time is up! Black wins.',
+    _ => 'Time is up! Draw by insufficient mating material.',
+  },
   GameTermination.stalemate => 'Draw by stalemate.',
   GameTermination.insufficientMaterial => 'Draw by insufficient material.',
   GameTermination.threefoldRepetition => 'Draw by threefold repetition.',
