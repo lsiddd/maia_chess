@@ -191,6 +191,7 @@ Use the toolchain pinned in [.github/workflows/ci.yaml](.github/workflows/ci.yam
 | --- | --- |
 | Flutter / Dart | Flutter 3.47.4 / Dart 3.13.3 |
 | Java | JDK 17 |
+| Gradle / AGP / Kotlin | 9.3.1 / 9.1.0 / 2.3.20 (AGP built-in) |
 | Android SDK / build tools | Platform 36 / 36.0.0 |
 | Android NDK | 28.2.13676358 |
 | CMake | 3.22.1 |

@@ -60,3 +60,6 @@ native/**/*.iml
 
 # Local task reference attachments.
 .codex-attachments/
+
+# Reports emitted before Gradle relocates the root build directory.
+/android/build/

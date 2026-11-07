@@ -2,8 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // Flutter follows AGP, which provides the Kotlin compiler.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -20,6 +19,8 @@ plugins {
 //   storePassword=<keystore password>
 //   keyAlias=maia_chess_release
 //   keyPassword=<key password>
+val emulatorX64 = project.findProperty("target-platform")?.toString() == "android-x64"
+
 val keystorePropertiesFile = rootProject.file("app/key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 val keystoreProperties = Properties()
@@ -27,7 +28,7 @@ if (hasReleaseKeystore) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
-android {
+extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
     namespace = "com.maiachess.maia_chess"
     compileSdk = flutter.compileSdkVersion
     // Pinned native toolchain for release reproducibility.
@@ -38,10 +39,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         applicationId = "com.maiachess.maia_chess"
         // Bundled ONNX Runtime requires Android API 24 or later.
@@ -50,13 +47,18 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         ndk {
-            // Maia-3's bundled runtime supports ARM64 devices and emulators.
+            // Release devices use ARM64; CI has a separate x86_64 runtime.
             // Flutter configures ABI splits itself when requested; AGP rejects
             // combining those splits with defaultConfig ABI filters.
             if (project.findProperty("split-per-abi") != "true") {
-                abiFilters += listOf("arm64-v8a")
+                abiFilters.clear()
+                abiFilters += listOf(if (emulatorX64) "x86_64" else "arm64-v8a")
             }
         }
+    }
+
+    packaging {
+        jniLibs.useLegacyPackaging = true
     }
 
     signingConfigs {
@@ -96,4 +98,18 @@ android {
 
 flutter {
     source = "../.."
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+// The published APK stays ARM64. CI emulator builds use the official matching
+// ORT 1.22 runtime; pub's onnxruntime_plus only bundles ARM libraries.
+if (emulatorX64) {
+    dependencies {
+        debugImplementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+    }
 }
