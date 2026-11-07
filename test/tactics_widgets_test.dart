@@ -49,7 +49,7 @@ void main() {
         find.widgetWithText(GameToolButton, label),
       );
       expect(button.onPressed, isNull, reason: label);
-      expect(button.active, isFalse, reason: label);
+      expect(button.active, label == 'Undo' ? isNull : isFalse, reason: label);
     }
     final plans = container.read(liveThreatControllerProvider.notifier);
     plans.setEnabled(true);
@@ -154,6 +154,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('attacked-piece-indicator')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(const Key('toggle-attacked-pieces')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
       await tester.pumpAndSettle();
       expect(
@@ -198,6 +202,10 @@ void main() {
             .value,
         contains('Attacked piece'),
       );
+      await tester.ensureVisible(
+        find.byKey(const Key('toggle-attacked-pieces')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('attacked-piece-indicator')), findsNothing);
@@ -226,6 +234,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       final boardRect = tester.getRect(find.byKey(const Key('chess-board')));
+      await tester.ensureVisible(
+        find.byKey(const Key('show-opponent-threats')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('show-opponent-threats')));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
@@ -285,6 +297,7 @@ void main() {
       await tester.ensureVisible(
         find.byKey(const Key('show-opponent-threats')),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('show-opponent-threats')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('opponent-threat-arrows')), findsNothing);
@@ -337,9 +350,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('toggle-attacked-pieces')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('opponent-threat-legend')), findsNothing);
@@ -366,11 +382,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Analysis unavailable'), findsOneWidget);
     expect(container.read(gameControllerProvider).hintThinking, isFalse);
+    await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('show-opponent-threats')));
     await tester.pumpAndSettle();

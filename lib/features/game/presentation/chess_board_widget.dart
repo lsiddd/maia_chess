@@ -183,6 +183,10 @@ class _ChessBoardWidgetState extends ConsumerState<ChessBoardWidget>
     Square? rookTo,
     Piece? rookPiece,
   }) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      setState(_clearSlide);
+      return;
+    }
     setState(() {
       _clearSlide();
       _rookFrom = rookFrom;
@@ -998,7 +1002,9 @@ class _SquareVisual extends StatelessWidget {
       // Interpolate selection and last-move colours instead of switching
       // abruptly.
       child: AnimatedContainer(
-        duration: AppMotion.fast,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : AppMotion.fast,
         curve: AppMotion.curve,
         color: squareColor,
         child: Stack(
@@ -1007,7 +1013,9 @@ class _SquareVisual extends StatelessWidget {
             Positioned.fill(
               child: AnimatedOpacity(
                 key: const ValueKey('check-glow-indicator'),
-                duration: AppMotion.medium,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : AppMotion.medium,
                 curve: AppMotion.curve,
                 opacity: isCheck ? 1 : 0,
                 child: const DecoratedBox(
@@ -1034,7 +1042,9 @@ class _SquareVisual extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [...previousChildren, ?currentChild],
                   ),
-                  duration: AppMotion.medium,
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : AppMotion.medium,
                   reverseDuration: instantExit ? Duration.zero : null,
                   switchInCurve: AppMotion.curve,
                   switchOutCurve: AppMotion.curve,
@@ -1096,7 +1106,9 @@ class _SquareVisual extends StatelessWidget {
             Positioned.fill(
               child: AnimatedOpacity(
                 key: const ValueKey('legal-target-indicator'),
-                duration: AppMotion.fast,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : AppMotion.fast,
                 curve: AppMotion.curve,
                 opacity: isLegalTarget ? 1 : 0,
                 child: FractionallySizedBox(

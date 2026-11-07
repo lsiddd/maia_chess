@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theming/app_page_route.dart';
+import '../../../core/theming/app_theme.dart';
 import '../../../data/providers.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../../data/repositories/settings_repository.dart';
@@ -187,78 +188,70 @@ class _GameScreenState extends ConsumerState<GameScreen>
     });
     final busy = game.aiThinking;
     const campaignToolTip = 'Unavailable in the campaign';
-    final toolbar = SizedBox(
-      height: 64,
-      child: Row(
-        key: const Key('game-actions'),
-        children: [
-          GameToolButton(
-            label: 'Undo',
-            icon: Icons.undo,
-            tooltip: game.allowsAssistance ? null : 'Undo · $campaignToolTip',
-            onPressed: game.canUndo && !busy && !game.isGameOver
-                ? _controller.undo
-                : null,
-          ),
-          GameToolButton(
-            key: const Key('hint-button'),
-            label: 'Hint',
-            icon: Icons.lightbulb_outline,
-            active: game.allowsAssistance && hint != null,
-            loading: game.allowsAssistance && game.hintThinking,
-            tooltip: game.allowsAssistance
-                ? 'Show the piece suggested by Stockfish. This makes the game unrated.'
-                : 'Hint · $campaignToolTip',
-            onPressed:
-                game.allowsAssistance &&
-                    (game.isGameOver || (!busy && !game.isAiTurn))
-                ? _hint
-                : null,
-          ),
-          GameToolButton(
-            key: const Key('toggle-attacked-pieces'),
-            label: 'Attacks',
-            icon: Icons.crop_free,
-            active: showAttacks,
-            tooltip: game.allowsAssistance
-                ? null
-                : 'Attacks · $campaignToolTip',
-            onPressed: !game.allowsAssistance || _savingSettings
-                ? null
-                : () {
-                    unawaited(_settings(attacks: !showAttacks));
-                    if (!showAttacks && !game.isGameOver) {
-                      unawaited(_controller.markAsNotEvaluated());
-                    }
-                  },
-          ),
-          GameToolButton(
-            key: const Key('show-opponent-threats'),
-            label: 'Plans',
-            icon: Icons.trending_up,
-            tooltip: game.allowsAssistance
-                ? 'Opponent plans'
-                : 'Plans · $campaignToolTip',
-            active: game.allowsAssistance && plans.enabled,
-            loading: game.allowsAssistance && plans.loading,
-            onPressed: game.allowsAssistance
-                ? () {
-                    _planIndex = 0;
-                    _plans.setEnabled(!plans.enabled);
-                    if (!plans.enabled && game.position.isCheck) {
-                      _notice(
-                        'Get out of check before viewing opponent plans.',
-                      );
-                    }
+    final toolbar = GameActionBar(
+      tools: [
+        GameToolButton(
+          label: 'Undo',
+          icon: Icons.undo,
+          tooltip: game.allowsAssistance ? null : 'Undo · $campaignToolTip',
+          onPressed: game.canUndo && !busy && !game.isGameOver
+              ? _controller.undo
+              : null,
+        ),
+        GameToolButton(
+          key: const Key('hint-button'),
+          label: 'Hint',
+          icon: Icons.lightbulb_outline,
+          active: game.allowsAssistance && hint != null,
+          loading: game.allowsAssistance && game.hintThinking,
+          tooltip: game.allowsAssistance
+              ? 'Show the piece suggested by Stockfish. This makes the game unrated.'
+              : 'Hint · $campaignToolTip',
+          onPressed:
+              game.allowsAssistance &&
+                  (game.isGameOver || (!busy && !game.isAiTurn))
+              ? _hint
+              : null,
+        ),
+        GameToolButton(
+          key: const Key('toggle-attacked-pieces'),
+          label: 'Attacks',
+          icon: Icons.crop_free,
+          active: showAttacks,
+          tooltip: game.allowsAssistance ? null : 'Attacks · $campaignToolTip',
+          onPressed: !game.allowsAssistance || _savingSettings
+              ? null
+              : () {
+                  unawaited(_settings(attacks: !showAttacks));
+                  if (!showAttacks && !game.isGameOver) {
+                    unawaited(_controller.markAsNotEvaluated());
                   }
-                : null,
-          ),
-          GameToolButton(
-            label: 'More',
-            icon: Icons.more_horiz,
-            onPressed: _more,
-          ),
-        ],
+                },
+        ),
+        GameToolButton(
+          key: const Key('show-opponent-threats'),
+          label: 'Plans',
+          icon: Icons.trending_up,
+          tooltip: game.allowsAssistance
+              ? 'Opponent plans'
+              : 'Plans · $campaignToolTip',
+          active: game.allowsAssistance && plans.enabled,
+          loading: game.allowsAssistance && plans.loading,
+          onPressed: game.allowsAssistance
+              ? () {
+                  _planIndex = 0;
+                  _plans.setEnabled(!plans.enabled);
+                  if (!plans.enabled && game.position.isCheck) {
+                    _notice('Get out of check before viewing opponent plans.');
+                  }
+                }
+              : null,
+        ),
+      ],
+      more: GameToolButton(
+        label: 'More',
+        icon: Icons.more_horiz,
+        onPressed: _more,
       ),
     );
     final board = Center(
@@ -281,45 +274,44 @@ class _GameScreenState extends ConsumerState<GameScreen>
           child: _TurnStatus(
             game: game,
             onRetry: _controller.retryAiMove,
+            onRetrySave: _controller.saveGame,
             notice: _noticeText,
           ),
         ),
-        SizedBox(
-          width: 48,
-          height: 48,
-          child: candidates.length > 1
-              ? IconButton(
-                  key: const Key('next-opponent-plan'),
-                  tooltip: 'Next opponent plan',
-                  onPressed: () => setState(
-                    () => _planIndex = (_planIndex + 1) % candidates.length,
-                  ),
-                  icon: FittedBox(
-                    child: Text(
-                      '${_planIndex % candidates.length + 1}/${candidates.length}',
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ),
-                )
-              : null,
-        ),
+        if (candidates.length > 1)
+          IconButton(
+            key: const Key('next-opponent-plan'),
+            tooltip: 'Next opponent plan',
+            onPressed: () => setState(
+              () => _planIndex = (_planIndex + 1) % candidates.length,
+            ),
+            icon: FittedBox(
+              child: Text(
+                '${_planIndex % candidates.length + 1}/${candidates.length}',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+          ),
       ],
     );
     final history = GameMoveHistory(game: game, orientation: orientation);
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 48,
+        toolbarHeight: MediaQuery.sizeOf(context).height < 500 ? 48 : 56,
         title: Text(
           game.aiSide == null ? 'Local game' : 'Maia-3 ${game.levelRating}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           if (game.isGameOver && game.gameId != null) ...[
             if (game.sanHistory.isNotEmpty)
-              TextButton(
+              IconButton(
+                tooltip: 'Review game',
                 onPressed: _postGameActionPending
                     ? null
                     : () => _afterGame(review: true),
-                child: const Text('Review game'),
+                icon: const Icon(Icons.analytics_outlined),
               ),
             IconButton(
               tooltip: 'Rematch',
@@ -345,19 +337,43 @@ class _GameScreenState extends ConsumerState<GameScreen>
                     const SizedBox(width: 16),
                     SizedBox(
                       width: constraints.maxWidth < 620 ? 260 : 300,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          status,
-                          if (game.clockEnabled)
-                            GameClocks(orientation: orientation),
-                          const SizedBox(height: 12),
-                          toolbar,
-                          history,
-                        ],
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            status,
+                            if (game.clockEnabled)
+                              GameClocks(orientation: orientation),
+                            const SizedBox(height: 12),
+                            toolbar,
+                            history,
+                          ],
+                        ),
                       ),
                     ),
                   ],
+                );
+              }
+              // On tall phones, keep context and controls next to the board.
+              // The flexible board still yields space to enlarged text.
+              if (constraints.maxHeight >= constraints.maxWidth + 240) {
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        status,
+                        if (game.clockEnabled)
+                          GameClocks(orientation: orientation),
+                        Flexible(
+                          child: AspectRatio(aspectRatio: 1, child: board),
+                        ),
+                        toolbar,
+                        history,
+                      ],
+                    ),
+                  ),
                 );
               }
               return Column(
@@ -436,7 +452,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               for (final item in [
                 ('flip', Icons.swap_vert, 'Rotate board'),
                 ('save', Icons.save_outlined, 'Save game'),
-                ('settings', Icons.tune, 'Settings'),
+                ('settings', Icons.palette_outlined, 'Appearance'),
                 if (game.allowsAssistance) ...[
                   (
                     'filter',
@@ -547,10 +563,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
 }
 
 class _TurnStatus extends StatelessWidget {
-  const _TurnStatus({required this.game, required this.onRetry, this.notice});
+  const _TurnStatus({
+    required this.game,
+    required this.onRetry,
+    required this.onRetrySave,
+    this.notice,
+  });
   final String? notice;
   final GameState game;
   final VoidCallback onRetry;
+  final VoidCallback onRetrySave;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -576,36 +598,59 @@ class _TurnStatus extends StatelessWidget {
         : game.aiSide == null
         ? 'Local'
         : 'Practice';
-    return SizedBox(
-      height: 52,
-      child: Semantics(
-        key: const Key('turn-status'),
-        liveRegion: true,
-        label:
-            '${lastMoveAnnouncement(game)} $turn. $mode. ${game.evaluated ? 'Rated' : 'Unrated'}',
+    return Semantics(
+      key: const Key('turn-status'),
+      liveRegion: true,
+      label:
+          '${lastMoveAnnouncement(game)} $turn. $mode. ${game.evaluated ? 'Rated' : 'Unrated'}',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
         child: Row(
           children: [
             Container(
-              width: 10,
-              height: 10,
+              width: 8,
+              height: 32,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: game.position.isCheck ? colors.error : colors.primary,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                color: game.position.isCheck || game.engineError != null
+                    ? colors.error
+                    : colors.primary,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.m),
             Expanded(
-              child: Tooltip(
-                message: turn,
-                child: Text(
-                  turn,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
+              child: ExcludeSemantics(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Tooltip(
+                      message: turn,
+                      child: Text(
+                        turn,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    if (MediaQuery.textScalerOf(context).scale(14) < 22)
+                      Text(
+                        '$mode${game.evaluated ? '' : ' · Unrated'}',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
-            if (game.engineError != null)
+            if (game.persistenceError != null)
+              IconButton(
+                tooltip: 'Retry save',
+                onPressed: onRetrySave,
+                icon: const Icon(Icons.save_outlined),
+              )
+            else if (game.engineError != null)
               IconButton(
                 tooltip: 'Try again',
                 onPressed: onRetry,
@@ -613,27 +658,12 @@ class _TurnStatus extends StatelessWidget {
               )
             else if (game.aiThinking)
               const Padding(
-                padding: EdgeInsets.all(8),
+                padding: EdgeInsets.all(AppSpacing.s),
                 child: SizedBox.square(
                   dimension: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-            Flexible(
-              child: Tooltip(
-                message: game.allowsAssistance
-                    ? 'Assistance and undo make the game unrated.'
-                    : 'Assistance and undo are unavailable in the campaign.',
-                child: Text(
-                  '$mode${game.evaluated ? '' : ' · Unrated'}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),

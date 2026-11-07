@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theming/app_theme.dart';
+
 class ReviewChart extends StatelessWidget {
   const ReviewChart({
     super.key,
@@ -16,34 +18,71 @@ class ReviewChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final last = whiteWinPercent.length - 1;
-        void select(double x) =>
-            onSelect((x / constraints.maxWidth * last).round().clamp(0, last));
-        return Semantics(
-          label: 'Evaluation graph, white advantage above the centre line',
-          value: 'Position $ply of $last',
-          increasedValue: ply < last ? 'Position ${ply + 1} of $last' : null,
-          decreasedValue: ply > 0 ? 'Position ${ply - 1} of $last' : null,
-          onIncrease: ply < last ? () => onSelect(ply + 1) : null,
-          onDecrease: ply > 0 ? () => onSelect(ply - 1) : null,
-          child: GestureDetector(
-            excludeFromSemantics: true,
-            behavior: HitTestBehavior.opaque,
-            onTapDown: (event) => select(event.localPosition.dx),
-            onHorizontalDragStart: (event) => select(event.localPosition.dx),
-            onHorizontalDragUpdate: (event) => select(event.localPosition.dx),
-            child: SizedBox(
-              height: 76,
-              width: double.infinity,
-              child: CustomPaint(
-                painter: _ChartPainter(whiteWinPercent, ply, colors),
-              ),
+    if (whiteWinPercent.isEmpty) return const SizedBox.shrink();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.small),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.m),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Game balance', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'White above the line · Black below',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
             ),
-          ),
-        );
-      },
+            const SizedBox(height: AppSpacing.m),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final last = whiteWinPercent.length - 1;
+                void select(double x) {
+                  if (constraints.maxWidth <= 0) return;
+                  onSelect(
+                    (x / constraints.maxWidth * last).round().clamp(0, last),
+                  );
+                }
+
+                return Semantics(
+                  label:
+                      'Evaluation graph, white advantage above the centre line',
+                  value: 'Position $ply of $last',
+                  increasedValue: ply < last
+                      ? 'Position ${ply + 1} of $last'
+                      : null,
+                  decreasedValue: ply > 0
+                      ? 'Position ${ply - 1} of $last'
+                      : null,
+                  onIncrease: ply < last ? () => onSelect(ply + 1) : null,
+                  onDecrease: ply > 0 ? () => onSelect(ply - 1) : null,
+                  child: GestureDetector(
+                    excludeFromSemantics: true,
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (event) => select(event.localPosition.dx),
+                    onHorizontalDragStart: (event) =>
+                        select(event.localPosition.dx),
+                    onHorizontalDragUpdate: (event) =>
+                        select(event.localPosition.dx),
+                    child: SizedBox(
+                      height: 76,
+                      width: double.infinity,
+                      child: CustomPaint(
+                        painter: _ChartPainter(whiteWinPercent, ply, colors),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -90,7 +129,7 @@ class _ChartPainter extends CustomPainter {
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke,
     );
-    final selected = point(ply);
+    final selected = point(ply.clamp(0, scores.length - 1));
     canvas.drawLine(
       Offset(selected.dx, 0),
       Offset(selected.dx, size.height),

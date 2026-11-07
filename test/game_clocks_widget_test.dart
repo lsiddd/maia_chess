@@ -57,14 +57,15 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('White  5:00'), findsOneWidget);
-      expect(find.text('Black  5:00'), findsOneWidget);
+      expect(find.byTooltip('White'), findsOneWidget);
+      expect(find.text('5:00'), findsNWidgets(2));
+      expect(find.byTooltip('Black'), findsOneWidget);
       final board = tester.getRect(find.byKey(const Key('chess-board')));
       expect(board.width, greaterThan(150));
       expect(board.width, closeTo(board.height, .01));
       now = 2000;
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('White  4:58'), findsOneWidget);
+      expect(find.text('4:58'), findsOneWidget);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
       await controller.flushPersistence();
@@ -76,7 +77,7 @@ void main() {
       await tester.pump();
       now += 1000;
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('White  4:57'), findsOneWidget);
+      expect(find.text('4:57'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await controller.flushPersistence();
