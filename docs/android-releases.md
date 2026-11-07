@@ -12,7 +12,9 @@ CMake 3.22.1.
 | Pull request targeting `main` | Analysis, formatting, Flutter tests, Python tests | No APK job or publication |
 | Push to `main` | Same checks | Release-signed ARM64 artifact and moving nightly pre-release |
 | Push of a tag matching `v*` | Same checks; tag must validate as `vX.Y.Z` | Release-signed ARM64 artifact and stable release |
-| Manual run on `main` with empty `release_tag` | Same checks | Artifact only; debug-signed if no signing secrets are supplied |
+| Daily at 06:17 UTC / 03:17 America/Belem | Same checks | Signed nightly from current `main` |
+| Manual run on `main` with `publish_nightly: true` and empty `release_tag` | Same checks | Signed nightly from current `main` |
+| Manual run with `publish_nightly: false` and empty `release_tag` | Same checks | Artifact only; debug-signed if no signing secrets are supplied |
 | Manual run with an existing `release_tag` | Checks on tagged source | Signed artifact and stable release for that exact tag |
 
 The `android-release` artifact contains the versioned APK and `SHA256SUMS` and
@@ -24,12 +26,18 @@ Nightlies are titled **Maia Chess Nightly** and contain
 `maia-chess-nightly-arm64-v8a.apk` plus `SHA256SUMS`. The existing automation
 moves the `nightly` tag and updates that pre-release in place. It serialises
 publication and checks the latest `main` SHA before publishing so a superseded
-build cannot replace the newer nightly. This is the only tag/release designed
+build cannot replace the newer nightly. A build-number guard also prevents a
+late-finishing build of the same commit from replacing an APK with a newer
+Android version code. The release notes carry a machine-readable build marker;
+existing notes are recognised by their version/build line. Unknown metadata
+fails publication safely, and rerunning the same build can repair a partial
+upload. This is the only tag/release designed
 to be overwritten. It does not become the latest stable release.
 
 Stable artifacts are named `maia-chess-X.Y.Z-arm64-v8a.apk`. The tag supplies
-`--build-name`; `GITHUB_RUN_NUMBER` supplies `--build-number`. Non-tag builds use
-the version name from `pubspec.yaml`. Nightly and stable APKs use the same release
+`--build-name`; `GITHUB_RUN_NUMBER` supplies `--build-number`. Nightly builds append `-nightly.RUN_NUMBER` to the version name from
+`pubspec.yaml`, so Android identifies installed development builds clearly.
+Other non-tag builds use the unmodified version name from `pubspec.yaml`. Nightly and stable APKs use the same release
 key. Publication fails if the stable release already exists; use a new version
 tag for a new publication.
 
@@ -55,7 +63,7 @@ Configure all four repository Actions secrets together:
 | `ANDROID_KEY_PASSWORD` | Private-key password |
 
 `scripts/configure_android_signing.py` requires signing for tags, manual tag
-publication, and pushes to `main`. Partial secret configuration always fails.
+publication, pushes to `main`, scheduled nightlies, and manual nightly publication. Partial secret configuration always fails.
 An artifact-only manual run on a branch without any signing secrets falls back to debug
 signing. The script escapes Java properties, writes private files with mode
 0600, and avoids logging secret values. The APK job removes its generated
