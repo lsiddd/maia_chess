@@ -36,6 +36,11 @@ String gameResultDescription(GameState state) => switch (state.termination) {
     state.result == GameResult.vitoriaBrancas
         ? 'Checkmate! White wins.'
         : 'Checkmate! Black wins.',
+  GameTermination.resignation => switch (state.result) {
+    GameResult.vitoriaBrancas => 'Black resigned. White wins.',
+    GameResult.vitoriaPretas => 'White resigned. Black wins.',
+    _ => 'Resignation. Draw by insufficient mating material.',
+  },
   GameTermination.timeout => switch (state.result) {
     GameResult.vitoriaBrancas => 'Time is up! White wins.',
     GameResult.vitoriaPretas => 'Time is up! Black wins.',

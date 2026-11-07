@@ -100,6 +100,10 @@ keep the time control. Undo retains the remaining time without a refund.
 Your ongoing game saves automatically after each move. When you come back,
 tap **Continue saved game** to pick up where you left off.
 
+**More → Resign** ends the game after confirmation. Against Maia-3, you can
+resign on either turn; in local play, the side to move resigns. The result stays
+in your history and follows the usual rated-game and campaign rules.
+
 ### Practise with a little help
 
 The toolbar keeps useful tools within reach:
@@ -110,7 +114,7 @@ The toolbar keeps useful tools within reach:
 | **Hint** | An amber outline marks the piece Stockfish suggests moving. Work out where you'd like to play it. |
 | **Attacks** | Spot attacked pieces: orange for pieces without geometric defence, double blue for defended pieces. Use **More** to show your pieces only or both sides. |
 | **Plans** | Explore up to three possible opponent continuations. Tap the counter to cycle through them. |
-| **More** | Rotate, restart, save, customise the board, or open the tool guide. |
+| **More** | Rotate, restart, resign, save, customise the board, or open the tool guide. |
 
 Your in-app rating tracks completed, unassisted games against Maia. Campaign
 progress uses eligible campaign games. In free play against Maia, hints,

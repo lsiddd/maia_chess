@@ -549,6 +549,26 @@ class GameController extends Notifier<GameState> {
     );
   }
 
+  /// Concede as the human against Maia, or as the side to move locally.
+  Future<void> resign() async {
+    if (_isDisposed || _activeStart != null || state.isGameOver) return;
+    _settleClock();
+    if (state.isGameOver) return;
+    _invalidateCurrentGame();
+    _maia?.cancel();
+    state = state.copyWith(
+      resignedSide: state.resigningSide,
+      aiThinking: false,
+      hintThinking: false,
+      clearSelection: true,
+      clearEngineError: true,
+    );
+    unawaited(cancelHint());
+    cancelOpponentThreats();
+    _publishClock();
+    await saveGame();
+  }
+
   /// Undo one ply in local play, or return to the previous human decision
   /// against Maia-3 in free play. Mark the game unrated, excluding it from
   /// rating and streaks.

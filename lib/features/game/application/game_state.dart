@@ -40,6 +40,7 @@ class GameState {
     this.incrementMs = 0,
     this.whiteTimeMs,
     this.blackTimeMs,
+    this.resignedSide,
   }) : positionHistory = List.unmodifiable(positionHistory),
        sanHistory = List.unmodifiable(sanHistory),
        uciHistory = List.unmodifiable(uciHistory),
@@ -73,6 +74,7 @@ class GameState {
     this.incrementMs = 0,
     this.whiteTimeMs,
     this.blackTimeMs,
+    this.resignedSide,
   }) {
     _validateHistory();
   }
@@ -152,6 +154,11 @@ class GameState {
   final int? whiteTimeMs;
   final int? blackTimeMs;
 
+  /// Side that conceded, independently of whose turn it was.
+  final Side? resignedSide;
+
+  Side get resigningSide => aiSide?.opposite ?? position.turn;
+
   TimeControl get timeControl => TimeControl(
     enabled: clockEnabled,
     minutes: (initialTimeMs ?? 600000) ~/ 60000,
@@ -193,13 +200,16 @@ class GameState {
   }
 
   bool get isGameOver => _gameOver ??=
+      resignedSide != null ||
       flaggedSide != null ||
       position.isGameOver ||
       isDrawByFiftyMoveRule ||
       isDrawByThreefoldRepetition;
 
   bool get canUndo {
-    if (!allowsAssistance || positionHistory.isEmpty) return false;
+    if (isGameOver || !allowsAssistance || positionHistory.isEmpty) {
+      return false;
+    }
     if (aiSide == null) return true;
 
     // If Maia-3 opened as White and the human has not moved, there is no human
@@ -220,12 +230,12 @@ class GameState {
 
   GameResult get result {
     if (!isGameOver) return GameResult.emAndamento;
-    final flagged = flaggedSide;
-    if (flagged != null) {
-      if (position.hasInsufficientMaterial(flagged.opposite)) {
+    final losingSide = resignedSide ?? flaggedSide;
+    if (losingSide != null) {
+      if (position.hasInsufficientMaterial(losingSide.opposite)) {
         return GameResult.empate;
       }
-      return flagged == Side.white
+      return losingSide == Side.white
           ? GameResult.vitoriaPretas
           : GameResult.vitoriaBrancas;
     }
@@ -248,6 +258,7 @@ class GameState {
   /// over draw counters; repetition and the fifty-move rule are handled here.
   GameTermination? get termination {
     if (!isGameOver) return null;
+    if (resignedSide != null) return GameTermination.resignation;
     if (flaggedSide != null) return GameTermination.timeout;
     if (position.isCheckmate) return GameTermination.checkmate;
     if (isDrawByThreefoldRepetition) {
@@ -302,6 +313,7 @@ class GameState {
     int? incrementMs,
     int? whiteTimeMs,
     int? blackTimeMs,
+    Side? resignedSide,
   }) {
     final next = GameState._(
       position: position ?? this.position,
@@ -340,11 +352,15 @@ class GameState {
       incrementMs: incrementMs ?? this.incrementMs,
       whiteTimeMs: whiteTimeMs ?? this.whiteTimeMs,
       blackTimeMs: blackTimeMs ?? this.blackTimeMs,
+      resignedSide: resignedSide ?? this.resignedSide,
     );
     if (identical(next.position, this.position) &&
         identical(next.positionHistory, this.positionHistory)) {
       next._threefoldRepetition = _threefoldRepetition;
-      if (next.flaggedSide == flaggedSide) next._gameOver = _gameOver;
+      if (next.flaggedSide == flaggedSide &&
+          next.resignedSide == this.resignedSide) {
+        next._gameOver = _gameOver;
+      }
     }
     return next;
   }

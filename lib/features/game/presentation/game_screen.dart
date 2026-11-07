@@ -464,8 +464,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
                   ('help', Icons.help_outline, 'Tool help'),
                 ],
                 ('reset', Icons.restart_alt, 'Restart'),
+                if (!game.isGameOver) ('resign', Icons.flag_outlined, 'Resign'),
               ])
                 ListTile(
+                  iconColor: item.$1 == 'resign'
+                      ? Theme.of(context).colorScheme.error
+                      : null,
+                  textColor: item.$1 == 'resign'
+                      ? Theme.of(context).colorScheme.error
+                      : null,
                   leading: Icon(item.$2),
                   title: Text(item.$3),
                   onTap: () => Navigator.pop(context, item.$1),
@@ -532,7 +539,49 @@ class _GameScreenState extends ConsumerState<GameScreen>
         );
       case 'reset':
         await _reset();
+      case 'resign':
+        await _resign();
     }
+  }
+
+  Future<void> _resign() async {
+    final game = ref.read(gameControllerProvider);
+    if (game.isGameOver) return;
+    final side = game.resigningSide;
+    final sideName = side == Side.white ? 'White' : 'Black';
+    final opponentName = side == Side.white ? 'Black' : 'White';
+    final draws = game.position.hasInsufficientMaterial(side.opposite);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          game.aiSide == null ? 'Resign as $sideName?' : 'Resign game?',
+        ),
+        content: Text(
+          draws
+              ? 'The game will end in a draw because $opponentName has insufficient mating material. This cannot be undone.'
+              : '${game.aiSide == null ? opponentName : 'Maia-3'} will win. The game will stay in your history. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep playing'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Resign'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final current = ref.read(gameControllerProvider);
+    if (current.gameId != game.gameId || current.resigningSide != side) return;
+    await _controller.resign();
   }
 
   Future<void> _reset() async {

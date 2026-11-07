@@ -20,7 +20,8 @@ class VisualHintController extends AutoDisposeNotifier<Square?> {
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
       if (previous?.position.fen != next.position.fen ||
           previous?.gameId != next.gameId ||
-          previous?.selectedSquare != next.selectedSquare) {
+          previous?.selectedSquare != next.selectedSquare ||
+          next.isGameOver) {
         clear();
       }
     });
