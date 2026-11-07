@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,13 @@ import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/data/repositories/settings_repository.dart';
 import 'package:maia_chess/features/settings/presentation/appearance_screen.dart';
 import 'package:maia_chess/main.dart';
+
+Finder _appearanceScrollable() => find
+    .descendant(
+      of: find.byType(AppearanceScreen),
+      matching: find.byType(Scrollable),
+    )
+    .first;
 
 void main() {
   testWidgets(
@@ -33,12 +41,23 @@ void main() {
       await tester.pumpAndSettle();
 
       final blue = find.byKey(const ValueKey('board-theme-blue'));
-      await tester.ensureVisible(blue);
+      await tester.scrollUntilVisible(
+        blue,
+        200,
+        scrollable: _appearanceScrollable(),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(blue);
       await tester.pumpAndSettle();
       expect(repository.settings.boardTheme, BoardTheme.blue);
       expect(repository.settings.defaultClockEnabled, isTrue);
       expect(repository.settings.defaultTimeMinutes, 15);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('chess-board-background')),
+        -200,
+        scrollable: _appearanceScrollable(),
+      );
+      await tester.pumpAndSettle();
       final background = tester.widget<Image>(
         find.byKey(const Key('chess-board-background')),
       );
@@ -46,11 +65,14 @@ void main() {
           (background.image as ResizeImage).imageProvider as AssetImage;
       expect(image.assetName, BoardTheme.blue.assetPath);
 
-      final selector = find.byType(DropdownButtonFormField<StoredThemeMode>);
-      await tester.ensureVisible(selector);
-      await tester.tap(selector);
+      final selector = find.byKey(const ValueKey('select-theme-dark'));
+      await tester.scrollUntilVisible(
+        selector,
+        200,
+        scrollable: _appearanceScrollable(),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Dark').last);
+      await tester.tap(selector);
       await tester.pumpAndSettle();
       expect(repository.settings.themeMode, StoredThemeMode.dark);
       expect(Theme.of(tester.element(selector)).brightness, Brightness.dark);
@@ -59,11 +81,79 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Appearance'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('theme-mode-dark')),
+        200,
+        scrollable: _appearanceScrollable(),
+      );
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('theme-mode-dark')), findsOneWidget);
       expect(repository.settings.boardTheme, BoardTheme.blue);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('board palettes expose a selected state and a TalkBack action', (
+    tester,
+  ) async {
+    final repository = _SettingsRepository();
+    addTearDown(repository.updates.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: AppearanceScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final blue = find.byKey(const ValueKey('board-theme-blue'));
+    await tester.scrollUntilVisible(
+      blue,
+      200,
+      scrollable: _appearanceScrollable(),
+    );
+    await tester.pumpAndSettle();
+    final node = tester.getSemantics(find.bySemanticsLabel('Blue board'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    node.owner!.performAction(node.id, SemanticsAction.tap);
+    await tester.pumpAndSettle();
+    expect(repository.settings.boardTheme, BoardTheme.blue);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsLabel('Blue board'))
+          .flagsCollection
+          .isSelected,
+      Tristate.isTrue,
+    );
+  });
+
+  testWidgets('failed appearance save preserves the current setting', (
+    tester,
+  ) async {
+    final repository = _SettingsRepository()..failSave = true;
+    addTearDown(repository.updates.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: AppearanceScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final dark = find.byKey(const ValueKey('select-theme-dark'));
+    await tester.scrollUntilVisible(
+      dark,
+      200,
+      scrollable: _appearanceScrollable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(dark);
+    await tester.pumpAndSettle();
+    expect(repository.settings.themeMode, StoredThemeMode.system);
+    expect(find.text('Could not save appearance settings.'), findsOneWidget);
+    repository.failSave = false;
+    await tester.tap(dark);
+    await tester.pumpAndSettle();
+    expect(repository.settings.themeMode, StoredThemeMode.dark);
+  });
 
   testWidgets('appearance fits a short screen with enlarged text', (
     tester,
@@ -94,8 +184,9 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('board-theme-purple')),
       200,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: _appearanceScrollable(),
     );
+    await tester.pumpAndSettle();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -107,6 +198,7 @@ class _SettingsRepository implements SettingsRepository {
     defaultTimeMinutes: 15,
   );
   final updates = StreamController<StoredAppSettings>.broadcast();
+  bool failSave = false;
 
   @override
   Stream<StoredAppSettings> watch() async* {
@@ -119,6 +211,7 @@ class _SettingsRepository implements SettingsRepository {
 
   @override
   Future<void> save(StoredAppSettings value) async {
+    if (failSave) throw StateError('Temporary write failure');
     settings = value;
     updates.add(value);
   }
