@@ -4,6 +4,7 @@ import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support_game_settings.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/application/game_state.dart';
@@ -12,12 +13,16 @@ import 'package:maia_chess/features/game/presentation/game_screen.dart';
 import 'game_controller_test.dart' show FakeGameRepository, FakeMaiaEngine;
 
 void main() {
+  late MemorySettings settings;
+  setUp(() => settings = MemorySettings());
+  tearDown(() => settings.close());
   testWidgets(
     'autosave errors offer a direct retry without leaving the board',
     (tester) async {
       final repository = FakeGameRepository();
       final container = ProviderContainer(
         overrides: [
+          settingsRepositoryProvider.overrideWithValue(settings),
           gameRepositoryProvider.overrideWithValue(repository),
           gameControllerProvider.overrideWith(_UnsavedGame.new),
         ],
@@ -49,6 +54,7 @@ void main() {
     final answer = Completer<String>();
     final container = ProviderContainer(
       overrides: [
+        settingsRepositoryProvider.overrideWithValue(settings),
         gameRepositoryProvider.overrideWithValue(repository),
         gameIdFactoryProvider.overrideWithValue(() => 'retry-game'),
         maiaModelResolverProvider.overrideWithValue(

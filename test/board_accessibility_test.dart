@@ -1,9 +1,11 @@
+import 'package:maia_chess/data/providers.dart';
 import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support_game_settings.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
 import 'package:maia_chess/features/game/presentation/board_accessibility.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
@@ -11,6 +13,9 @@ import 'package:maia_chess/features/game/application/game_state.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
 
 void main() {
+  late MemorySettings settings;
+  setUp(() => settings = MemorySettings());
+  tearDown(() => settings.close());
   for (final example in [
     (
       fen: 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1',
@@ -50,6 +55,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          settingsRepositoryProvider.overrideWithValue(settings),
           if (busy) gameControllerProvider.overrideWith(_BusyController.new),
         ],
         child: const MaterialApp(home: GameScreen()),

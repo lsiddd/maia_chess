@@ -32,6 +32,9 @@ python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 CI checks formatting without applying it and uploads `coverage/lcov.info`.
+The APK job also runs `./gradlew :app:lintRelease` from `android/` after the
+production build. Run this locally after Android resource or build changes.
+
 Analysis excludes `native/`, `build/`, and `android/`; formatting covers only app
 Dart code, tests, and tools. Review native changes separately. The Python tests exercise
 signing configuration without requiring real signing secrets. APK and model
