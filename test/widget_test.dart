@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:maia_chess/data/providers.dart';
@@ -31,6 +32,11 @@ void main() {
 
     expect(find.text('Play (2 local players)'), findsOneWidget);
     expect(find.text('Maia-3 campaign'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('My performance'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('My performance'), findsOneWidget);
     expect(find.text('Saved games and PGN'), findsOneWidget);
     expect(find.text('Technical diagnostic (Phase 0)'), findsNothing);
@@ -54,6 +60,7 @@ void main() {
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.text('Play (2 local players)'));
     await tester.tap(find.text('Play (2 local players)'));
     await tester.pumpAndSettle();
 
@@ -85,6 +92,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continue saved game'));
     // Two callbacks before rebuilding must also respect the opening guard.
+    await tester.ensureVisible(find.text('Play (2 local players)'));
     await tester.tap(find.text('Play (2 local players)'));
     await tester.pump();
     expect(repository.reads, 1);

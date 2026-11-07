@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/constants/board_assets.dart';
@@ -22,8 +23,11 @@ import 'features/game/presentation/time_control_picker.dart';
 import 'features/history/presentation/history_screen.dart';
 import 'features/settings/presentation/appearance_screen.dart';
 import 'features/stats/presentation/stats_screen.dart';
+import 'core/widgets/home_widgets.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   registerChessAssetLicenses();
   runApp(const ProviderScope(child: MaiaChessApp()));
 }
@@ -68,10 +72,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _openingGame = true);
     try {
       await open();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open the game: $error')),
+        const SnackBar(
+          content: Text('Could not open your game. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _openingGame = false);
@@ -92,7 +98,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final activeGame = ref.watch(activeGameProvider);
-    final colors = Theme.of(context).colorScheme;
+    final saved = activeGame.valueOrNull;
+    final busy = _openingGame || activeGame.isLoading;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Maia Chess'),
@@ -104,75 +111,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               context,
             ).push(AppPageRoute(builder: (_) => const AppearanceScreen())),
           ),
+          const SizedBox(width: AppSpacing.s),
         ],
       ),
       body: MaxWidthBody(
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.l),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.l,
+            AppSpacing.m,
+            AppSpacing.l,
+            AppSpacing.xl,
+          ),
           children: [
-            _HomeHeader(colors: colors),
+            HomeHero(
+              savedGame: saved,
+              loading: activeGame.isLoading,
+              opening: _openingGame,
+              onPlay: busy
+                  ? null
+                  : () => _openGame(
+                      () => saved == null
+                          ? _openNewAiGame(context, ref)
+                          : _resume(context, ref),
+                    ),
+            ),
             const SizedBox(height: AppSpacing.xl),
-            if (activeGame.valueOrNull != null) ...[
-              FilledButton.icon(
-                onPressed: _openingGame
+            const HomeSectionHeading(title: 'Find your next challenge'),
+            const SizedBox(height: AppSpacing.m),
+            if (saved != null) ...[
+              HomeActionTile(
+                icon: Icons.add_rounded,
+                title: 'Free play against Maia-3',
+                subtitle: 'Choose an opponent and play your way.',
+                onTap: busy
                     ? null
-                    : () => _openGame(() => _resume(context, ref)),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Continue saved game'),
+                    : () => _openGame(() => _openNewAiGame(context, ref)),
               ),
-              const SizedBox(height: AppSpacing.m),
+              const SizedBox(height: AppSpacing.s),
             ],
-            FilledButton.icon(
-              onPressed: _openingGame
+            HomeActionTile(
+              icon: Icons.flag_outlined,
+              title: 'Maia-3 campaign',
+              subtitle: 'Build your game, one level at a time.',
+              onTap: busy
                   ? null
                   : () => _openGame(() async {
                       await Navigator.of(context).push(
                         AppPageRoute(builder: (_) => const CampaignScreen()),
                       );
                     }),
-              icon: const Icon(Icons.flag_outlined),
-              label: const Text('Maia-3 campaign'),
-            ),
-            const SizedBox(height: AppSpacing.m),
-            FilledButton.tonalIcon(
-              onPressed: _openingGame
-                  ? null
-                  : () => _openGame(() => _openNewAiGame(context, ref)),
-              icon: const Icon(Icons.psychology_outlined),
-              label: const Text('Free play against Maia-3'),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              'More options',
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.s),
+            HomeActionTile(
+              icon: Icons.people_outline_rounded,
+              title: 'Play (2 local players)',
+              subtitle: 'Share the board with someone nearby.',
+              onTap: busy
+                  ? null
+                  : () => _openGame(() => _startLocalGame(context, ref)),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            const HomeSectionHeading(title: 'Your chess notebook'),
+            const SizedBox(height: AppSpacing.m),
             Card(
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.sports_esports_outlined),
-                    title: const Text('Play (2 local players)'),
-                    onTap: _openingGame
-                        ? null
-                        : () => _openGame(() => _startLocalGame(context, ref)),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.insights_outlined),
-                    title: const Text('My performance'),
+                  HomeActionTile(
+                    icon: Icons.insights_outlined,
+                    title: 'My performance',
+                    subtitle: 'Rating, results and progress',
+                    outlined: false,
                     onTap: () => Navigator.of(
                       context,
                     ).push(AppPageRoute(builder: (_) => const StatsScreen())),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.history),
-                    title: const Text('Saved games and PGN'),
+                  const Divider(indent: 64, endIndent: AppSpacing.l),
+                  HomeActionTile(
+                    icon: Icons.book_outlined,
+                    title: 'Saved games and PGN',
+                    subtitle: 'Replay, review and learn',
+                    outlined: false,
                     onTap: () => Navigator.of(
                       context,
                     ).push(AppPageRoute(builder: (_) => const HistoryScreen())),
@@ -183,7 +201,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (activeGame.hasError) ...[
               const SizedBox(height: AppSpacing.m),
               ErrorStateCard(
-                message: 'Failed to check autosave: ${activeGame.error}',
+                message:
+                    'Your saved game could not be loaded. Try again before starting a new game.',
                 onRetry: () => ref.invalidate(activeGameProvider),
               ),
             ],
@@ -281,62 +300,5 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ) ??
         false;
-  }
-}
-
-class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.colors});
-
-  final ColorScheme colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl - 2),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-        border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: colors.primary,
-              borderRadius: BorderRadius.circular(AppRadius.medium),
-            ),
-            child: Icon(
-              Icons.castle_outlined,
-              color: colors.onPrimary,
-              size: 30,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.l),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Maia Chess',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontFamily: AppTypography.accentFontFamily,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                const Text('Offline chess against a human-style AI (Maia-3)'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
