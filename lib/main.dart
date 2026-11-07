@@ -18,6 +18,7 @@ import 'features/difficulty/presentation/campaign_screen.dart';
 import 'features/difficulty/presentation/new_game_vs_ai_screen.dart';
 import 'features/game/application/game_controller.dart';
 import 'features/game/presentation/game_screen.dart';
+import 'features/game/presentation/time_control_picker.dart';
 import 'features/history/presentation/history_screen.dart';
 import 'features/settings/presentation/appearance_screen.dart';
 import 'features/stats/presentation/stats_screen.dart';
@@ -225,7 +226,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _startLocalGame(BuildContext context, WidgetRef ref) async {
     if (!await _confirmReplacingActiveGame(context, ref)) return;
     if (!context.mounted) return;
-    await ref.read(gameControllerProvider.notifier).startTwoPlayers();
+    final timeControl = await showTimeControlDialog(context);
+    if (timeControl == null || !context.mounted) return;
+    await ref
+        .read(gameControllerProvider.notifier)
+        .startTwoPlayers(timeControl: timeControl);
     if (!context.mounted) return;
     final error = ref.read(gameControllerProvider).persistenceError;
     if (error != null) {

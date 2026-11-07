@@ -15,8 +15,10 @@ import '../../history/domain/game_replayer.dart';
 import '../../hints/domain/hint_result.dart';
 import '../../pgn/application/pgn_service.dart';
 import '../../tactics/domain/tactical_analysis.dart';
+import 'game_clock.dart';
 import 'game_state.dart';
 import 'move_feedback.dart';
+import 'time_control.dart';
 
 typedef MaiaEngineFactory = MaiaEngine Function();
 typedef StockfishEngineFactory = StockfishEngine Function();
@@ -68,6 +70,10 @@ class GameController extends Notifier<GameState> {
   static const _minimumMaiaReplyMs = 500;
   static const _maximumMaiaReplyMs = 1100;
 
+  Timer? _clockTimer;
+  int? _clockCheckpointMs;
+  bool _clockPaused = false;
+
   final _random = Random();
   void Function()? _cancelMaiaReplyDelay;
   MaiaEngine? _maia;
@@ -113,7 +119,10 @@ class GameController extends Notifier<GameState> {
 
   /// Start a local two-player game and dispose engines from any previous AI
   /// game.
-  Future<void> startTwoPlayers() async {
+  Future<void> startTwoPlayers({
+    TimeControl timeControl = const TimeControl(),
+  }) async {
+    timeControl.validate();
     _activeStart?.cancel();
     final generation = _invalidateCurrentGame();
     await _gameStartTail;
@@ -122,8 +131,10 @@ class GameController extends Notifier<GameState> {
     if (!_isCurrentGame(generation)) return;
     await _disposeEngines();
     if (!_isCurrentGame(generation)) return;
-    state = GameState.initial();
-    await _beginPersistedGame();
+    state = _withTimeControl(GameState.initial(), timeControl);
+    if (await _beginPersistedGame() && _isCurrentGame(generation)) {
+      _startClock();
+    }
   }
 
   /// Start an AI game with [humanSide] against Maia-3 at [levelRating]
@@ -133,8 +144,10 @@ class GameController extends Notifier<GameState> {
     required Side humanSide,
     required int levelRating,
     bool campaignMode = false,
+    TimeControl timeControl = const TimeControl(),
     GameStartRequest? request,
   }) async {
+    timeControl.validate();
     DifficultyLevel.byRating(levelRating); // Validate before changing state.
     if (request?.isCancelled == true) return Future.value(false);
     _activeStart?.cancel();
@@ -159,6 +172,7 @@ class GameController extends Notifier<GameState> {
         humanSide: humanSide,
         levelRating: levelRating,
         campaignMode: campaignMode,
+        timeControl: timeControl,
         generation: gameGeneration,
         request: startRequest,
       ),
@@ -182,6 +196,7 @@ class GameController extends Notifier<GameState> {
     required Side humanSide,
     required int levelRating,
     required bool campaignMode,
+    required TimeControl timeControl,
     required int generation,
     required GameStartRequest request,
   }) async {
@@ -204,7 +219,7 @@ class GameController extends Notifier<GameState> {
       );
     }
 
-    var candidate = GameState.initial().copyWith(
+    var candidate = _withTimeControl(GameState.initial(), timeControl).copyWith(
       aiSide: humanSide.opposite,
       levelRating: levelRating,
       campaignMode: campaignMode,
@@ -248,6 +263,7 @@ class GameController extends Notifier<GameState> {
       persisted = true;
       if (!active()) return false;
       state = candidate;
+      _startClock();
       if (candidate.sanHistory.isNotEmpty) {
         unawaited(ref.read(moveSoundPlayerProvider)(candidate.sanHistory.last));
       }
@@ -331,6 +347,7 @@ class GameController extends Notifier<GameState> {
       campaignMode: stored.campaignMode,
       clockEnabled: stored.clockEnabled,
       initialTimeMs: stored.initialTimeMs,
+      incrementMs: stored.incrementMs,
       whiteTimeMs: stored.whiteTimeMs,
       blackTimeMs: stored.blackTimeMs,
     );
@@ -358,8 +375,10 @@ class GameController extends Notifier<GameState> {
       }
       if (!_isCurrentGame(generation)) return false;
       state = state.copyWith(aiThinking: false);
+      _startClock();
       return _maybePlayAiTurn();
     }
+    _startClock();
     return true;
   }
 
@@ -496,8 +515,11 @@ class GameController extends Notifier<GameState> {
   /// native engines. Throw [PlayException] if the move is illegal in the
   /// current position.
   Future<void> _applyMove(Move move, {required GameMoveActor actor}) async {
+    _settleClock();
+    if (state.isGameOver) return;
     final next = _stateAfterMove(state, move, actor: actor);
     state = next;
+    _startClock();
     unawaited(ref.read(moveSoundPlayerProvider)(next.sanHistory.last));
     await _persistCurrentGame();
   }
@@ -510,6 +532,12 @@ class GameController extends Notifier<GameState> {
     final (newPosition, san) = before.position.makeSan(move);
     final now = DateTime.now().toUtc();
     return before.copyWith(
+      whiteTimeMs: before.clockEnabled && before.position.turn == Side.white
+          ? before.whiteTimeMs! + before.incrementMs
+          : before.whiteTimeMs,
+      blackTimeMs: before.clockEnabled && before.position.turn == Side.black
+          ? before.blackTimeMs! + before.incrementMs
+          : before.blackTimeMs,
       position: newPosition as Chess,
       positionHistory: [...before.positionHistory, before.position],
       sanHistory: [...before.sanHistory, san],
@@ -536,6 +564,8 @@ class GameController extends Notifier<GameState> {
         return;
       }
     }
+    _settleClock();
+    if (state.isGameOver) return;
     final history = [...state.positionHistory];
     final sanHistory = [...state.sanHistory];
     final uciHistory = [...state.uciHistory];
@@ -569,6 +599,8 @@ class GameController extends Notifier<GameState> {
       clearSelection: true,
       evaluated: false,
     );
+    // Undo retains the remaining balances; it never refunds time or adds increment.
+    _startClock();
     await _persistCurrentGame();
   }
 
@@ -906,7 +938,7 @@ class GameController extends Notifier<GameState> {
       await _discardMaia();
       if (!_isCurrentGame(generation)) return;
     }
-    state = GameState.initial().copyWith(
+    state = _withTimeControl(GameState.initial(), state.timeControl).copyWith(
       aiSide: state.aiSide,
       levelRating: state.levelRating,
       campaignMode: state.campaignMode,
@@ -914,6 +946,7 @@ class GameController extends Notifier<GameState> {
     final playerSide = state.aiSide?.opposite;
     if (!await _beginPersistedGame(playerSide: playerSide)) return;
     if (!_isCurrentGame(generation)) return;
+    _startClock();
     await _maybePlayAiTurn();
   }
 
@@ -960,11 +993,18 @@ class GameController extends Notifier<GameState> {
     state = state.copyWith(aiThinking: true, clearEngineError: true);
     try {
       final levelRating = state.levelRating!;
+      if (_maia?.isReady != true) {
+        _settleClock();
+        _stopClock();
+        _publishClock();
+        if (!_isCurrentGame(gameGeneration)) return false;
+      }
       await _ensureEngineLoaded(
         levelRating,
         stillNeeded: () => _isCurrentGame(gameGeneration),
       );
       if (!_isCurrentGame(gameGeneration)) return false;
+      _startClock();
       final uci = await _maia!.getMove(
         [...state.positionHistory, state.position],
         selfElo: levelRating,
@@ -979,6 +1019,7 @@ class GameController extends Notifier<GameState> {
       // affect a restarted game.
       if (_isCurrentGame(gameGeneration) &&
           state.isAiTurn &&
+          !state.isGameOver &&
           state.position.fen == fen) {
         await _applyMove(move, actor: GameMoveActor.maia);
         return true;
@@ -986,6 +1027,9 @@ class GameController extends Notifier<GameState> {
       return false;
     } catch (e) {
       if (_isCurrentGame(gameGeneration)) {
+        _settleClock();
+        _stopClock();
+        _publishClock();
         final failedEngine = _maia;
         _maia = null;
         if (failedEngine != null) {
@@ -993,6 +1037,8 @@ class GameController extends Notifier<GameState> {
         }
         if (!_isCurrentGame(gameGeneration)) return false;
         state = state.copyWith(engineError: 'Maia-3: $e');
+        _publishClock();
+        await _persistCurrentGame();
       }
       return false;
     } finally {
@@ -1227,6 +1273,7 @@ class GameController extends Notifier<GameState> {
                       pgn: snapshot.pgn,
                       clockEnabled: snapshot.clockEnabled,
                       initialTimeMs: snapshot.initialTimeMs,
+                      incrementMs: snapshot.incrementMs,
                       whiteTimeMs: snapshot.whiteTimeMs,
                       blackTimeMs: snapshot.blackTimeMs,
                       moves: snapshot.moves,
@@ -1325,6 +1372,7 @@ class GameController extends Notifier<GameState> {
       currentFen: snapshotState.position.fen,
       clockEnabled: snapshotState.clockEnabled,
       initialTimeMs: snapshotState.initialTimeMs,
+      incrementMs: snapshotState.incrementMs,
       whiteTimeMs: snapshotState.whiteTimeMs,
       blackTimeMs: snapshotState.blackTimeMs,
       moves: List.unmodifiable(moves),
@@ -1355,6 +1403,7 @@ class GameController extends Notifier<GameState> {
 
   /// Explicitly persist the current state; per-move autosave remains active.
   Future<void> saveGame() async {
+    _settleClock();
     state = state.copyWith(clearPersistenceError: true);
     if (state.gameId == null &&
         !await _beginPersistedGame(playerSide: state.aiSide?.opposite)) {
@@ -1378,12 +1427,116 @@ class GameController extends Notifier<GameState> {
     await _disposeEngines();
   }
 
+  GameState _withTimeControl(GameState game, TimeControl control) =>
+      game.copyWith(
+        clockEnabled: control.enabled,
+        initialTimeMs: control.enabled ? control.initialTimeMs : null,
+        incrementMs: control.enabled ? control.incrementSeconds * 1000 : 0,
+        whiteTimeMs: control.enabled ? control.startingTimeMs : null,
+        blackTimeMs: control.enabled ? control.startingTimeMs : null,
+      );
+
+  /// Offline games pause while the app is backgrounded or the board is closed.
+  /// Engine replies already in flight may finish, but do not consume paused time.
+  void setClockPaused(bool paused) {
+    if (_isDisposed || _clockPaused == paused) return;
+    if (!state.clockEnabled) {
+      _clockPaused = paused;
+      return;
+    }
+    _settleClock();
+    _clockPaused = paused;
+    if (paused) {
+      _stopClock();
+      _publishClock();
+      if (state.clockEnabled) unawaited(_persistCurrentGame());
+    } else {
+      _startClock();
+    }
+  }
+
+  void _stopClock() {
+    _clockTimer?.cancel();
+    _clockTimer = null;
+    _clockCheckpointMs = null;
+  }
+
+  void _startClock() {
+    if (state.isGameOver) _stopClock();
+    if (_clockTimer != null) {
+      _publishClock();
+      return;
+    }
+    if (!_clockPaused &&
+        state.clockEnabled &&
+        !state.isGameOver &&
+        state.engineError == null) {
+      _clockCheckpointMs = ref.read(clockNowMsProvider)();
+      _clockTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        if (_isDisposed) return;
+        final reading = _clockReading();
+        if (reading.whiteMs == 0 || reading.blackMs == 0) {
+          _settleClock();
+        } else {
+          ref.read(gameClockProvider.notifier).state = reading;
+        }
+      });
+    }
+    _publishClock();
+  }
+
+  ClockReading _clockReading() {
+    final checkpoint = _clockCheckpointMs;
+    final elapsed = checkpoint == null
+        ? 0
+        : max(0, ref.read(clockNowMsProvider)() - checkpoint);
+    return ClockReading(
+      whiteMs: max(
+        0,
+        (state.whiteTimeMs ?? 0) -
+            (state.position.turn == Side.white ? elapsed : 0),
+      ),
+      blackMs: max(
+        0,
+        (state.blackTimeMs ?? 0) -
+            (state.position.turn == Side.black ? elapsed : 0),
+      ),
+      runningSide: checkpoint == null ? null : state.position.turn,
+    );
+  }
+
+  void _publishClock() {
+    ref.read(gameClockProvider.notifier).state = state.clockEnabled
+        ? _clockReading()
+        : null;
+  }
+
+  void _settleClock() {
+    if (_clockCheckpointMs == null) return;
+    final reading = _clockReading();
+    _clockCheckpointMs = ref.read(clockNowMsProvider)();
+    state = state.copyWith(
+      whiteTimeMs: reading.whiteMs,
+      blackTimeMs: reading.blackMs,
+    );
+    if (state.flaggedSide != null) {
+      // Reject late engine replies and promotion dialogs after flag fall.
+      _invalidateCurrentGame();
+      state = state.copyWith(aiThinking: false, clearSelection: true);
+      unawaited(cancelHint());
+      cancelOpponentThreats();
+      unawaited(_persistCurrentGame());
+    }
+    _publishClock();
+  }
+
   bool _hasOwnPieceAt(Square square) {
     final piece = state.position.board.pieceAt(square);
     return piece != null && piece.color == state.position.turn;
   }
 
   int _invalidateCurrentGame() {
+    _stopClock();
     _gameGeneration++;
     _cancelMaiaReplyDelay?.call();
     _cancelMaiaReplyDelay = null;

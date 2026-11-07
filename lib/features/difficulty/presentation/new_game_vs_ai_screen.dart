@@ -10,6 +10,8 @@ import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/max_width_body.dart';
 import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
+import '../../game/presentation/time_control_picker.dart';
+import '../../game/application/time_control.dart';
 
 /// Configure the human side and Maia-3 level for free play. Campaign selection
 /// lives in `CampaignScreen`.
@@ -22,6 +24,7 @@ class NewGameVsAiScreen extends ConsumerStatefulWidget {
 
 class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   Side _humanSide = Side.white;
+  TimeControl _timeControl = const TimeControl();
   int _levelRating = DifficultyLevel.all.first.rating;
   bool _starting = false;
   bool _leaving = false;
@@ -52,7 +55,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
   }
 
   Future<void> _start() async {
-    if (_starting || _leaving) return;
+    if (_starting || _leaving || !_timeControl.isValid) return;
     setState(() => _starting = true);
     final request = _startRequest = GameStartRequest();
     final controller = ref.read(gameControllerProvider.notifier);
@@ -60,6 +63,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
       final pending = _pendingStart = controller.startVsAi(
         humanSide: _humanSide,
         levelRating: _levelRating,
+        timeControl: _timeControl,
         request: request,
       );
       final started = await pending;
@@ -157,9 +161,16 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: AppSpacing.l),
+            TimeControlPicker(
+              value: _timeControl,
+              onChanged: _starting
+                  ? null
+                  : (value) => setState(() => _timeControl = value),
+            ),
             const SizedBox(height: AppSpacing.xl),
             FilledButton(
-              onPressed: _starting ? null : _start,
+              onPressed: _starting || !_timeControl.isValid ? null : _start,
               child: AnimatedSwitcher(
                 duration: AppMotion.fast,
                 transitionBuilder: (child, animation) =>

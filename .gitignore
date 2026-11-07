@@ -57,3 +57,6 @@ native/**/*.iml
 
 # Kotlin compiler session cache.
 /android/.kotlin/
+
+# Local task reference attachments.
+.codex-attachments/

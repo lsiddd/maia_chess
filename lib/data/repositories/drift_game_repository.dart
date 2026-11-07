@@ -220,6 +220,7 @@ class DriftGameRepository implements GameRepository {
       pgn: row.pgn,
       clockEnabled: row.clockEnabled,
       initialTimeMs: row.initialTimeMs,
+      incrementMs: row.incrementMs,
       whiteTimeMs: row.whiteTimeMs,
       blackTimeMs: row.blackTimeMs,
       moves: moves
@@ -325,6 +326,7 @@ class DriftGameRepository implements GameRepository {
       pgn: Value(game.pgn),
       clockEnabled: Value(game.clockEnabled),
       initialTimeMs: Value(game.initialTimeMs),
+      incrementMs: Value(game.incrementMs),
       whiteTimeMs: Value(game.whiteTimeMs),
       blackTimeMs: Value(game.blackTimeMs),
     );

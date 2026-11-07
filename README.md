@@ -86,6 +86,17 @@ From the home screen, choose how you'd like to play:
 Tap a piece and its destination, or drag it to a legal square. Use **More** to
 rotate the board, save the game, or change its appearance.
 
+Choose **Unlimited time** or **Clock** before starting any mode. With a clock,
+set **Minutes per player** and **Increment in seconds** (0–180 each). The
+increment is added after every legal move. With zero minutes, each player
+starts with one increment; a clock cannot have both values set to zero.
+
+Both clocks appear above the board, with the active side highlighted. Running
+out of time ends the game; it is a draw if the opponent has insufficient mating
+material. Clocks pause when you leave the game, open appearance settings, or
+background the app, and resume with the saved balances. Restart and rematch
+keep the time control. Undo retains the remaining time without a refund.
+
 Your ongoing game saves automatically after each move. When you come back,
 tap **Continue saved game** to pick up where you left off.
 

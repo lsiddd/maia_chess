@@ -33,6 +33,7 @@ class Games extends Table {
   TextColumn get currentFen => text()();
   TextColumn get pgn => text().nullable()();
   BoolColumn get clockEnabled => boolean().withDefault(const Constant(false))();
+  IntColumn get incrementMs => integer().withDefault(const Constant(0))();
   IntColumn get initialTimeMs => integer().nullable()();
   IntColumn get whiteTimeMs => integer().nullable()();
   IntColumn get blackTimeMs => integer().nullable()();
@@ -114,7 +115,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.connect(DatabaseConnection super.connection);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -127,6 +128,9 @@ class AppDatabase extends _$AppDatabase {
         await migrator.createAll();
         await _seedDefaults();
         return;
+      }
+      if (from < 6) {
+        await migrator.addColumn(games, games.incrementMs);
       }
       if (from < 2) {
         await migrator.addColumn(

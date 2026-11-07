@@ -18,6 +18,7 @@ import 'board_accessibility.dart';
 import 'chess_board_widget.dart';
 import 'game_move_history.dart';
 import 'game_toolbar.dart';
+import 'game_clocks.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -31,6 +32,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   late final LiveThreatController _plans;
   bool _flipped = false;
   bool _savingSettings = false;
+  bool _appearanceOpen = false;
   bool _postGameActionPending = false;
   int _planIndex = 0;
   String? _noticeText;
@@ -47,12 +49,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
       }
     }, fireImmediately: true);
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _controller.setClockPaused(false);
+    });
     unawaited(WakelockPlus.enable());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _plans.setPaused(state != AppLifecycleState.resumed);
+    _controller.setClockPaused(
+      state != AppLifecycleState.resumed || _appearanceOpen,
+    );
     if (state != AppLifecycleState.resumed) {
       ref.read(visualHintProvider.notifier).clear();
       unawaited(_controller.cancelHint());
@@ -62,6 +70,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   @override
   void dispose() {
+    scheduleMicrotask(() => _controller.setClockPaused(true));
     _noticeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_controller.cancelHint());
@@ -304,15 +313,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
           game.aiSide == null ? 'Local game' : 'Maia-3 ${game.levelRating}',
         ),
         actions: [
-          if (game.isGameOver &&
-              game.gameId != null &&
-              game.sanHistory.isNotEmpty) ...[
-            TextButton(
-              onPressed: _postGameActionPending
-                  ? null
-                  : () => _afterGame(review: true),
-              child: const Text('Review game'),
-            ),
+          if (game.isGameOver && game.gameId != null) ...[
+            if (game.sanHistory.isNotEmpty)
+              TextButton(
+                onPressed: _postGameActionPending
+                    ? null
+                    : () => _afterGame(review: true),
+                child: const Text('Review game'),
+              ),
             IconButton(
               tooltip: 'Rematch',
               onPressed: _postGameActionPending
@@ -329,18 +337,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth >= 620 &&
+              if (constraints.maxWidth >= 560 &&
                   constraints.maxWidth > constraints.maxHeight) {
                 return Row(
                   children: [
                     Expanded(child: board),
                     const SizedBox(width: 16),
                     SizedBox(
-                      width: 300,
+                      width: constraints.maxWidth < 620 ? 260 : 300,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           status,
+                          if (game.clockEnabled)
+                            GameClocks(orientation: orientation),
                           const SizedBox(height: 12),
                           toolbar,
                           history,
@@ -353,6 +363,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               return Column(
                 children: [
                   status,
+                  if (game.clockEnabled) GameClocks(orientation: orientation),
                   Expanded(child: board),
                   toolbar,
                   history,
@@ -466,9 +477,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
         final error = ref.read(gameControllerProvider).persistenceError;
         _notice(error ?? 'Game saved.');
       case 'settings':
-        await Navigator.of(
-          context,
-        ).push(AppPageRoute(builder: (_) => const AppearanceScreen()));
+        _appearanceOpen = true;
+        _controller.setClockPaused(true);
+        try {
+          await Navigator.of(
+            context,
+          ).push(AppPageRoute(builder: (_) => const AppearanceScreen()));
+        } finally {
+          _appearanceOpen = false;
+          if (mounted &&
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed) {
+            _controller.setClockPaused(false);
+          }
+        }
       case 'filter':
         await _settings(ownOnly: !settings.ownAttackedPiecesOnly);
       case 'help':
