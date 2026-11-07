@@ -3,8 +3,8 @@
   "mode": "debug integration test",
   "device": "maia_test ARM64 emulator",
   "baseline_apk_bytes": 439745849,
-  "release_apk_bytes": 379009578,
-  "compressed_native_bytes": 92434839,
+  "release_apk_bytes": 379012714,
+  "compressed_native_bytes": 92437974,
   "uncompressed_native_bytes": 153067248,
   "lifecycle": {
     "before_rss": 380973056,

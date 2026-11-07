@@ -69,15 +69,15 @@ and native 16 KB alignment, and CI checks signature and ZIP alignment.
 
 ## Measurements and validation
 
-Local ARM64 release APK: **379,009,578 bytes**, versus the prior
-439,745,849-byte artifact: **60,736,271 bytes (13.81%) less**. Native entries
-contain 153,067,248 uncompressed bytes and 92,434,839 compressed bytes. Because
+Local ARM64 release APK: **379,012,714 bytes**, versus the prior
+439,745,849-byte artifact: **60,733,135 bytes (13.81%) less**. Native entries
+contain 153,067,248 uncompressed bytes and 92,437,974 compressed bytes. Because
 Android now extracts them, the APK-plus-native-libraries installed footprint is
 roughly 92 MB larger than before (before filesystem overhead and app data).
 The 307,514,441-byte FP32 model is unchanged. This is a distribution tradeoff,
 not a claim of lower installed storage or smaller neural weights.
 
-The updated Dart suite passes **373 tests**, with **13 Python release-tool tests**.
+The updated Dart suite passes **374 tests**, with **13 Python release-tool tests**.
 The ARM64 acceptance suite passes **84 tests**. After the final worker-path
 changes, five affected native session/restore/review flows were rerun and passed.
 Release compilation, Android Lint, model/native APK verification, signature
@@ -96,7 +96,8 @@ against earlier measurements. Exact data and context are in
 
 
 Regression coverage includes library projections over 1,100 games, incremental
-versus rebuilt rating/campaign state after every completion and deletion, failed
+versus rebuilt rating/campaign state after every completion and deletion
+(including timestamps that collapse to the same SQLite second), failed
 FIFO write recovery, resource disposal and generation races, worker replay
 validation, model cache invalidation, and bounded file imports.
 
