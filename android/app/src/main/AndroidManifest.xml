@@ -3,7 +3,8 @@
          when the device's backup service is enabled. The app has no account
          or application-level cloud synchronisation. -->
     <application
-        android:label="maia_chess"
+        android:label="Maia Chess"
+        android:enableOnBackInvokedCallback="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
