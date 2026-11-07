@@ -33,18 +33,18 @@ You'll need **Android 7.0 or newer on a 64-bit ARM device (ARM64)**. The Maia-3 
 3. Launch **Maia Chess** and choose a mode. You're ready to play.
 
 Want the newest development build? [Try the nightly](https://github.com/lsiddd/maia_chess/releases/tag/nightly),
-updated after changes to `main` pass CI.
+updated after verified changes to `main`, daily at 06:17 UTC, or by manual nightly dispatch.
 
 ## A look inside
 
 <table>
   <tr>
-    <td align="center" width="33%"><strong>Play against Maia</strong></td>
+    <td align="center" width="33%"><strong>Play and practise</strong></td>
     <td align="center" width="33%"><strong>Climb the campaign</strong></td>
     <td align="center" width="33%"><strong>Make it yours</strong></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/game.png" alt="A game against Maia with the chessboard, move history, and practice toolbar" width="250"></td>
+    <td align="center"><img src="docs/images/game.png" alt="Chessboard with move history and the practice toolbar" width="250"></td>
     <td align="center"><img src="docs/images/campaign.png" alt="Maia campaign showing the first level and the path to higher opponents" width="250"></td>
     <td align="center"><img src="docs/images/appearance.png" alt="Appearance settings with a board preview, app theme, and board colours" width="250"></td>
   </tr>
@@ -149,7 +149,9 @@ Cburnett pieces. Your settings also carry over to game replays.
 
 The board works in portrait and landscape, supports tap and drag controls,
 and includes square labels and accessibility announcements. The screen stays
-awake while you play.
+awake while you play. Reduced-motion preferences, larger text, and Android
+back navigation are respected throughout the redesigned screens.
+See the [design decisions and validation](docs/ui-ux-redesign.md).
 
 Your games, settings, statistics, and campaign progress are stored on your
 device. You can play without an account or an internet connection and take
