@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:maia_chess/core/theming/app_theme.dart';
 import 'package:maia_chess/data/providers.dart';
+import 'package:maia_chess/data/local/app_database.dart';
 import 'package:maia_chess/data/repositories/settings_repository.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/presentation/chess_board_widget.dart';
@@ -22,14 +23,14 @@ void main() {
   testWidgets('game screen: tools, history, menus, autosave, and restart', (
     tester,
   ) async {
-    final container = ProviderContainer();
+    final container = _TestContainer();
     final game = container.read(gameControllerProvider.notifier);
     try {
       await container
           .read(settingsRepositoryProvider)
           .save(const StoredAppSettings());
       await game.startTwoPlayers();
-      await _showGame(tester, container);
+      await _showGame(tester, container.container);
       final board = _rect(tester);
       _expectVisible(tester);
       await tester.tap(find.byKey(const Key('hint-button')));
@@ -161,14 +162,14 @@ void main() {
     } finally {
       await tester.pumpWidget(const SizedBox());
       await game.shutdownEngines();
-      container.dispose();
+      await container.close();
     }
   }, timeout: const Timeout(Duration(minutes: 5)));
 
   testWidgets(
     'game screen: real Maia-3 free play, Stockfish hint, paired undo, and resume',
     (tester) async {
-      var container = ProviderContainer();
+      var container = _TestContainer();
       try {
         await container
             .read(settingsRepositoryProvider)
@@ -178,7 +179,7 @@ void main() {
           await game.startVsAi(humanSide: Side.white, levelRating: 1100),
           isTrue,
         );
-        await _showGame(tester, container);
+        await _showGame(tester, container.container);
         final board = _rect(tester);
         await _move(tester, 'e2', 'e4');
         await _until(
@@ -203,14 +204,14 @@ void main() {
         await game.flushPersistence();
         await tester.pumpWidget(const SizedBox());
         await game.shutdownEngines();
-        container.dispose();
-        container = ProviderContainer();
+        await container.close();
+        container = _TestContainer();
         game = container.read(gameControllerProvider.notifier);
         expect(await game.restoreActiveGame(), isTrue);
         expect(container.read(gameControllerProvider).position.fen, fen);
         expect(container.read(gameControllerProvider).evaluated, isFalse);
         expect(container.read(gameControllerProvider).campaignMode, isFalse);
-        await _showGame(tester, container);
+        await _showGame(tester, container.container);
         await tester.tap(find.text('Undo'));
         await tester.pumpAndSettle();
         expect(container.read(gameControllerProvider).uciHistory, isEmpty);
@@ -222,7 +223,7 @@ void main() {
       } finally {
         await tester.pumpWidget(const SizedBox());
         await container.read(gameControllerProvider.notifier).shutdownEngines();
-        container.dispose();
+        await container.close();
       }
     },
     timeout: const Timeout(Duration(minutes: 5)),
@@ -231,7 +232,7 @@ void main() {
   testWidgets('campaign preserves rating with saved attack preference', (
     tester,
   ) async {
-    final container = ProviderContainer();
+    final container = _TestContainer();
     final game = container.read(gameControllerProvider.notifier);
     final settings = container.read(settingsRepositoryProvider);
     final previousSettings = await settings.get();
@@ -245,7 +246,7 @@ void main() {
         ),
         isTrue,
       );
-      await _showGame(tester, container);
+      await _showGame(tester, container.container);
       await _move(tester, 'e2', 'e4');
       await _until(
         tester,
@@ -274,7 +275,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await settings.save(previousSettings);
       await game.shutdownEngines();
-      container.dispose();
+      await container.close();
     }
   }, timeout: const Timeout(Duration(minutes: 5)));
 }
@@ -329,4 +330,22 @@ Future<void> _menu(WidgetTester tester, String option) async {
   await tester.ensureVisible(target);
   await tester.tap(target);
   await tester.pumpAndSettle();
+}
+
+// Own the database explicitly so a recreated container cannot race async close.
+class _TestContainer {
+  _TestContainer() : this._(AppDatabase());
+  _TestContainer._(this.database)
+    : container = ProviderContainer(
+        overrides: [appDatabaseProvider.overrideWithValue(database)],
+      );
+  final AppDatabase database;
+  final ProviderContainer container;
+
+  T read<T>(ProviderListenable<T> provider) => container.read(provider);
+
+  Future<void> close() async {
+    container.dispose();
+    await database.close();
+  }
 }

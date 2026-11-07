@@ -4,6 +4,7 @@ import 'game_controller_test.dart' show FakeGameRepository;
 
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
@@ -315,52 +316,63 @@ void main() {
       testWidgets(
         'castling synchronises king and rook: $side, queenside=$queenSide; undo clears flight',
         (tester) async {
-          final position = Chess.fromSetup(
-            Setup.parseFen(
-              'r3k2r/8/8/8/8/8/8/R3K2R ${side == Side.white ? 'w' : 'b'} KQkq - 0 1',
-            ),
-          );
-          final container = await mount(tester, position: position);
-          final controller = container.read(gameControllerProvider.notifier);
-          final row = side == Side.white ? 7 : 0;
-          await controller.attemptDragMove(
-            side == Side.white ? Square.e1 : Square.e8,
-            Square.fromCoords(
-              File(queenSide ? 2 : 6),
-              Rank(side == Side.white ? 0 : 7),
-            ),
-            onPromotion: () async => null,
-          );
-          await tester.pump();
-          expect(slide, findsOneWidget);
-          expect(rookSlide, findsOneWidget);
-          Offset center(Finder layer) => tester.getCenter(
-            find.descendant(of: layer, matching: find.byType(ChessPieceWidget)),
-          );
-          final kingStart = center(slide);
-          final rookStart = center(rookSlide);
-          await tester.pump(const Duration(milliseconds: 100));
-          final kingEnd = tester.getCenter(square(row, queenSide ? 2 : 6));
-          final rookEnd = tester.getCenter(square(row, queenSide ? 3 : 5));
-          final kingProgress =
-              (center(slide).dx - kingStart.dx) / (kingEnd.dx - kingStart.dx);
-          final rookProgress =
-              (center(rookSlide).dx - rookStart.dx) /
-              (rookEnd.dx - rookStart.dx);
-          expect(kingProgress, greaterThan(0));
-          expect(kingProgress, lessThan(1));
-          expect(kingProgress, closeTo(rookProgress, 0.0001));
-          await controller.undo();
-          await tester.pump();
-          expect(slide, findsNothing);
-          expect(rookSlide, findsNothing);
-          await tester.pumpAndSettle();
-          expect(
-            container.read(gameControllerProvider).position.fen,
-            position.fen,
-          );
-          expect(find.byType(ChessPieceWidget), findsNWidgets(6));
-          expect(tester.takeException(), isNull);
+          // Live frames use wall time. Slow only this test's animation so
+          // inspecting both intermediate positions cannot race completion.
+          final previousDilation = timeDilation;
+          timeDilation = 10;
+          try {
+            final position = Chess.fromSetup(
+              Setup.parseFen(
+                'r3k2r/8/8/8/8/8/8/R3K2R ${side == Side.white ? 'w' : 'b'} KQkq - 0 1',
+              ),
+            );
+            final container = await mount(tester, position: position);
+            final controller = container.read(gameControllerProvider.notifier);
+            final row = side == Side.white ? 7 : 0;
+            await controller.attemptDragMove(
+              side == Side.white ? Square.e1 : Square.e8,
+              Square.fromCoords(
+                File(queenSide ? 2 : 6),
+                Rank(side == Side.white ? 0 : 7),
+              ),
+              onPromotion: () async => null,
+            );
+            await tester.pump();
+            expect(slide, findsOneWidget);
+            expect(rookSlide, findsOneWidget);
+            Offset center(Finder layer) => tester.getCenter(
+              find.descendant(
+                of: layer,
+                matching: find.byType(ChessPieceWidget),
+              ),
+            );
+            final kingStart = center(slide);
+            final rookStart = center(rookSlide);
+            await tester.pump(const Duration(seconds: 1));
+            final kingEnd = tester.getCenter(square(row, queenSide ? 2 : 6));
+            final rookEnd = tester.getCenter(square(row, queenSide ? 3 : 5));
+            final kingProgress =
+                (center(slide).dx - kingStart.dx) / (kingEnd.dx - kingStart.dx);
+            final rookProgress =
+                (center(rookSlide).dx - rookStart.dx) /
+                (rookEnd.dx - rookStart.dx);
+            expect(kingProgress, greaterThan(0));
+            expect(kingProgress, lessThan(1));
+            expect(kingProgress, closeTo(rookProgress, 0.0001));
+            await controller.undo();
+            await tester.pump();
+            expect(slide, findsNothing);
+            expect(rookSlide, findsNothing);
+            await tester.pumpAndSettle();
+            expect(
+              container.read(gameControllerProvider).position.fen,
+              position.fen,
+            );
+            expect(find.byType(ChessPieceWidget), findsNWidgets(6));
+            expect(tester.takeException(), isNull);
+          } finally {
+            timeDilation = previousDilation;
+          }
         },
       );
     }
