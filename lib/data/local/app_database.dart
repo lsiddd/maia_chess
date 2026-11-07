@@ -197,7 +197,17 @@ class AppDatabase extends _$AppDatabase {
         }.contains(game.result)) {
       return;
     }
-    final ended = (game.endedAtUtc ?? game.lastModifiedAtUtc).toUtc();
+    // Compare persisted precision, exactly as the full rebuild does. Two
+    // distinct Dart timestamps can become the same SQLite timestamp.
+    final storedTime =
+        await (selectOnly(games)
+              ..addColumns([games.endedAtUtc, games.lastModifiedAtUtc])
+              ..where(games.id.equals(game.id)))
+            .getSingle();
+    final ended =
+        (storedTime.read(games.endedAtUtc) ??
+                storedTime.read(games.lastModifiedAtUtc)!)
+            .toUtc();
     final last =
         await (select(ratingHistory)
               ..orderBy([
