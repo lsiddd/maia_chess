@@ -38,14 +38,12 @@ remains tracked to prevent unsafe concurrent sessions, while local chess stays
 available.
 
 The audit's memory sample (about 737 MiB PSS) and 439.7 MB APK are baseline
-observations, not evidence of a leak. Reducing model/native weight requires
-separate parity and device performance evidence. Library hydration, synchronous
-replay of very large imports, full derived-state rebuilding and controller
-responsibility splitting remain scalability/architecture work, not resolved by
-these fixes.
+observations, not evidence of a leak. The subsequent resource-efficiency work
+addresses list hydration, large replay/export work, derived-state rebuilding,
+persistence responsibilities, engine lifetime, APK packaging, Android toolchain
+migration and native integration automation. See
+[resource-efficiency.md](resource-efficiency.md) for implementation boundaries,
+measured results and remaining platform constraints.
 
 Dependency updates are not security fixes merely because newer versions exist.
-The pinned Gradle/AGP/Kotlin versions still build, but Flutter emits future-support
-warnings. A coordinated toolchain migration and Android integration automation
-remain outstanding; the new lint job does not replace device tests. The manifest
-back-callback attribute is intentionally ignored below API 33.
+The manifest back-callback attribute is intentionally ignored below API 33.

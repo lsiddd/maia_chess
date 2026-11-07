@@ -9,7 +9,7 @@ CMake 3.22.1.
 
 | Trigger | Checks | APK and publication |
 | --- | --- | --- |
-| Pull request targeting `main` | Analysis, formatting, Flutter tests, Python tests | No APK job or publication |
+| Pull request targeting `main` | Analysis, formatting, Flutter tests, Python tests, native Android acceptance | No APK job or publication |
 | Push to `main` | Same checks | Release-signed ARM64 artifact and moving nightly pre-release |
 | Push of a tag matching `v*` | Same checks; tag must validate as `vX.Y.Z` | Release-signed ARM64 artifact and stable release |
 | Daily at 06:17 UTC / 03:17 America/Belem | Same checks | Signed nightly from current `main` |
@@ -136,3 +136,8 @@ source. Source/build defects require a corrected commit and new version tag.
 If a release already exists, investigate it separately instead of assuming a
 retry will overwrite it. Never translate published history or external release
 notes by force-pushing tags.
+
+Native Android acceptance is a publication gate alongside the verified ARM64
+APK. The emulator's x86_64 ORT dependency is debug-only and is not distributed.
+To rerun an older stable release, dispatch the workflow from that same tag so
+its build/test configuration matches the source being released.

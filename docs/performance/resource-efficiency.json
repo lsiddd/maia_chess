@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-07",
+  "mode": "debug integration test",
+  "device": "maia_test ARM64 emulator",
+  "baseline_apk_bytes": 439745849,
+  "release_apk_bytes": 379009578,
+  "compressed_native_bytes": 92434839,
+  "uncompressed_native_bytes": 153067248,
+  "lifecycle": {
+    "before_rss": 380973056,
+    "loaded_rss": 980217856,
+    "released_rss": 363900928,
+    "resume_ms": 718
+  },
+  "model_validation": {
+    "model": "Maia-3 79M FP32",
+    "extraction_ms": 0,
+    "startup_ms": 455,
+    "inferences": 192,
+    "median_ms": 70,
+    "p95_ms": 73,
+    "max_probability_error": 1.0308356891086667e-05,
+    "rss_bytes": 832540672,
+    "max_rss_bytes": 989413376
+  },
+  "notes": [
+    "RSS is not comparable to the earlier PSS sample.",
+    "Model extraction is warm after the lifecycle test in the same process.",
+    "Single local observation, not a cross-device threshold."
+  ],
+  "lifecycle_recheck": {
+    "before_rss": 385974272,
+    "loaded_rss": 1023553536,
+    "released_rss": 408035328,
+    "resume_ms": 624
+  },
+  "arm64_acceptance_tests": 84,
+  "final_flow_recheck_tests": 5
+}
