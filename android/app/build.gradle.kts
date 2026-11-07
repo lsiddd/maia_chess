@@ -28,7 +28,7 @@ if (hasReleaseKeystore) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
-extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
+android {
     namespace = "com.maiachess.maia_chess"
     compileSdk = flutter.compileSdkVersion
     // Pinned native toolchain for release reproducibility.
