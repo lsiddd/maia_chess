@@ -1,3 +1,4 @@
+import 'package:maia_chess/features/pgn/application/pgn_service.dart';
 import 'dart:async';
 
 import 'package:dartchess/dartchess.dart';
@@ -82,7 +83,7 @@ void main() {
       expect(container.read(gameControllerProvider).whiteTimeMs, 60500);
       expect(repository.games.values.single.incrementMs, 2000);
       expect(
-        repository.games.values.single.pgn,
+        const PgnService().export(repository.games.values.single),
         contains('[TimeControl "60+2"]'),
       );
       controller.setClockPaused(true);

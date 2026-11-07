@@ -242,9 +242,11 @@ class PgnService {
 
   List<String> _sanTokens(String plain) {
     final result = <String>[];
-    for (final match in RegExp(r'\S+').allMatches(plain)) {
+    for (final match in RegExp(
+      r'\$\d+|\d+\s*\.(?:\s*\.)*|[^\s$]+|\$',
+    ).allMatches(plain)) {
       var token = match[0]!;
-      token = token.replaceFirst(RegExp(r'^\d+\.(?:\.\.)?'), '');
+      token = token.replaceFirst(RegExp(r'^\d+\s*\.(?:\s*\.)*'), '');
       if (token.isEmpty ||
           token == '...' ||
           token == 'e.p.' ||
@@ -281,6 +283,9 @@ class PgnService {
 
     for (var i = 0; i < source.length; i++) {
       final char = source[i];
+      if (char == '%' && (i == 0 || source[i - 1] == '\n')) {
+        lineComment = true;
+      }
       if (lineComment) {
         if (char == '\n') {
           lineComment = false;

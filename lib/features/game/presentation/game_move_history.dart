@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../application/game_controller.dart';
 import '../../../core/theming/app_theme.dart';
 import '../application/game_state.dart';
 import 'chess_board_widget.dart';
@@ -52,24 +54,29 @@ class _GameMoveHistoryState extends State<GameMoveHistory> {
           isScrollControlled: true,
           useSafeArea: true,
           showDragHandle: true,
-          builder: (_) => SafeArea(
-            top: false,
-            child: FractionallySizedBox(
-              heightFactor: .92,
-              child: _HistoryReview(
-                game: game,
-                orientation: orientation,
-                initialPly: _selectedPly,
-                initialOffset: _scrollOffset,
-                onLeave: (ply, offset) {
-                  if (mounted &&
-                      widget.game.position.fen == game.position.fen) {
-                    _selectedPly = ply;
-                    _scrollOffset = offset;
-                  }
-                },
-              ),
-            ),
+          builder: (_) => Consumer(
+            builder: (context, ref, _) {
+              final live = ref.watch(gameControllerProvider);
+              return SafeArea(
+                top: false,
+                child: FractionallySizedBox(
+                  heightFactor: .92,
+                  child: _HistoryReview(
+                    game: live.gameId == game.gameId ? live : game,
+                    orientation: orientation,
+                    initialPly: _selectedPly,
+                    initialOffset: _scrollOffset,
+                    onLeave: (ply, offset) {
+                      if (mounted &&
+                          widget.game.position.fen == game.position.fen) {
+                        _selectedPly = ply;
+                        _scrollOffset = offset;
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         ),
         child: Semantics(

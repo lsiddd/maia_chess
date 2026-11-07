@@ -129,7 +129,7 @@ class GameController extends Notifier<GameState> {
     if (!_isCurrentGame(generation)) return;
     await _cancelHint('A new game was started.');
     if (!_isCurrentGame(generation)) return;
-    await _disposeEngines();
+    _disposeInBackground(_disposeEngines());
     if (!_isCurrentGame(generation)) return;
     state = _withTimeControl(GameState.initial(), timeControl);
     if (await _beginPersistedGame() && _isCurrentGame(generation)) {
@@ -282,7 +282,7 @@ class GameController extends Notifier<GameState> {
       }
       return false;
     } finally {
-      if (!persisted) await _discardMaia();
+      if (!persisted) _disposeInBackground(_discardMaia());
     }
   }
 
@@ -304,6 +304,14 @@ class GameController extends Notifier<GameState> {
     try {
       await flushPersistence();
       if (!_isCurrentGame(generation)) return false;
+      // Never replace unsaved session state with an older database snapshot.
+      if (state.persistenceError != null && state.gameId != null) {
+        await _persistCurrentGame();
+        if (!_isCurrentGame(generation) || state.persistenceError != null) {
+          return false;
+        }
+        if (state.isGameOver) return false;
+      }
       stored = await ref.read(gameRepositoryProvider).getActiveGame();
     } catch (error) {
       if (!_isCurrentGame(generation)) return false;
@@ -1066,6 +1074,7 @@ class GameController extends Notifier<GameState> {
       if (_isCurrentGame(gameGeneration)) {
         _cancelMaiaReplyDelay = null;
         state = state.copyWith(aiThinking: false);
+        _startClock();
       }
     }
   }
@@ -1082,7 +1091,9 @@ class GameController extends Notifier<GameState> {
 
     ensureActive();
     final disposal = _engineDisposal;
-    if (disposal != null) await disposal;
+    if (disposal != null) {
+      await disposal.timeout(const Duration(seconds: 30));
+    }
     ensureActive();
     if (_maia?.isReady == true) return;
 
@@ -1102,7 +1113,7 @@ class GameController extends Notifier<GameState> {
       if (!identical(_maia, engine)) {
         throw StateError('Maia-3 engine was disposed during startup');
       }
-      await engine.init(weightsPath);
+      await engine.init(weightsPath).timeout(const Duration(seconds: 30));
       ensureActive();
       if (!identical(_maia, engine) || !engine.isReady) {
         throw StateError('Maia-3 engine was not ready after startup');
@@ -1110,7 +1121,7 @@ class GameController extends Notifier<GameState> {
     } catch (_) {
       if (identical(_maia, engine)) {
         _maia = null;
-        await _trackEngineDisposal([engine.dispose()]);
+        _disposeInBackground(_trackEngineDisposal([engine.dispose()]));
       }
       rethrow;
     }
@@ -1237,6 +1248,19 @@ class GameController extends Notifier<GameState> {
     ]);
   }
 
+  // Local chess does not depend on native shutdown. Keep the shutdown tracked
+  // so a subsequent AI session still cannot reuse native resources too early.
+  void _disposeInBackground(Future<void> disposal) {
+    final generation = _gameGeneration;
+    unawaited(
+      disposal.catchError((Object error) {
+        if (_isCurrentGame(generation)) {
+          state = state.copyWith(engineError: 'Engine shutdown failed: $error');
+        }
+      }),
+    );
+  }
+
   Future<void> _trackEngineDisposal(List<Future<void>> operations) {
     final previous = _engineDisposal;
     if (operations.isEmpty) return previous ?? Future.value();
@@ -1324,11 +1348,15 @@ class GameController extends Notifier<GameState> {
           : StoredGameResult.ongoing,
       termination: completed ? _termination(snapshotState) : null,
     );
-    final pgn = const PgnService().export(snapshot);
-    snapshot = snapshot.copyWith(pgn: pgn);
-
     try {
-      await _queuePersistence(() {
+      await _queuePersistence(() async {
+        // Active games already store every move. Build PGN only at completion
+        // or on explicit export, rather than serializing the full game per move.
+        if (completed) {
+          snapshot = snapshot.copyWith(
+            pgn: const PgnService().export(snapshot),
+          );
+        }
         final repository = ref.read(gameRepositoryProvider);
         return completed
             ? repository.completeGame(snapshot).then<void>((_) {})
@@ -1482,7 +1510,8 @@ class GameController extends Notifier<GameState> {
   }
 
   void _startClock() {
-    if (state.isGameOver) _stopClock();
+    final waitingForSave = state.aiThinking && !state.isAiTurn;
+    if (state.isGameOver || waitingForSave) _stopClock();
     if (_clockTimer != null) {
       _publishClock();
       return;
@@ -1490,7 +1519,8 @@ class GameController extends Notifier<GameState> {
     if (!_clockPaused &&
         state.clockEnabled &&
         !state.isGameOver &&
-        state.engineError == null) {
+        state.engineError == null &&
+        !waitingForSave) {
       _clockCheckpointMs = ref.read(clockNowMsProvider)();
       _clockTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
         if (_isDisposed) return;
