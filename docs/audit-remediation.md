@@ -21,6 +21,9 @@ moves. Completed games still persist PGN, including termination metadata.
 Widget tests inject an in-memory settings repository instead of opening the
 production database. The migration test runs in its own suite without an unrelated fixture
 database. Drift warnings are not suppressed.
+The Android resume fixture also owns and awaits database shutdown before
+reopening it. Castling animation tests slow their test clock to inspect both
+pieces reliably on live Android frames, restoring time dilation in `finally`.
 Android lint now runs after the production APK build in CI. The redundant v21
 launch resource was removed and a dedicated alpha-only king drawable supports
 themed launcher icons.
