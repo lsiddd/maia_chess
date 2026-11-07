@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
+import '../../../core/theming/app_theme.dart';
 import '../application/game_state.dart';
 import 'chess_board_widget.dart';
 
@@ -71,19 +72,29 @@ class _GameMoveHistoryState extends State<GameMoveHistory> {
             ),
           ),
         ),
-        child: Row(
-          children: [
-            const Icon(Icons.history, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                recent.isEmpty ? 'Moves · No moves yet' : recent.join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        child: Semantics(
+          button: true,
+          label: 'View move history',
+          value: recent.isEmpty ? 'No moves yet' : recent.join(', '),
+          excludeSemantics: true,
+          child: Row(
+            children: [
+              Icon(
+                Icons.history,
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            ),
-            const Icon(Icons.expand_less),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  recent.isEmpty ? 'Moves · No moves yet' : recent.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.expand_less),
+            ],
+          ),
         ),
       ),
     );
@@ -175,6 +186,13 @@ class _HistoryReviewState extends State<_HistoryReview> {
                     ],
                   ),
                   if (separateActions) currentPosition,
+                  Text(
+                    'Position $_ply of ${game.sanHistory.length}',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.s),
                 ],
               ),
             );

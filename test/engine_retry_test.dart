@@ -6,11 +6,41 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
+import 'package:maia_chess/features/game/application/game_state.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
 
 import 'game_controller_test.dart' show FakeGameRepository, FakeMaiaEngine;
 
 void main() {
+  testWidgets(
+    'autosave errors offer a direct retry without leaving the board',
+    (tester) async {
+      final repository = FakeGameRepository();
+      final container = ProviderContainer(
+        overrides: [
+          gameRepositoryProvider.overrideWithValue(repository),
+          gameControllerProvider.overrideWith(_UnsavedGame.new),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: GameScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final original = container.read(gameControllerProvider).position.fen;
+      await tester.tap(find.byTooltip('Retry save'));
+      await tester.pumpAndSettle();
+      expect(container.read(gameControllerProvider).persistenceError, isNull);
+      expect(container.read(gameControllerProvider).position.fen, original);
+      expect(repository.games, hasLength(1));
+      expect(find.byTooltip('Retry save'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Try again preserves the game and retries the AI move', (
     tester,
   ) async {
@@ -104,4 +134,10 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await controller.shutdownEngines();
   });
+}
+
+class _UnsavedGame extends GameController {
+  @override
+  GameState build() =>
+      super.build().copyWith(persistenceError: 'Autosave failed.');
 }

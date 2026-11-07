@@ -34,6 +34,40 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('tall portrait keeps context and tools close to all 64 squares', (
+    tester,
+  ) async {
+    await pumpGameAt(tester, const Size(400, 900));
+    final board = find.byKey(const Key('chess-board'));
+    final rect = tester.getRect(board);
+    final status = tester.getRect(find.byKey(const Key('turn-status')));
+    final actions = tester.getRect(find.byKey(const Key('game-actions')));
+    expect(rect.width, 376);
+    expect(rect.height, rect.width);
+    expect(rect.top - status.bottom, inInclusiveRange(0, 12));
+    expect(actions.top - rect.bottom, inInclusiveRange(0, 12));
+    expect(tester.getCenter(find.text('More')).dy, greaterThan(450));
+    expect(actions.bottom, lessThan(876));
+    for (var row = 0; row < 8; row++) {
+      for (var column = 0; column < 8; column++) {
+        final square = tester.getRect(
+          find.byKey(ValueKey('board-square-$row-$column')),
+        );
+        expect(rect.contains(square.center), isTrue);
+        expect(square.width, closeTo(rect.width / 8, .01));
+      }
+    }
+    await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(board), rect);
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rotate board'));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(board), rect);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('menu respects bottom navigation with enlarged text', (
     tester,
   ) async {
@@ -76,9 +110,17 @@ void main() {
             expect(square.width, closeTo(rect.width / 8, .01));
           }
         }
+        await tester.ensureVisible(
+          find.byKey(const Key('toggle-attacked-pieces')),
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
         await tester.pumpAndSettle();
         expect(tester.getRect(board), rect);
+        await tester.ensureVisible(
+          find.byKey(const Key('toggle-attacked-pieces')),
+        );
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('toggle-attacked-pieces')));
         await tester.pumpAndSettle();
         expect(tester.getRect(board), rect);

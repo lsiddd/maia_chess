@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theming/app_theme.dart';
+import '../../../core/widgets/error_state_card.dart';
 import '../../../data/repositories/game_repository.dart';
 import '../../history/domain/game_replayer.dart';
 import '../../pgn/application/pgn_service.dart';
@@ -368,102 +369,118 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
     final controls = _retrying ? const SizedBox.shrink() : _navigation(context);
     final details = _retrying ? _exercise(context) : _details(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_retrying ? 'Learn from mistakes' : 'Game review'),
-        leading: _retrying
-            ? IconButton(
-                onPressed: () => _goTo(_ply),
-                tooltip: 'Back to review',
-                icon: const Icon(Icons.arrow_back),
-              )
-            : null,
-        actions: [
-          if (!_retrying && _review != null)
-            IconButton(
-              tooltip: 'Export annotated PGN',
-              onPressed: _sharing ? null : () => _shareReview(_review!),
-              icon: const Icon(Icons.share_outlined),
+    return PopScope(
+      canPop: !_retrying && _variation == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && (_retrying || _variation != null)) _goTo(_ply);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            _retrying ? 'Learn from mistakes' : 'Game review',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          leading: _retrying
+              ? IconButton(
+                  onPressed: () => _goTo(_ply),
+                  tooltip: 'Back to review',
+                  icon: const Icon(Icons.arrow_back),
+                )
+              : null,
+          actions: [
+            if (!_retrying && _review != null)
+              IconButton(
+                tooltip: 'Export annotated PGN',
+                onPressed: _sharing ? null : () => _shareReview(_review!),
+                icon: const Icon(Icons.share_outlined),
+              ),
+            PopupMenuButton<String>(
+              tooltip: 'Review options',
+              onSelected: (action) async {
+                if (action == 'rotate') {
+                  setState(() => _orientation = _orientation.opposite);
+                } else {
+                  await Clipboard.setData(ClipboardData(text: position.fen));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Position copied.')),
+                    );
+                  }
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'rotate', child: Text('Rotate board')),
+                PopupMenuItem(
+                  value: 'copy',
+                  child: Text('Copy position (FEN)'),
+                ),
+              ],
             ),
-          IconButton(
-            tooltip: 'Rotate board',
-            onPressed: () =>
-                setState(() => _orientation = _orientation.opposite),
-            icon: const Icon(Icons.swap_vert),
-          ),
-          IconButton(
-            tooltip: 'Copy position (FEN)',
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: position.fen));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Position copied.')),
-                );
-              }
-            },
-            icon: const Icon(Icons.copy_outlined),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth >= 650 &&
-                constraints.maxWidth > constraints.maxHeight;
-            if (wide) {
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1080),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppSpacing.m),
-                          child: Column(
-                            children: [
-                              Expanded(child: board),
-                              if (positionAnalysis != null)
-                                ReviewEvaluationBar(
-                                  evaluation: positionAnalysis.evaluation,
-                                ),
-                              controls,
-                            ],
+          ],
+        ),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide =
+                  constraints.maxWidth >= 650 &&
+                  constraints.maxWidth > constraints.maxHeight;
+              if (wide) {
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1080),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.m),
+                            child: Column(
+                              children: [
+                                Expanded(child: board),
+                                if (positionAnalysis != null)
+                                  ReviewEvaluationBar(
+                                    evaluation: positionAnalysis.evaluation,
+                                  ),
+                                controls,
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: ListView(
-                          key: const PageStorageKey('review-landscape-details'),
-                          padding: const EdgeInsets.all(AppSpacing.m),
-                          children: details,
+                        Expanded(
+                          child: ListView(
+                            key: const PageStorageKey(
+                              'review-landscape-details',
+                            ),
+                            padding: const EdgeInsets.all(AppSpacing.m),
+                            children: details,
+                          ),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: ListView(
+                    key: const PageStorageKey('review-portrait-details'),
+                    controller: _portraitScroll,
+                    padding: const EdgeInsets.all(AppSpacing.m),
+                    children: [
+                      board,
+                      if (positionAnalysis != null)
+                        ReviewEvaluationBar(
+                          evaluation: positionAnalysis.evaluation,
+                        ),
+                      controls,
+                      ...details,
                     ],
                   ),
                 ),
               );
-            }
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: ListView(
-                  key: const PageStorageKey('review-portrait-details'),
-                  controller: _portraitScroll,
-                  padding: const EdgeInsets.all(AppSpacing.m),
-                  children: [
-                    board,
-                    if (positionAnalysis != null)
-                      ReviewEvaluationBar(
-                        evaluation: positionAnalysis.evaluation,
-                      ),
-                    controls,
-                    ...details,
-                  ],
-                ),
-              ),
-            );
-          },
+            },
+          ),
         ),
       ),
     );
@@ -486,44 +503,61 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
             variation.positions[_step - 1],
             variation.sans[_step - 1],
           );
-    return Column(
-      children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            IconButton(
-              tooltip: 'First position',
-              onPressed: cursor == 0 ? null : () => _moveCursor(-cursor),
-              icon: const Icon(Icons.first_page),
-            ),
-            IconButton(
-              tooltip: 'Previous position',
-              onPressed: cursor == 0 ? null : () => _moveCursor(-1),
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            IconButton(
-              tooltip: 'Next position',
-              onPressed: cursor == last ? null : () => _moveCursor(1),
-              icon: const Icon(Icons.chevron_right),
-            ),
-            IconButton(
-              tooltip: 'Last position',
-              onPressed: cursor == last
-                  ? null
-                  : () => _moveCursor(last - cursor),
-              icon: const Icon(Icons.last_page),
-            ),
-          ],
-        ),
-        if (variation != null)
-          TextButton.icon(
-            onPressed: () => _goTo(_ply),
-            icon: const Icon(Icons.undo),
-            label: const Text('Return to game'),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+      child: Column(
+        children: [
+          Semantics(
+            liveRegion: true,
+            child: Text(title, style: Theme.of(context).textTheme.titleMedium),
           ),
-      ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'First position',
+                onPressed: cursor == 0 ? null : () => _moveCursor(-cursor),
+                icon: const Icon(Icons.first_page),
+              ),
+              IconButton(
+                tooltip: 'Previous position',
+                onPressed: cursor == 0 ? null : () => _moveCursor(-1),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s),
+                  child: Text(
+                    '$cursor / $last',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next position',
+                onPressed: cursor == last ? null : () => _moveCursor(1),
+                icon: const Icon(Icons.chevron_right),
+              ),
+              IconButton(
+                tooltip: 'Last position',
+                onPressed: cursor == last
+                    ? null
+                    : () => _moveCursor(last - cursor),
+                icon: const Icon(Icons.last_page),
+              ),
+            ],
+          ),
+          if (variation != null)
+            TextButton.icon(
+              onPressed: () => _goTo(_ply),
+              icon: const Icon(Icons.undo),
+              label: const Text('Return to game'),
+            ),
+        ],
+      ),
     );
   }
 
@@ -544,10 +578,20 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Stockfish is reviewing ${progress.$1} of ${progress.$2} positions.',
+                  'Reviewing your game',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${progress.$1} of ${progress.$2} positions · You can keep exploring.',
                 ),
                 const SizedBox(height: AppSpacing.s),
-                LinearProgressIndicator(value: progress.$1 / progress.$2),
+                LinearProgressIndicator(
+                  value: progress.$1 / progress.$2,
+                  semanticsLabel: 'Game review progress',
+                  semanticsValue:
+                      '${(progress.$1 / progress.$2 * 100).round()}',
+                ),
                 TextButton(
                   onPressed: _cancelAnalysis,
                   child: const Text('Cancel analysis'),
@@ -557,7 +601,8 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
           ),
         )
       else if (review == null) ...[
-        if (_analysisError case final error?) Text(error),
+        if (_analysisError case final error?)
+          ErrorStateCard(message: 'Game analysis is unavailable. $error'),
         if (_canAnalyzeGame)
           OutlinedButton.icon(
             onPressed: _busy ? null : _analyzeGame,
@@ -600,7 +645,11 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
             onRetry: move.quality.isMistake ? () => _startExercise(move) : null,
           ),
       ],
-      if (_positionError case final error?) Text(error),
+      if (_positionError case final error?)
+        ErrorStateCard(
+          message: 'Position analysis is unavailable. $error',
+          onRetry: _busy ? null : _analyzePosition,
+        ),
       if (positionAnalysis != null && positionAnalysis.lines.isNotEmpty)
         ReviewLines(
           lines: positionAnalysis.lines,

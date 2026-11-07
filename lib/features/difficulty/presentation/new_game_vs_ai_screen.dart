@@ -96,105 +96,147 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final scaffold = Scaffold(
       appBar: AppBar(title: const Text('Play against Maia-3')),
-      body: MaxWidthBody(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          children: [
-            Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.l),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _SectionLabel(
-                      icon: Icons.swap_horiz,
-                      label: 'Your side',
-                    ),
-                    const SizedBox(height: AppSpacing.m),
-                    SegmentedButton<Side>(
-                      segments: const [
-                        ButtonSegment(value: Side.white, label: Text('White')),
-                        ButtonSegment(value: Side.black, label: Text('Black')),
-                      ],
-                      selected: {_humanSide},
-                      onSelectionChanged: _starting
-                          ? null
-                          : (selection) =>
-                                setState(() => _humanSide = selection.first),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.l),
-            Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.l),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _SectionLabel(
-                      icon: Icons.psychology_outlined,
-                      label: 'Level (Maia-3 style)',
-                    ),
-                    const SizedBox(height: AppSpacing.m),
-                    Wrap(
-                      spacing: AppSpacing.s,
-                      runSpacing: AppSpacing.s,
-                      children: DifficultyLevel.all.map((level) {
-                        final selected = level.rating == _levelRating;
-                        return ChoiceChip(
-                          label: Text('${level.rating}'),
-                          selected: selected,
-                          onSelected: _starting
-                              ? null
-                              : (_) =>
-                                    setState(() => _levelRating = level.rating),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.l),
-            TimeControlPicker(
-              value: _timeControl,
-              onChanged: _starting
-                  ? null
-                  : (value) => setState(() => _timeControl = value),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            FilledButton(
-              onPressed: _starting || !_timeControl.isValid ? null : _start,
-              child: AnimatedSwitcher(
-                duration: AppMotion.fast,
-                transitionBuilder: (child, animation) =>
-                    FadeTransition(opacity: animation, child: child),
-                child: _starting
-                    ? const SizedBox(
-                        key: ValueKey('starting-spinner'),
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Start game', key: ValueKey('starting-label')),
-              ),
-            ),
-            if (_starting) ...[
-              const SizedBox(height: AppSpacing.m),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: MaxWidthBody(
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            children: [
               Text(
-                'Loading Maia-3 79M... '
-                'This may take a few seconds the first time.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
+                'A game at your level.',
+                style: theme.textTheme.headlineMedium,
+              ),
+              const SizedBox(height: AppSpacing.s),
+              Text(
+                'Choose your challenge. Hints are available while you play.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              const _SectionLabel(icon: Icons.swap_horiz, label: 'Your side'),
+              const SizedBox(height: AppSpacing.m),
+              SegmentedButton<Side>(
+                direction: MediaQuery.textScalerOf(context).scale(14) > 20
+                    ? Axis.vertical
+                    : Axis.horizontal,
+                segments: const [
+                  ButtonSegment(
+                    value: Side.white,
+                    icon: Icon(Icons.circle_outlined),
+                    label: Text('White'),
+                  ),
+                  ButtonSegment(
+                    value: Side.black,
+                    icon: Icon(Icons.circle),
+                    label: Text('Black'),
+                  ),
+                ],
+                selected: {_humanSide},
+                onSelectionChanged: _starting
+                    ? null
+                    : (selection) =>
+                          setState(() => _humanSide = selection.first),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              const _SectionLabel(
+                icon: Icons.psychology_outlined,
+                label: 'Your opponent',
+              ),
+              const SizedBox(height: AppSpacing.s),
+              Text(
+                'Higher ratings offer a stronger challenge.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.m),
+              _RatingPicker(
+                selectedRating: _levelRating,
+                onChanged: _starting
+                    ? null
+                    : (rating) => setState(() => _levelRating = rating),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              TimeControlPicker(
+                value: _timeControl,
+                onChanged: _starting
+                    ? null
+                    : (value) => setState(() => _timeControl = value),
               ),
             ],
-          ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border(top: BorderSide(color: colors.outlineVariant)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.m,
+                  AppSpacing.xl,
+                  AppSpacing.l,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Maia-3 $_levelRating · '
+                      '${_humanSide == Side.white ? 'White' : 'Black'} · '
+                      '${timeControlLabel(_timeControl)}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.s),
+                    FilledButton.icon(
+                      onPressed: _starting || !_timeControl.isValid
+                          ? null
+                          : _start,
+                      icon: _starting
+                          ? const SizedBox.square(
+                              key: ValueKey('starting-spinner'),
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.arrow_forward),
+                      label: Text(
+                        _starting ? 'Preparing your game…' : 'Start game',
+                        key: const ValueKey('starting-label'),
+                      ),
+                    ),
+                    if (_starting) ...[
+                      const SizedBox(height: AppSpacing.s),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          'The first game may take a few seconds to prepare.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -230,6 +272,74 @@ class _SectionLabel extends StatelessWidget {
           child: Text(label, style: Theme.of(context).textTheme.titleMedium),
         ),
       ],
+    );
+  }
+}
+
+/// Fixed cells preserve the player's spatial map when a selection changes.
+/// Measuring the label lets large system text reduce columns without shrinking.
+class _RatingPicker extends StatelessWidget {
+  const _RatingPicker({required this.selectedRating, required this.onChanged});
+
+  final int selectedRating;
+  final ValueChanged<int>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = theme.chipTheme.labelStyle ?? theme.textTheme.labelLarge;
+    final labelMeasure = TextPainter(
+      text: TextSpan(text: '2600', style: labelStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final minimumWidth = (labelMeasure.width + 40).clamp(76.0, double.infinity);
+    labelMeasure.dispose();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns =
+            ((constraints.maxWidth + AppSpacing.s) /
+                    (minimumWidth + AppSpacing.s))
+                .floor()
+                .clamp(1, 4);
+        final width =
+            (constraints.maxWidth - AppSpacing.s * (columns - 1)) / columns;
+        return Wrap(
+          key: const Key('rating-options'),
+          spacing: AppSpacing.s,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final level in DifficultyLevel.all)
+              SizedBox(
+                width: width,
+                child: ChoiceChip(
+                  key: ValueKey('level-${level.rating}'),
+                  showCheckmark: false,
+                  labelPadding: EdgeInsets.zero,
+                  label: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        child: selectedRating == level.rating
+                            ? const ExcludeSemantics(
+                                child: Icon(Icons.check, size: 18),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text('${level.rating}'),
+                    ],
+                  ),
+                  selected: selectedRating == level.rating,
+                  onSelected: onChanged == null
+                      ? null
+                      : (_) => onChanged!(level.rating),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

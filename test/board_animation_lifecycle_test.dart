@@ -23,6 +23,7 @@ void main() {
     WidgetTester tester, {
     Chess? position,
     ValueNotifier<Side>? orientation,
+    bool disableAnimations = false,
   }) async {
     final container = ProviderContainer(
       overrides: [
@@ -38,6 +39,12 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: disableAnimations),
+            child: child!,
+          ),
           home: Scaffold(
             body: SizedBox.square(
               dimension: 400,
@@ -62,6 +69,28 @@ void main() {
   final slide = find.byKey(const Key('board-slide-layer'));
   final rookSlide = find.byKey(const Key('board-rook-slide-layer'));
   final drag = find.byKey(const Key('board-drag-layer'));
+
+  testWidgets('reduced motion updates pieces without a flight layer', (
+    tester,
+  ) async {
+    final container = await mount(tester, disableAnimations: true);
+    await container
+        .read(gameControllerProvider.notifier)
+        .attemptDragMove(Square.e2, Square.e4, onPromotion: () async => null);
+    await tester.pump();
+    expect(slide, findsNothing);
+    expect(find.byKey(const ValueKey('board-piece-4-4')), findsOneWidget);
+    expect(
+      container
+          .read(gameControllerProvider)
+          .position
+          .board
+          .pieceAt(Square.e4)
+          ?.role,
+      Role.pawn,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   test(
     'a delayed promotion response does not modify a restarted game',

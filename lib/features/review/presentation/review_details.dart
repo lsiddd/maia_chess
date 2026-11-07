@@ -98,7 +98,7 @@ class ReviewMoveDetails extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.s),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.m),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -106,6 +106,7 @@ class ReviewMoveDetails extends StatelessWidget {
               '${sideLabel(move.side)} played ${move.san} · ${move.quality.label}',
               style: style.titleMedium,
             ),
+            const SizedBox(height: AppSpacing.s),
             Text(_explanation()),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -161,9 +162,22 @@ class ReviewLines extends StatelessWidget {
           ),
           for (final line in lines)
             ListTile(
-              visualDensity: VisualDensity.compact,
-              leading: Text(line.evaluation.display),
-              title: Text(line.sans.take(8).join(' '), maxLines: 2),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.l,
+                vertical: AppSpacing.xs,
+              ),
+              leading: Text(
+                line.evaluation.display,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              title: Text(
+                line.sans.take(8).join(' '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => onSelect(line),
             ),
@@ -212,11 +226,13 @@ class ReviewSummary extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.s),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.m),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            row('Game summary', 'White', 'Black', header: true),
+            Text('Game summary', style: style.titleLarge),
+            const SizedBox(height: AppSpacing.m),
+            row('Move quality', 'White', 'Black', header: true),
             row('Accuracy', percent(white.accuracy), percent(black.accuracy)),
             row(
               'Avg. centipawn loss',
@@ -232,7 +248,8 @@ class ReviewSummary extends StatelessWidget {
               ),
             if (review.keyMoments.isNotEmpty) ...[
               const Divider(),
-              const Text('Practice mistakes by side'),
+              Text('Practice mistakes by side', style: style.titleSmall),
+              const SizedBox(height: AppSpacing.s),
               Wrap(
                 spacing: AppSpacing.xs,
                 children: [
@@ -281,11 +298,12 @@ class ReviewMoveList extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.m),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Move list', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.s),
             Wrap(
               spacing: AppSpacing.xs,
               runSpacing: AppSpacing.xs,
@@ -361,7 +379,7 @@ class ReviewVariationList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.m),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

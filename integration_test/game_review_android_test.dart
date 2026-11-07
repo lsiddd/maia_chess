@@ -41,7 +41,7 @@ void main() {
       }
       final finished = container.read(gameControllerProvider);
       expect(finished.isGameOver, isTrue);
-      await tester.tap(find.text('Review game'));
+      await tester.tap(find.byTooltip('Review game'));
       final graph = find.byType(ReviewChart);
       for (
         var attempt = 0;

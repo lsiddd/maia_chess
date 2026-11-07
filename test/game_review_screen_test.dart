@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maia_chess/data/repositories/game_repository.dart';
+import 'package:maia_chess/core/theming/app_theme.dart';
 import 'package:maia_chess/engine_ffi/stockfish_engine/stockfish_analysis.dart';
 import 'package:maia_chess/features/game/presentation/chess_board_widget.dart';
 import 'package:maia_chess/features/history/domain/game_replayer.dart';
@@ -72,6 +73,56 @@ void main() {
     expect(game.moves.map((move) => move.uci), replayed.ucis);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Android back returns from practice and variations to the game', (
+    tester,
+  ) async {
+    await _openReview(tester, game, replayed, analyzer);
+    await tester.pumpAndSettle();
+    final graph = tester.getRect(find.byType(ReviewChart));
+    await tester.tapAt(
+      Offset(graph.left + graph.width * .75, graph.bottom - 24),
+    );
+    await tester.pumpAndSettle();
+    final retry = find.widgetWithText(TextButton, 'Retry move');
+    await _scrollTo(tester, retry);
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Game review'), findsOneWidget);
+    expect(_board(tester).position.fen, replayed.positions[3].fen);
+    final show = find.widgetWithText(TextButton, 'Show continuation');
+    await _scrollTo(tester, show);
+    await tester.tap(show);
+    await tester.pumpAndSettle();
+    expect(_board(tester).position.isCheckmate, isTrue);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(_board(tester).position.fen, replayed.positions[3].fen);
+    expect(find.widgetWithText(TextButton, 'Return to game'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final size in [const Size(320, 568), const Size(800, 400)]) {
+    testWidgets('review remains usable at $size with enlarged text', (
+      tester,
+    ) async {
+      await _openReview(
+        tester,
+        game,
+        replayed,
+        analyzer,
+        size: size,
+        textScale: 2,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Next position'));
+      await tester.pumpAndSettle();
+      expect(_board(tester).position.fen, replayed.positions[1].fen);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('cancelling a scan allows individual position analysis', (
     tester,
@@ -148,15 +199,24 @@ Future<void> _openReview(
   WidgetTester tester,
   StoredGame game,
   ReplayedGame replayed,
-  GameReviewAnalyzer analyzer,
-) async {
+  GameReviewAnalyzer analyzer, {
+  Size size = const Size(420, 900),
+  double textScale = 1,
+}) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(420, 900);
+  tester.view.physicalSize = size;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [reviewAnalyzerProvider.overrideWithValue(analyzer)],
       child: MaterialApp(
+        theme: AppTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: GameReviewScreen(game: game, replayed: replayed),
       ),
     ),

@@ -135,7 +135,16 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
       appBar: AppBar(title: const Text('Maia-3 campaign')),
       body: MaxWidthBody(
         child: progress.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(semanticsLabel: 'Opening campaign'),
+                SizedBox(height: AppSpacing.l),
+                Text('Opening your campaign…'),
+              ],
+            ),
+          ),
           error: (error, stackTrace) => Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -145,49 +154,199 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
               ),
             ),
           ),
-          data: (levels) => CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                sliver: SliverToBoxAdapter(
-                  child: _CampaignHeader(
-                    humanSide: _humanSide,
-                    onSideChanged: _startingRating == null
-                        ? (side) => setState(() => _humanSide = side)
-                        : null,
+          data: (levels) {
+            if (levels.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: ErrorStateCard(
+                    message: 'No campaign levels are available yet.',
+                    onRetry: () => ref.invalidate(difficultyProgressProvider),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                sliver: SliverToBoxAdapter(
-                  child: TimeControlPicker(
-                    value: _timeControl,
-                    onChanged: _startingRating != null
-                        ? null
-                        : (value) => setState(() => _timeControl = value),
+              );
+            }
+            final nextLevels = levels.where(
+              (level) => level.unlocked && !level.levelCompleted,
+            );
+            final nextLevel = nextLevels.isEmpty ? null : nextLevels.first;
+            final remainingLevels = levels
+                .where((level) => level != nextLevel)
+                .toList();
+            return CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xl,
+                    AppSpacing.l,
+                    AppSpacing.xl,
+                    AppSpacing.xl,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: _CampaignHeader(
+                      completed: levels
+                          .where((level) => level.levelCompleted)
+                          .length,
+                      total: levels.length,
+                    ),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                sliver: SliverList.separated(
-                  itemCount: levels.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final item = levels[index];
-                    return _CampaignLevelCard(
-                      progress: item,
-                      finalLevel: index == levels.length - 1,
-                      busy: _startingRating != null || !_timeControl.isValid,
-                      starting: _startingRating == item.rating,
-                      onPlay: () => _startLevel(item),
-                    );
-                  },
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: ExpansionTile(
+                        title: const Text('Game setup'),
+                        expansionAnimationStyle: AnimationStyle(
+                          duration: AppMotion.duration(
+                            context,
+                            AppMotion.medium,
+                          ),
+                          curve: AppMotion.curve,
+                        ),
+                        subtitle: Text(
+                          '${_humanSide == Side.white ? 'White' : 'Black'} · '
+                          '${timeControlLabel(_timeControl)}',
+                        ),
+                        leading: const Icon(Icons.tune),
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.l,
+                        ),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          AppSpacing.l,
+                          0,
+                          AppSpacing.l,
+                          AppSpacing.l,
+                        ),
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Play as',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.s),
+                          SizedBox(
+                            width: double.infinity,
+                            child: SegmentedButton<Side>(
+                              direction:
+                                  MediaQuery.textScalerOf(context).scale(14) >
+                                      20
+                                  ? Axis.vertical
+                                  : Axis.horizontal,
+                              segments: const [
+                                ButtonSegment(
+                                  value: Side.white,
+                                  icon: Icon(Icons.circle_outlined),
+                                  label: Text('White'),
+                                ),
+                                ButtonSegment(
+                                  value: Side.black,
+                                  icon: Icon(Icons.circle),
+                                  label: Text('Black'),
+                                ),
+                              ],
+                              selected: {_humanSide},
+                              onSelectionChanged: _startingRating != null
+                                  ? null
+                                  : (selection) => setState(
+                                      () => _humanSide = selection.first,
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.l),
+                          TimeControlPicker(
+                            framed: false,
+                            value: _timeControl,
+                            onChanged: _startingRating != null
+                                ? null
+                                : (value) =>
+                                      setState(() => _timeControl = value),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                if (nextLevel != null)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                      0,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your next challenge',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: AppSpacing.m),
+                          _CampaignLevelCard(
+                            progress: nextLevel,
+                            finalLevel: nextLevel == levels.last,
+                            busy:
+                                _startingRating != null ||
+                                !_timeControl.isValid,
+                            starting: _startingRating == nextLevel.rating,
+                            onPlay: () => _startLevel(nextLevel),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (remainingLevels.isNotEmpty) ...[
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                      AppSpacing.m,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Text(
+                        'Your path',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      0,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                    ),
+                    sliver: SliverList.separated(
+                      itemCount: remainingLevels.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: AppSpacing.s),
+                      itemBuilder: (context, index) {
+                        final item = remainingLevels[index];
+                        return _CampaignLevelCard(
+                          progress: item,
+                          finalLevel: item == levels.last,
+                          busy:
+                              _startingRating != null || !_timeControl.isValid,
+                          starting: _startingRating == item.rating,
+                          onPlay: () => _startLevel(item),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -207,83 +366,53 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
 }
 
 class _CampaignHeader extends StatelessWidget {
-  const _CampaignHeader({required this.humanSide, required this.onSideChanged});
+  const _CampaignHeader({required this.completed, required this.total});
 
-  final Side humanSide;
-  final ValueChanged<Side>? onSideChanged;
+  final int completed;
+  final int total;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.primaryContainer,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
-      ),
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: colors.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(Icons.flag, color: colors.onPrimary, size: 28),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Climb through all 16 Maia-3 levels',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            fontFamily: AppTypography.accentFontFamily,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Win 2 games in any window of 3 rated campaign games '
-                      'to unlock the next level.',
-                    ),
-                    const SizedBox(height: 4),
-                    const Text('Campaign games are played without assistance.'),
-                  ],
-                ),
-              ),
-            ],
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          completed == total
+              ? 'Every level. Well played.'
+              : 'One level at a time.',
+          style: theme.textTheme.headlineMedium,
+        ),
+        const SizedBox(height: AppSpacing.s),
+        Text(
+          'Climb through all 16 Maia-3 levels',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: colors.onSurfaceVariant,
           ),
-          const SizedBox(height: 20),
-          Text('Play as', style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 8),
-          SegmentedButton<Side>(
-            segments: const [
-              ButtonSegment(
-                value: Side.white,
-                icon: Icon(Icons.circle_outlined),
-                label: Text('White'),
-              ),
-              ButtonSegment(
-                value: Side.black,
-                icon: Icon(Icons.circle),
-                label: Text('Black'),
-              ),
-            ],
-            selected: {humanSide},
-            onSelectionChanged: onSideChanged == null
-                ? null
-                : (selection) => onSideChanged!(selection.first),
+        ),
+        const SizedBox(height: AppSpacing.l),
+        LinearProgressIndicator(
+          value: completed / total,
+          minHeight: 6,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          semanticsLabel:
+              'Campaign progress: $completed of $total levels completed',
+        ),
+        const SizedBox(height: AppSpacing.s),
+        Text(
+          '$completed of $total levels completed',
+          style: theme.textTheme.labelLarge,
+        ),
+        const SizedBox(height: AppSpacing.l),
+        Text(
+          'Win 2 of your last 3 rated games to unlock the next level. '
+          'Campaign games are played without assistance.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colors.onSurfaceVariant,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -308,11 +437,7 @@ class _CampaignLevelCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final completed = progress.levelCompleted;
-    final accent = completed
-        ? colors.tertiary
-        : progress.unlocked
-        ? colors.primary
-        : colors.outline;
+    final active = progress.unlocked && !completed;
     final status = !progress.unlocked
         ? 'Locked'
         : completed
@@ -322,131 +447,117 @@ class _CampaignLevelCard extends StatelessWidget {
         : '${progress.validWins}/${progress.winsRequired} wins • '
               '${progress.gamesInWindow}/${progress.windowSize} games';
 
-    return Semantics(
-      label: 'Maia-3 ${progress.rating}, $status',
-      child: Card(
-        elevation: progress.unlocked ? 1 : 0,
-        color: progress.unlocked
-            ? colors.surfaceContainer
-            : colors.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: accent.withValues(alpha: 0.35)),
+    return Card(
+      margin: EdgeInsets.zero,
+      color: active ? colors.primaryContainer : colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        side: BorderSide(
+          color: active ? colors.primary : colors.outlineVariant,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: accent, width: 2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                ExcludeSemantics(
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: active ? colors.primary : colors.surfaceContainer,
+                      borderRadius: BorderRadius.circular(AppRadius.small),
+                    ),
+                    child: Icon(
+                      completed
+                          ? Icons.check
+                          : progress.unlocked
+                          ? Icons.flag_outlined
+                          : Icons.lock_outline,
+                      color: active
+                          ? colors.onPrimary
+                          : colors.onSurfaceVariant,
+                      size: 22,
+                    ),
+                  ),
                 ),
-                child: completed
-                    ? Icon(Icons.check, color: accent)
-                    : progress.unlocked
-                    ? Text(
-                        '${progress.rating ~/ 100}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : Icon(Icons.lock_outline, color: accent),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Maia-3 ${progress.rating}',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontFamily: AppTypography.accentFontFamily,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (progress.unlocked)
-                          Icon(
-                            completed
-                                ? Icons.workspace_premium
-                                : Icons.lock_open,
-                            color: accent,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      status,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: accent,
-                      ),
-                    ),
-                    if (progress.unlocked) ...[
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(99),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween(
-                            begin: 0,
-                            end: (progress.validWins / progress.winsRequired)
-                                .clamp(0, 1)
-                                .toDouble(),
-                          ),
-                          duration: AppMotion.slow,
-                          curve: AppMotion.curve,
-                          builder: (context, value, _) =>
-                              LinearProgressIndicator(
-                                minHeight: 7,
-                                value: value,
-                                color: accent,
-                                backgroundColor: accent.withValues(alpha: 0.12),
-                              ),
+                const SizedBox(width: AppSpacing.m),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Maia-3 ${progress.rating}',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontFamily: AppTypography.accentFontFamily,
+                          color: active
+                              ? colors.onPrimaryContainer
+                              : colors.onSurface,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton.tonalIcon(
-                          onPressed: busy ? null : onPlay,
-                          icon: AnimatedSwitcher(
-                            duration: AppMotion.fast,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                ),
-                            child: starting
-                                ? const SizedBox.square(
-                                    key: ValueKey('level-starting-spinner'),
-                                    dimension: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.play_arrow,
-                                    key: ValueKey('level-starting-icon'),
-                                  ),
-                          ),
-                          label: Text(completed ? 'Play again' : 'Play level'),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        status,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: active
+                              ? colors.onPrimaryContainer
+                              : colors.onSurfaceVariant,
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
+              ],
+            ),
+            if (active) ...[
+              const SizedBox(height: AppSpacing.l),
+              LinearProgressIndicator(
+                value: (progress.validWins / progress.winsRequired).clamp(0, 1),
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                semanticsLabel:
+                    'Wins toward next level: '
+                    '${progress.validWins} of ${progress.winsRequired} wins',
               ),
             ],
-          ),
+            if (progress.unlocked) ...[
+              const SizedBox(height: AppSpacing.l),
+              FilledButton.icon(
+                onPressed: busy ? null : onPlay,
+                icon: starting
+                    ? const SizedBox.square(
+                        key: ValueKey('level-starting-spinner'),
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(completed ? Icons.replay : Icons.arrow_forward),
+                label: Text(
+                  starting
+                      ? 'Preparing game…'
+                      : completed
+                      ? 'Play again'
+                      : 'Play level',
+                ),
+              ),
+              if (starting) ...[
+                const SizedBox(height: AppSpacing.s),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    'The first game may take a few seconds to prepare.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: active
+                          ? colors.onPrimaryContainer
+                          : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
         ),
       ),
     );
