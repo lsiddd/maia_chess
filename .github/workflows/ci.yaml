@@ -7,10 +7,18 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  schedule:
+    # 03:17 America/Belem (UTC-3).
+    - cron: '17 6 * * *'
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
+      publish_nightly:
+        description: 'Publish a signed nightly from main (leave release_tag empty)'
+        required: false
+        default: false
+        type: boolean
       release_tag:
         description: 'Existing vX.Y.Z tag to publish; leave empty for an artifact only'
         required: false
@@ -109,12 +117,16 @@ jobs:
         env:
           REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
           REF_NAME: ${{ inputs.release_tag || github.ref_name }}
+          NIGHTLY_BUILD: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || inputs.publish_nightly) && inputs.release_tag == '' }}
         run: |
           if [[ "$REF_TYPE" == tag ]]; then
             [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a vX.Y.Z tag'; exit 1; }
             version="${REF_NAME#v}"
           else
             version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
+          fi
+          if [[ "$NIGHTLY_BUILD" == true ]]; then
+            version="$version-nightly.$GITHUB_RUN_NUMBER"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -124,7 +136,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' || (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || inputs.publish_nightly)) }}
           SIGNING_REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
         run: GITHUB_REF_TYPE="$SIGNING_REF_TYPE" python3 scripts/configure_android_signing.py
       - name: Build release APK
@@ -158,7 +170,7 @@ jobs:
   nightly:
     name: Publish nightly
     needs: apk
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || inputs.publish_nightly) && inputs.release_tag == ''
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -189,6 +201,17 @@ jobs:
             exit 0
           fi
 
+          # Publication is serialised, but builds may finish out of order
+          # even when they use the same commit (scheduled/manual runs).
+          published_notes="$RUNNER_TEMP/nightly-published-notes.md"
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == "nightly") | .body // ""' > "$published_notes"
+          publication="$(python3 scripts/check_nightly_order.py "$GITHUB_RUN_NUMBER" "$published_notes")"
+          if [[ "$publication" == skip ]]; then
+            echo '::notice::A newer nightly build is already published.'
+            exit 0
+          fi
+
           cd dist
           sha256sum --check SHA256SUMS
           mv "maia-chess-$APP_VERSION-arm64-v8a.apk" maia-chess-nightly-arm64-v8a.apk
@@ -202,7 +225,9 @@ jobs:
           - CI: [run $GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID)
 
           ARM64 APK signed with the release key. Verify SHA256SUMS before installing.
-          This pre-release is updated after each main push that passes the checks.
+          Updated after verified main pushes, daily at 06:17 UTC, or by manual nightly dispatch.
+
+          <!-- maia-nightly-build: $GITHUB_RUN_NUMBER -->
           EOF
 
           git tag --force nightly "$GITHUB_SHA"
