@@ -1,7 +1,9 @@
+import 'package:maia_chess/data/providers.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support_game_settings.dart';
 import 'package:maia_chess/features/game/application/game_controller.dart';
 import 'package:maia_chess/features/game/application/game_state.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
@@ -15,6 +17,9 @@ class _EndedGame extends GameController {
 }
 
 void main() {
+  late MemorySettings settings;
+  setUp(() => settings = MemorySettings());
+  tearDown(() => settings.close());
   for (final example in [
     (fen: '7k/6Q1/5K2/8/8/8/8/8 b - - 0 1', label: 'Checkmate! White wins.'),
     (fen: '7k/5Q2/6K1/8/8/8/8/8 b - - 0 1', label: 'Draw by stalemate.'),
@@ -32,6 +37,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            settingsRepositoryProvider.overrideWithValue(settings),
             gameControllerProvider.overrideWith(() => _EndedGame(example.fen)),
           ],
           child: const MaterialApp(home: GameScreen()),

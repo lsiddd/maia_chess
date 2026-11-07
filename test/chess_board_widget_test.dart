@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maia_chess/data/providers.dart';
+import 'support_game_settings.dart';
 
 import 'package:maia_chess/features/game/presentation/chess_piece_widget.dart';
 import 'package:maia_chess/features/game/presentation/game_screen.dart';
@@ -15,9 +17,12 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
+    final settings = MemorySettings();
+    addTearDown(settings.close);
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(settings)],
+        child: const MaterialApp(
           debugShowCheckedModeBanner: false,
           home: GameScreen(),
         ),

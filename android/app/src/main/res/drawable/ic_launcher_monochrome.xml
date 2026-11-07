@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A single king silhouette; themed launchers use alpha, not RGB. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M51,22 L57,22 L57,28 L63,28 L63,34 L57,34 L57,40 L51,40 L51,34 L45,34 L45,28 L51,28 Z M38,42 Q54,36 70,42 L64,56 L44,56 Z M43,59 L65,59 L65,64 Q63,74 72,80 L36,80 Q45,74 43,64 Z M34,83 L74,83 Q78,83 78,88 L30,88 Q30,83 34,83 Z" />
+</vector>
