@@ -31,7 +31,9 @@ class DriftStatsRepository implements StatsRepository {
       DriftStatsRepository(database)._readSnapshot();
 
   Future<PlayerStatsSnapshot> _readSnapshot() async {
-    return _snapshot(await _eligibleGamesQuery().get());
+    return _db.transaction(
+      () async => _snapshot(await _eligibleGamesQuery().get()),
+    );
   }
 
   SimpleSelectStatement<$GamesTable, GameRow> _eligibleGamesQuery() {
