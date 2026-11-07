@@ -14,6 +14,7 @@ enum GameTermination {
   fiftyMoveRule,
   imported,
   timeout,
+  resignation,
   unknown,
 }
 

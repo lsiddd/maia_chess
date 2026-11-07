@@ -173,6 +173,9 @@ class PgnService {
         : '-';
     if (game.termination == GameTermination.timeout) {
       headers['Termination'] = 'time forfeit';
+    } else if (game.termination == GameTermination.resignation) {
+      headers['Termination'] = 'normal';
+      headers['TerminationDetails'] = 'resignation';
     }
     if (game.levelRating != null) {
       headers['MaiaLevel'] = '${game.levelRating}';
