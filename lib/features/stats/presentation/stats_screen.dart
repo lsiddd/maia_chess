@@ -18,19 +18,27 @@ class StatsScreen extends ConsumerWidget {
     final stats = ref.watch(playerStatsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('My performance')),
-      body: MaxWidthBody(
-        child: stats.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: ErrorStateCard(
-                message: 'Could not calculate statistics: $error',
-                onRetry: () => ref.invalidate(playerStatsProvider),
+      body: SafeArea(
+        top: false,
+        child: MaxWidthBody(
+          child: stats.when(
+            loading: () => const Center(
+              child: CircularProgressIndicator(
+                semanticsLabel: 'Loading performance',
               ),
             ),
+            error: (error, stackTrace) => Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.l),
+                child: ErrorStateCard(
+                  message:
+                      'Your performance could not be loaded. Please try again.',
+                  onRetry: () => ref.invalidate(playerStatsProvider),
+                ),
+              ),
+            ),
+            data: (snapshot) => _StatsBody(stats: snapshot),
           ),
-          data: (snapshot) => _StatsBody(stats: snapshot),
         ),
       ),
     );
@@ -44,65 +52,134 @@ class _StatsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final playedLevels = DifficultyLevel.all
+        .where((level) => (stats.resultsByLevel[level.rating]?.total ?? 0) > 0)
+        .toList(growable: false);
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-          sliver: SliverToBoxAdapter(child: _RatingHero(stats: stats)),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.l,
+            AppSpacing.s,
+            AppSpacing.l,
+            AppSpacing.xl,
+          ),
           sliver: SliverToBoxAdapter(
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _MetricCard(
-                    icon: Icons.local_fire_department_outlined,
-                    label: 'Current streak',
-                    value: '${stats.currentStreak}',
-                    suffix: 'wins',
+                Text(
+                  'Every game tells a story.',
+                  style: theme.textTheme.headlineMedium,
+                ),
+                const SizedBox(height: AppSpacing.s),
+                Text(
+                  'Track your progress against Maia.',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MetricCard(
-                    icon: Icons.emoji_events_outlined,
-                    label: 'Best streak',
-                    value: '${stats.recordStreak}',
-                    suffix: 'wins',
+                const SizedBox(height: AppSpacing.xl),
+                _RatingHero(stats: stats),
+                const SizedBox(height: AppSpacing.m),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stacked =
+                        constraints.maxWidth < 340 ||
+                        MediaQuery.textScalerOf(context).scale(16) > 22;
+                    final current = _MetricCard(
+                      icon: Icons.local_fire_department_outlined,
+                      label: 'Current streak',
+                      value: '${stats.currentStreak}',
+                      suffix: _plural(stats.currentStreak, 'win', 'wins'),
+                    );
+                    final best = _MetricCard(
+                      icon: Icons.emoji_events_outlined,
+                      label: 'Best streak',
+                      value: '${stats.recordStreak}',
+                      suffix: _plural(stats.recordStreak, 'win', 'wins'),
+                    );
+                    return stacked
+                        ? Column(
+                            children: [
+                              current,
+                              const SizedBox(height: AppSpacing.m),
+                              best,
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: current),
+                              const SizedBox(width: AppSpacing.m),
+                              Expanded(child: best),
+                            ],
+                          );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Results by level',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Wins, draws and losses in rated games.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 22, 16, 8),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              'Results by level',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontFamily: AppTypography.accentFontFamily,
-                fontWeight: FontWeight.w700,
+        if (stats.evaluatedGames == 0)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.l,
+              0,
+              AppSpacing.l,
+              AppSpacing.xxl,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Text(
+                    'Your results will appear here after your first rated game. Local games and imported games do not affect your rating.',
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ),
               ),
             ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.l,
+              0,
+              AppSpacing.l,
+              AppSpacing.xxl,
+            ),
+            sliver: SliverList.separated(
+              itemCount: playedLevels.length,
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.s),
+              itemBuilder: (context, index) {
+                final level = playedLevels[index];
+                return _LevelScoreCard(
+                  rating: level.rating,
+                  results:
+                      stats.resultsByLevel[level.rating] ??
+                      const LevelResults(),
+                );
+              },
+            ),
           ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-          sliver: SliverList.separated(
-            itemCount: DifficultyLevel.all.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final level = DifficultyLevel.all[index];
-              return _LevelScoreCard(
-                rating: level.rating,
-                results:
-                    stats.resultsByLevel[level.rating] ?? const LevelResults(),
-              );
-            },
-          ),
-        ),
       ],
     );
   }
@@ -117,88 +194,111 @@ class _RatingHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 20, 16, 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-        border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ESTIMATED RATING',
-            style: theme.textTheme.labelLarge?.copyWith(
-              letterSpacing: 1.5,
-              color: colors.onPrimaryContainer.withValues(alpha: 0.72),
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ESTIMATED RATING',
+              style: theme.textTheme.labelMedium?.copyWith(
+                letterSpacing: 1.4,
+                color: colors.onSurfaceVariant,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.end,
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              Text(
-                '${stats.estimatedRating.round()}',
-                style: theme.textTheme.displayLarge?.copyWith(
-                  fontFamily: AppTypography.accentFontFamily,
-                  fontWeight: FontWeight.w800,
-                  height: 1,
+            const SizedBox(height: AppSpacing.s),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.m,
+              runSpacing: AppSpacing.s,
+              children: [
+                Text(
+                  stats.evaluatedGames == 0
+                      ? '—'
+                      : '${stats.estimatedRating.round()}',
+                  style: theme.textTheme.displayLarge?.copyWith(
+                    fontFamily: AppTypography.accentFontFamily,
+                    color: colors.primary,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Text(
-                  '${stats.evaluatedGames} rated games',
-                  style: theme.textTheme.bodyMedium,
+                Text(
+                  '${stats.evaluatedGames} rated ${_plural(stats.evaluatedGames, 'game', 'games')}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (stats.ratingHistory.isEmpty)
-            Container(
-              height: 150,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: colors.surface.withValues(alpha: 0.38),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Complete a rated game against Maia-3 to start '
-                  'your rating history.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            )
-          else
-            Semantics(
-              label:
-                  'Rating chart with ${stats.ratingHistory.length} '
-                  'points; current rating ${stats.estimatedRating.round()}',
-              child: SizedBox(
-                height: 190,
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            if (stats.ratingHistory.isEmpty)
+              Container(
                 width: double.infinity,
-                child: CustomPaint(
-                  painter: _RatingChartPainter(
-                    points: stats.ratingHistory,
-                    lineColor: colors.primary,
-                    gridColor: colors.onSurface.withValues(alpha: 0.12),
-                    labelColor: colors.onSurfaceVariant,
-                    fillColor: colors.primary.withValues(alpha: 0.16),
+                padding: const EdgeInsets.all(AppSpacing.l),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.trending_up, color: colors.primary, size: 28),
+                    const SizedBox(height: AppSpacing.m),
+                    Text(
+                      'Your progress starts here.',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.s),
+                    const Text(
+                      'Complete a rated game against Maia-3 to start your rating history.',
+                    ),
+                  ],
+                ),
+              )
+            else ...[
+              Semantics(
+                label:
+                    'Rating chart with ${stats.ratingHistory.length} ${_plural(stats.ratingHistory.length, 'point', 'points')}; current rating ${stats.estimatedRating.round()}',
+                child: SizedBox(
+                  height: 190,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: _RatingChartPainter(
+                      points: stats.ratingHistory,
+                      lineColor: colors.primary,
+                      gridColor: colors.outlineVariant,
+                      labelColor: colors.onSurfaceVariant,
+                      fillColor: colors.primary.withValues(alpha: 0.1),
+                      textScaler: MediaQuery.textScalerOf(context),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      'First game',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.m),
+                  Flexible(
+                    child: Text(
+                      'Latest game',
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -223,11 +323,14 @@ class _MetricCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(icon, color: colors.tertiary),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Icon(icon, color: colors.primary),
+            ),
             const SizedBox(height: 12),
             Text(label, style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 2),
@@ -241,7 +344,7 @@ class _MetricCard extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  TextSpan(text: '  $suffix'),
+                  TextSpan(text: ' $suffix'),
                 ],
               ),
             ),
@@ -262,87 +365,72 @@ class _LevelScoreCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final total = math.max(1, results.total);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: colors.secondaryContainer,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Text(
-                '$rating',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontFamily: AppTypography.accentFontFamily,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Semantics(
+      label:
+          'Maia $rating. ${results.total} ${_plural(results.total, 'game', 'games')}: ${results.wins} ${_plural(results.wins, 'win', 'wins')}, ${results.draws} ${_plural(results.draws, 'draw', 'draws')}, ${results.losses} ${_plural(results.losses, 'loss', 'losses')}.',
+      excludeSemantics: true,
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AppSpacing.l,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      Text(
-                        '${results.total} games',
-                        style: theme.textTheme.labelLarge,
-                      ),
-                      Text(
-                        '${results.wins}W  ${results.draws}D  '
-                        '${results.losses}L',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: SizedBox(
-                      height: 8,
-                      child: Row(
-                        children: [
-                          if (results.wins > 0)
-                            Expanded(
-                              flex: results.wins,
-                              child: ColoredBox(color: colors.tertiary),
-                            ),
-                          if (results.draws > 0)
-                            Expanded(
-                              flex: results.draws,
-                              child: ColoredBox(color: colors.secondary),
-                            ),
-                          if (results.losses > 0)
-                            Expanded(
-                              flex: results.losses,
-                              child: ColoredBox(color: colors.error),
-                            ),
-                          if (results.total == 0)
-                            Expanded(
-                              flex: total,
-                              child: ColoredBox(
-                                color: colors.surfaceContainerHighest,
-                              ),
-                            ),
-                        ],
-                      ),
+                  Text('Maia $rating', style: theme.textTheme.titleMedium),
+                  Text(
+                    '${results.total} ${_plural(results.total, 'game', 'games')}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: AppSpacing.m),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: SizedBox(
+                  height: 6,
+                  child: Row(
+                    children: [
+                      if (results.wins > 0)
+                        Expanded(
+                          flex: results.wins,
+                          child: ColoredBox(color: colors.primary),
+                        ),
+                      if (results.draws > 0)
+                        Expanded(
+                          flex: results.draws,
+                          child: ColoredBox(color: colors.secondary),
+                        ),
+                      if (results.losses > 0)
+                        Expanded(
+                          flex: results.losses,
+                          child: ColoredBox(color: colors.error),
+                        ),
+                      if (results.total == 0)
+                        Expanded(
+                          child: ColoredBox(
+                            color: colors.surfaceContainerHighest,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s),
+              Text(
+                '${results.wins}W  ${results.draws}D  ${results.losses}L',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -356,6 +444,7 @@ class _RatingChartPainter extends CustomPainter {
     required this.gridColor,
     required this.labelColor,
     required this.fillColor,
+    required this.textScaler,
   });
 
   final List<RatingPoint> points;
@@ -363,10 +452,11 @@ class _RatingChartPainter extends CustomPainter {
   final Color gridColor;
   final Color labelColor;
   final Color fillColor;
+  final TextScaler textScaler;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const left = 38.0;
+    final left = textScaler.scale(12) * 3.3;
     const top = 10.0;
     const bottom = 24.0;
     const right = 8.0;
@@ -399,9 +489,10 @@ class _RatingChartPainter extends CustomPainter {
       final text = TextPainter(
         text: TextSpan(
           text: label,
-          style: TextStyle(color: labelColor, fontSize: 10),
+          style: TextStyle(color: labelColor, fontSize: 12),
         ),
         textDirection: TextDirection.ltr,
+        textScaler: textScaler,
       )..layout();
       text.paint(
         canvas,
@@ -457,10 +548,14 @@ class _RatingChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RatingChartPainter oldDelegate) {
-    return oldDelegate.points != points ||
+    return oldDelegate.textScaler != textScaler ||
+        oldDelegate.points != points ||
         oldDelegate.lineColor != lineColor ||
         oldDelegate.gridColor != gridColor ||
         oldDelegate.labelColor != labelColor ||
         oldDelegate.fillColor != fillColor;
   }
 }
+
+String _plural(int count, String singular, String plural) =>
+    count == 1 ? singular : plural;
