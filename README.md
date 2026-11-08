@@ -6,7 +6,8 @@
 
 **A human-style opponent, wherever you play.**
 
-Offline chess for Android. Sixteen Maia-3 levels, Stockfish game review, and a campaign to climb.
+Play offline against 16 human-style Maia-3 opponents, from 600 to 2600 Elo.
+Use Stockfish for hints, opponent plans, and post-game review.
 
 [![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#get-the-app)
 [![Works offline](https://img.shields.io/badge/Play-Offline-187B80)](#why-maia)
@@ -18,8 +19,7 @@ Offline chess for Android. Sixteen Maia-3 levels, Stockfish game review, and a c
 </div>
 
 Play a quick match against Maia, work your way through the campaign, or share a
-board with a friend. Your opponents, practice tools, and saved games run right
-on your phone. Open the app and play, even when you're offline.
+board with a friend on one Android device.
 
 ## Get the app
 
@@ -41,24 +41,19 @@ updated after verified changes to `main`, daily at 06:17 UTC, or by manual night
   <tr>
     <td align="center" width="33%"><strong>Play and practise</strong></td>
     <td align="center" width="33%"><strong>Climb the campaign</strong></td>
-    <td align="center" width="33%"><strong>Make it yours</strong></td>
+    <td align="center" width="33%"><strong>Review key moves and evaluations</strong></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/game.png" alt="Chessboard with move history and the practice toolbar" width="250"></td>
+    <td align="center"><img src="docs/images/game.png" alt="Local game with the chessboard, move history, and practice toolbar" width="250"></td>
     <td align="center"><img src="docs/images/campaign.png" alt="Maia campaign showing the first level and the path to higher opponents" width="250"></td>
-    <td align="center"><img src="docs/images/appearance.png" alt="Appearance settings with a board preview, app theme, and board colours" width="250"></td>
+    <td align="center"><img src="docs/images/review.png" alt="Stockfish review showing the evaluation graph and Black's forced mate after 2. g4" width="250"></td>
   </tr>
 </table>
 
 ## Why Maia?
 
-[Maia-3](https://github.com/CSSLab/maia3) learns from real human games to model
-how people play at different rating bands. This app runs the **Maia-3 79M** model on your phone, with 16 levels from
-**600 to 2600**. One shared model uses the selected Elo to predict human play.
-
-Maia is your opponent; **Stockfish** powers the hints and opponent-plan tools.
-Both run locally, so you can practise on the train, on a trip, or anywhere you
-want a game.
+Maia-3 learns from real human games. It uses the selected opponent rating to
+predict the moves a person at that level is likely to play. [Maia-3 project](https://github.com/CSSLab/maia3)
 
 | What you want to do | What Maia Chess offers |
 | --- | --- |
@@ -75,11 +70,11 @@ want a game.
 
 From the home screen, choose how you'd like to play:
 
-- **Free play against Maia:** pick your colour, select any level from 600 to
-  2600, and tap **Start game**.
-- **Maia campaign:** start with level 600. Win two games in a window of three
-  rated campaign games at a level to unlock the next opponent. Campaign games
-  disable hints, attacks, plans, and undo.
+- Choose **Free play against Maia-3**, pick your colour and an opponent from
+  600 to 2600, then tap **Start game**.
+- **Maia-3 campaign** starts at level 600. Win twice within a rolling window
+  of up to three rated campaign games at the same level to unlock the next
+  opponent. Campaign games disable hints, attacks, plans, and undo.
 - **Play (2 local players):** share the phone with a friend and take turns on
   the same board.
 
@@ -91,14 +86,16 @@ set **Minutes per player** and **Increment in seconds** (0–180 each). The
 increment is added after every legal move. With zero minutes, each player
 starts with one increment; a clock cannot have both values set to zero.
 
-Both clocks appear above the board, with the active side highlighted. Running
-out of time ends the game; it is a draw if the opponent has insufficient mating
-material. Clocks pause when you leave the game, open appearance settings, or
+Both clocks appear near the board and highlight the active side. In the wide
+landscape layout, they sit beside the board. Running out of time ends the game
+in a draw if the opponent has insufficient mating material, and in a loss
+otherwise. Clocks pause when you leave the game, open appearance settings, or
 background the app, and resume with the saved balances. Restart and rematch
 keep the time control. Undo retains the remaining time without a refund.
 
-Your ongoing game saves automatically after each move. When you come back,
-tap **Continue saved game** to pick up where you left off.
+The app keeps one ongoing game and saves it automatically after each move.
+Tap **Continue saved game** to pick up where you left off. Starting a new game
+replaces the autosave after you confirm.
 
 **More → Resign** ends the game after confirmation. Against Maia-3, you can
 resign on either turn; in local play, the side to move resigns. The result stays
@@ -154,7 +151,7 @@ Cburnett pieces. Your settings also carry over to game replays.
 The board works in portrait and landscape, supports tap and drag controls,
 and includes square labels and accessibility announcements. The screen stays
 awake while you play. Reduced-motion preferences, larger text, and Android
-back navigation are respected throughout the redesigned screens.
+back navigation are supported.
 
 Your games, settings, statistics, and campaign progress are stored on your
 device. You can play without an account or an internet connection and take
@@ -177,9 +174,11 @@ your games with you using PGN export.
 
 ## Build from source
 
-Made with **Flutter and Dart**, with **ONNX Runtime** running Maia-3 and **Stockfish**
-providing assistance. **Riverpod** manages app state and **Drift/SQLite** stores
-your games locally.
+Maia Chess is built with **Flutter and Dart**. **ONNX Runtime** runs one
+bundled **Maia-3 79M** model in a Dart isolate for all opponent levels.
+**Stockfish** loads on demand for assistance and review. **Riverpod** manages
+app state, and **Drift/SQLite** stores games locally, saving move history
+incrementally and loading moves only when a game is opened from the library.
 
 <details>
 <summary><strong>Developer setup and build commands</strong></summary>
@@ -224,9 +223,10 @@ dart run tool/verify_apk.dart build/app/outputs/flutter-apk/app-arm64-v8a-releas
 ```
 
 The APK is written to `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`.
-Configure `android/app/key.properties` for release signing; local builds use
-the debug key when that file is absent. See [Android releases](docs/android-releases.md)
-for signing, checks, versioning, and publication.
+Configure `android/app/key.properties` for release signing. Local builds use
+the debug key when that file is absent. CI publishes stable and nightly builds
+after native acceptance on an Android emulator and verification of the signed
+ARM64 APK. [Android releases](docs/android-releases.md)
 
 Run Android builds and integration tests sequentially. After integration tests,
 use the normal build command to refresh plugin registration.
