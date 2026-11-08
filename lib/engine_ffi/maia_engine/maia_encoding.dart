@@ -27,7 +27,7 @@ abstract final class MaiaEncoding {
     final history = positions
         .skip(max(0, positions.length - historyLength))
         .toList();
-    final result = Float32List(64 * 96);
+    final tokens = Float32List(64 * 96);
     for (var frame = 0; frame < historyLength; frame++) {
       final board = history[max(0, frame - (historyLength - history.length))];
       final black = board.turn == Side.black;
@@ -37,10 +37,10 @@ abstract final class MaiaEncoding {
         final oriented = black ? square ^ 56 : square;
         final role = _roles.indexOf(piece.role);
         final channel = role + (piece.color == board.turn ? 0 : 6);
-        result[oriented * 96 + frame * 12 + channel] = 1;
+        tokens[oriented * 96 + frame * 12 + channel] = 1;
       }
     }
-    return result;
+    return tokens;
   }
 
   static int index(NormalMove move, Side turn) {
@@ -57,7 +57,7 @@ abstract final class MaiaEncoding {
   /// Use standard king destinations for castling, not dartchess's Chess960
   /// king-to-rook representation. Include all four legal promotions.
   static Map<int, String> legalMoves(Chess position) {
-    final result = <int, String>{};
+    final movesByIndex = <int, String>{};
     for (var square = 0; square < 64; square++) {
       final from = Square(square);
       final piece = position.board.pieceAt(from);
@@ -70,12 +70,12 @@ abstract final class MaiaEncoding {
             : <Role?>[null];
         for (final promotion in promotions) {
           final move = NormalMove(from: from, to: to, promotion: promotion);
-          result[index(move, position.turn)] = move.uci;
+          movesByIndex[index(move, position.turn)] = move.uci;
         }
       }
     }
     return Map.fromEntries(
-      result.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+      movesByIndex.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
   }
 

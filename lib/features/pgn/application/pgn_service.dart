@@ -248,7 +248,7 @@ class PgnService {
   }
 
   List<String> _sanTokens(String plain) {
-    final result = <String>[];
+    final tokens = <String>[];
     for (final match in RegExp(
       r'\$\d+|\d+\s*\.(?:\s*\.)*|[^\s$]+|\$',
     ).allMatches(plain)) {
@@ -266,14 +266,14 @@ class PgnService {
       if (token.length > 16) {
         throw const PgnFormatException('The PGN contains invalid move text.');
       }
-      if (result.length == maxImportMoves) {
+      if (tokens.length == maxImportMoves) {
         throw const PgnFormatException(
           'A PGN may contain at most 20,000 moves, including variations.',
         );
       }
-      result.add(token);
+      tokens.add(token);
     }
-    return result;
+    return tokens;
   }
 
   String _stripHeadersAndComments(

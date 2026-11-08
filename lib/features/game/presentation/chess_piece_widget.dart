@@ -15,7 +15,7 @@ class ChessPieceWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       image: true,
-      label: pieceLabelPt(piece),
+      label: pieceLabelEn(piece),
       child: RepaintBoundary(
         child: SvgPicture.asset(
           pieceAssetPath(piece),

@@ -5,7 +5,7 @@ import '../application/game_state.dart';
 import '../../../data/repositories/game_repository.dart';
 
 String boardSquareLabel(Square square, Piece? piece) =>
-    '${square.name}, ${piece == null ? 'empty' : pieceLabelPt(piece)}';
+    '${square.name}, ${piece == null ? 'empty' : pieceLabelEn(piece)}';
 
 /// Describe the last move for the status live region. Use the previous
 /// position to identify a pawn that has just promoted.
@@ -19,13 +19,13 @@ String lastMoveAnnouncement(GameState state) {
   final String description;
   if (san.startsWith('O-O')) {
     description =
-        '${pieceLabelPt(piece)}, '
+        '${pieceLabelEn(piece)}, '
         '${san.startsWith('O-O-O') ? 'queenside castling' : 'kingside castling'}';
   } else {
     description =
-        '${pieceLabelPt(piece)} from ${move.from.name} to ${move.to.name}'
+        '${pieceLabelEn(piece)} from ${move.from.name} to ${move.to.name}'
         '${san.contains('x') ? ', captures' : ''}'
-        '${move.promotion == null ? '' : ', promotes to ${roleLabelPt(move.promotion!)}'}';
+        '${move.promotion == null ? '' : ', promotes to ${roleLabelEn(move.promotion!)}'}';
   }
   return '$description${san.endsWith('#') ? ', checkmate' : ''}.';
 }

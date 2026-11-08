@@ -9,6 +9,12 @@ import 'package:onnxruntime_plus/onnxruntime_plus.dart';
 
 import 'maia_encoding.dart';
 
+typedef _InferenceRequest = ({
+  Float32List tokens,
+  int selfElo,
+  int opponentElo,
+});
+
 abstract interface class MaiaEngine {
   bool get isReady;
   Future<void> init(String modelPath);
@@ -129,7 +135,11 @@ class MaiaService implements MaiaEngine {
     final tokens = MaiaEncoding.tokens(positions);
     final generation = _generation;
     _runOptions!.unsetTerminate();
-    final running = _running = _request('run', [tokens, selfElo, opponentElo]);
+    final running = _running = _request('run', (
+      tokens: tokens,
+      selfElo: selfElo,
+      opponentElo: opponentElo,
+    ));
     // Register cleanup before awaiting: the next inference can start as soon
     // as this response completes, while a timed-out native call still drains.
     void clearRunning() {
@@ -238,17 +248,17 @@ void _maiaWorker((SendPort, String) arguments) async {
       final inputs = <String, OrtValue>{};
       List<OrtValue?> outputs = [];
       try {
-        final data = message[2] as List;
+        final request = message[2] as _InferenceRequest;
         inputs['tokens'] = OrtValueTensor.createTensorWithDataList(
-          data[0] as Float32List,
+          request.tokens,
           [1, 64, 96],
         );
         inputs['self_elo'] = OrtValueTensor.createTensorWithDataList(
-          Int64List.fromList([data[1] as int]),
+          Int64List.fromList([request.selfElo]),
           [1],
         );
         inputs['opponent_elo'] = OrtValueTensor.createTensorWithDataList(
-          Int64List.fromList([data[2] as int]),
+          Int64List.fromList([request.opponentElo]),
           [1],
         );
         outputs = session.run(run, inputs, ['policy']);

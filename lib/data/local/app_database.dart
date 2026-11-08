@@ -271,18 +271,20 @@ class AppDatabase extends _$AppDatabase {
       windowSize: level.windowSize,
     );
     var unlocked = true;
-    for (final item in progress) {
-      final rule = DifficultyLevel.byRating(item.rating);
-      final wins = item.rating == level.rating ? window.wins : item.validWins;
-      final count = item.rating == level.rating
+    for (final levelProgress in progress) {
+      final rule = DifficultyLevel.byRating(levelProgress.rating);
+      final wins = levelProgress.rating == level.rating
+          ? window.wins
+          : levelProgress.validWins;
+      final count = levelProgress.rating == level.rating
           ? window.games
-          : item.windowGames;
-      if (wins != item.validWins ||
-          count != item.windowGames ||
-          unlocked != item.unlocked) {
+          : levelProgress.windowGames;
+      if (wins != levelProgress.validWins ||
+          count != levelProgress.windowGames ||
+          unlocked != levelProgress.unlocked) {
         await (update(
           difficultyProgress,
-        )..where((row) => row.rating.equals(item.rating))).write(
+        )..where((row) => row.rating.equals(levelProgress.rating))).write(
           DifficultyProgressCompanion(
             validWins: Value(wins),
             windowGames: Value(count),

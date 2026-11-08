@@ -34,9 +34,8 @@ String pieceAssetPath(Piece piece) {
   return 'assets/chess_pieces/$side$role.svg';
 }
 
-/// English role label used by promotion and accessibility announcements. The
-/// legacy function name is retained for compatibility.
-String roleLabelPt(Role role) {
+/// English role label used by promotion and accessibility announcements.
+String roleLabelEn(Role role) {
   switch (role) {
     case Role.queen:
       return 'Queen';
@@ -53,7 +52,7 @@ String roleLabelPt(Role role) {
   }
 }
 
-String pieceLabelPt(Piece piece) {
+String pieceLabelEn(Piece piece) {
   final color = piece.color == Side.white ? 'White' : 'Black';
-  return '$color ${roleLabelPt(piece.role).toLowerCase()}';
+  return '$color ${roleLabelEn(piece.role).toLowerCase()}';
 }

@@ -23,7 +23,7 @@ Future<Role?> showPromotionDialog(
           final piece = Piece(color: side, role: role);
           return IconButton(
             iconSize: 48,
-            tooltip: roleLabelPt(role),
+            tooltip: roleLabelEn(role),
             onPressed: () => Navigator.of(context).pop(role),
             icon: SizedBox.square(
               dimension: 48,

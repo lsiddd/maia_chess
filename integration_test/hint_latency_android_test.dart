@@ -79,7 +79,7 @@ void main() {
         }
       }
 
-      Future<void> optimizedHint() async {
+      Future<void> controllerHint() async {
         final hint = await controller.getHint();
         expect(hint.stockfishSan, isNotEmpty);
       }
@@ -96,13 +96,13 @@ void main() {
         metrics['sequential_warm_ms'] = sequentialWarm;
 
         await stockfish.dispose();
-        metrics['parallel_cold_ms'] = await measure(optimizedHint);
-        metrics['cached_ms'] = await measure(optimizedHint);
+        metrics['parallel_cold_ms'] = await measure(controllerHint);
+        metrics['cached_ms'] = await measure(controllerHint);
         final parallelWarm = <double>[];
         for (var sample = 0; sample < 3; sample++) {
           // A new game invalidates the hint cache but reuses the engines.
           await newGame();
-          parallelWarm.add(await measure(optimizedHint));
+          parallelWarm.add(await measure(controllerHint));
         }
         metrics['parallel_warm_ms'] = parallelWarm;
         metrics['parallel_1500ms_ms'] = await measure(() async {
@@ -123,7 +123,7 @@ void main() {
             await Future<void>.delayed(const Duration(milliseconds: 10));
           }
         });
-        metrics['prepared_first_hint_ms'] = await measure(optimizedHint);
+        metrics['prepared_first_hint_ms'] = await measure(controllerHint);
         binding.reportData = {'hint_latency': metrics};
         debugPrint('HINT_LATENCY ${jsonEncode(metrics)}');
       } finally {

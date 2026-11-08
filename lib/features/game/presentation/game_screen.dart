@@ -450,7 +450,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final item in [
+              for (final menuAction in [
                 ('flip', Icons.swap_vert, 'Rotate board'),
                 ('save', Icons.save_outlined, 'Save game'),
                 ('settings', Icons.palette_outlined, 'Appearance'),
@@ -468,15 +468,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 if (!game.isGameOver) ('resign', Icons.flag_outlined, 'Resign'),
               ])
                 ListTile(
-                  iconColor: item.$1 == 'resign'
+                  iconColor: menuAction.$1 == 'resign'
                       ? Theme.of(context).colorScheme.error
                       : null,
-                  textColor: item.$1 == 'resign'
+                  textColor: menuAction.$1 == 'resign'
                       ? Theme.of(context).colorScheme.error
                       : null,
-                  leading: Icon(item.$2),
-                  title: Text(item.$3),
-                  onTap: () => Navigator.pop(context, item.$1),
+                  leading: Icon(menuAction.$2),
+                  title: Text(menuAction.$3),
+                  onTap: () => Navigator.pop(context, menuAction.$1),
                 ),
               Padding(
                 padding: const EdgeInsets.all(16),

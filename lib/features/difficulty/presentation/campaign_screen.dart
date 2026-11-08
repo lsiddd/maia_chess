@@ -331,14 +331,14 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
                       separatorBuilder: (_, _) =>
                           const SizedBox(height: AppSpacing.s),
                       itemBuilder: (context, index) {
-                        final item = remainingLevels[index];
+                        final levelProgress = remainingLevels[index];
                         return _CampaignLevelCard(
-                          progress: item,
-                          finalLevel: item == levels.last,
+                          progress: levelProgress,
+                          finalLevel: levelProgress == levels.last,
                           busy:
                               _startingRating != null || !_timeControl.isValid,
-                          starting: _startingRating == item.rating,
-                          onPlay: () => _startLevel(item),
+                          starting: _startingRating == levelProgress.rating,
+                          onPlay: () => _startLevel(levelProgress),
                         );
                       },
                     ),
