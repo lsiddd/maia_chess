@@ -100,6 +100,13 @@ flutter {
     source = "../.."
 }
 
+// Run full lint with the same Flutter inputs and ABI as the release APK.
+if (providers.gradleProperty("lint-release").orNull == "true") {
+    tasks.matching { it.name == "assembleRelease" }.configureEach {
+        dependsOn("lintRelease")
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

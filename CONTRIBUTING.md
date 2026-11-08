@@ -32,8 +32,9 @@ python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 CI checks formatting without applying it and uploads `coverage/lcov.info`.
-The APK job also runs `./gradlew :app:lintRelease` from `android/` after the
-production build. Run this locally after Android resource or build changes.
+After Android resource or build changes, pass `--android-project-arg=lint-release=true`
+to the production build command. CI uses this flag to run full Android lint in
+the same Gradle invocation as the ARM64 APK build.
 
 Analysis excludes `native/`, `build/`, and `android/`; formatting covers only app
 Dart code, tests, and tools. Review native changes separately. The Python tests exercise

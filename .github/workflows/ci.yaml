@@ -72,7 +72,6 @@ jobs:
 
   android_integration:
     name: Android native integration
-    needs: analyze
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -95,6 +94,16 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+            ~/.gradle/wrapper/dists/gradle-*-bin
+            !~/.gradle/wrapper/dists/**/*.zip
+          key: gradle-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties', 'pubspec.lock') }}
+          restore-keys: gradle-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-
       - name: Prepare native SDK and KVM
         run: |
           sudo chmod 666 /dev/kvm
@@ -154,6 +163,16 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+            ~/.gradle/wrapper/dists/gradle-*-bin
+            !~/.gradle/wrapper/dists/**/*.zip
+          key: gradle-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties', 'pubspec.lock') }}
+          restore-keys: gradle-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-
       - name: Prepare SDK and limit Gradle memory
         run: |
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
@@ -194,13 +213,13 @@ jobs:
           REQUIRE_RELEASE_SIGNING: ${{ github.ref_type == 'tag' || inputs.release_tag != '' || (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || inputs.publish_nightly)) }}
           SIGNING_REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
         run: GITHUB_REF_TYPE="$SIGNING_REF_TYPE" python3 scripts/configure_android_signing.py
-      - name: Build release APK
+      - name: Build and lint release APK
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
-        run: flutter build apk --release --split-per-abi --target-platform android-arm64 --build-name "$APP_VERSION" --build-number "$GITHUB_RUN_NUMBER"
-      - name: Android lint
-        working-directory: android
-        run: ./gradlew :app:lintRelease
+        run: |
+          flutter build apk --release --split-per-abi --target-platform android-arm64 \
+            --build-name "$APP_VERSION" --build-number "$GITHUB_RUN_NUMBER" \
+            --android-project-arg=lint-release=true
 
       - name: Verify APK signature and contents
         run: |
