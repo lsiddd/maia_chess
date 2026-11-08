@@ -91,9 +91,12 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Climb through all 16 Maia-3 levels'), findsOneWidget);
+        final level800 = find.text('Maia-3 800');
+        await tester.scrollUntilVisible(level800, 150);
+        expect(level800, findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Maia-3 600'), 150);
         expect(find.text('Level completed'), findsOneWidget);
         expect(find.text('Play again'), findsOneWidget);
-        expect(find.text('Maia-3 800'), findsOneWidget);
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -136,7 +139,15 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('1/2 wins • 2/3 games'), findsOneWidget);
-        expect(find.text('Locked'), findsWidgets);
+        await tester.scrollUntilVisible(level800, 150);
+        final level800Card = find.ancestor(
+          of: level800,
+          matching: find.byType(Card),
+        );
+        expect(
+          find.descendant(of: level800Card, matching: find.text('Locked')),
+          findsOneWidget,
+        );
 
         await games.deleteGame(first.ongoing.id);
         await games.deleteGame(second.ongoing.id);
