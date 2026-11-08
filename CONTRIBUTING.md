@@ -63,7 +63,7 @@ The script refuses personal devices and keeps its output in
 emulator/device when changing inference or packaging.
 
 For the screen matrix, vary emulator orientation, display size, font scale, and
-navigation mode, then run `integration_test/section_2_android_test.dart`. Widget
+navigation mode, then run `integration_test/game_screen_android_test.dart`. Widget
 tests also exercise narrow screens and enlarged text. Run Android tests and
 production builds sequentially: concurrent Flutter targets can race while
 generating `GeneratedPluginRegistrant.java`. After integration tests, use the
@@ -99,7 +99,7 @@ Outputs are `build/board_performance.json`, `build/hint_latency.json`, and
 `build/audit_performance.json`. The last two targets overwrite the same audit
 output; copy each report before running the next target. Keep measurement
 records dated, link raw evidence, and distinguish emulator results from physical
-device results. See the [historical performance report](docs/performance-validation.md).
+device results.
 
 ## English communication and commits
 
@@ -126,5 +126,4 @@ force-push branches, or recreate published version tags to translate it.
 Migrating that history requires a separately coordinated and authorised history
 rewrite. Release automation uses English templates with source links; review any
 additional feature notes when publishing a stable release. See
-[release documentation](docs/android-releases.md) and the
-[language audit](docs/documentation-audit.md).
+[release documentation](docs/android-releases.md).

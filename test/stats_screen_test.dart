@@ -8,6 +8,49 @@ import 'package:maia_chess/features/stats/domain/player_stats.dart';
 import 'package:maia_chess/features/stats/presentation/stats_screen.dart';
 
 void main() {
+  testWidgets('statistics screen shows rating, streaks, and results', (
+    tester,
+  ) async {
+    final snapshot = PlayerStatsSnapshot(
+      estimatedRating: 1532.4,
+      ratingHistory: [
+        RatingPoint(
+          gameId: 'one',
+          recordedAtUtc: DateTime.utc(2026, 8, 5),
+          value: 1516,
+        ),
+        RatingPoint(
+          gameId: 'two',
+          recordedAtUtc: DateTime.utc(2026, 8, 6),
+          value: 1532.4,
+        ),
+      ],
+      resultsByLevel: const {1500: LevelResults(wins: 2, losses: 1, draws: 1)},
+      currentStreak: 2,
+      recordStreak: 4,
+      evaluatedGames: 4,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          playerStatsProvider.overrideWith((ref) => Stream.value(snapshot)),
+        ],
+        child: const MaterialApp(home: StatsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1532'), findsOneWidget);
+    expect(find.text('Current streak'), findsOneWidget);
+    expect(find.text('Best streak'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('4 games'),
+      300,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('2W  1D  1L'), findsOneWidget);
+  });
+
   testWidgets(
     'results show only played levels in rating order with correct plurals',
     (tester) async {

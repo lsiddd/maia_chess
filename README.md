@@ -155,7 +155,6 @@ The board works in portrait and landscape, supports tap and drag controls,
 and includes square labels and accessibility announcements. The screen stays
 awake while you play. Reduced-motion preferences, larger text, and Android
 back navigation are respected throughout the redesigned screens.
-See the [design decisions and validation](docs/ui-ux-redesign.md).
 
 Your games, settings, statistics, and campaign progress are stored on your
 device. You can play without an account or an internet connection and take
@@ -243,7 +242,6 @@ find it.
 - [Contributing](CONTRIBUTING.md): checks, tests, code generation, and contribution conventions.
 - [Architecture](docs/architecture.md): app state, storage, and engine integration.
 - [Android releases](docs/android-releases.md): build, signing, and release workflow.
-- [Maia-3 validation](docs/maia3-validation.md): numerical parity, offline tests, and measured emulator results.
 
 ## Licence and credits
 

@@ -63,3 +63,6 @@ native/**/*.iml
 
 # Reports emitted before Gradle relocates the root build directory.
 /android/build/
+
+# Local Claude scheduler state.
+/.claude/scheduled_tasks.lock

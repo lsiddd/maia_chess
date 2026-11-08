@@ -2,9 +2,9 @@
 import 'board_interaction_android_test.dart' as board;
 import 'game_review_android_test.dart' as review;
 import 'move_sound_android_test.dart' as sounds;
-import 'phase_4_android_test.dart' as persistence;
-import 'phase_5_android_test.dart' as campaign;
-import 'section_2_android_test.dart' as game;
+import 'persistence_android_test.dart' as persistence;
+import 'campaign_progress_android_test.dart' as campaign;
+import 'game_screen_android_test.dart' as game;
 import 'tactics_android_test.dart' as tactics;
 
 void main() {

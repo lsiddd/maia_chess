@@ -22,7 +22,7 @@ void main() {
     (tester) async {
       final temporaryDirectory = await getTemporaryDirectory();
       final databaseFile = io.File(
-        '${temporaryDirectory.path}/phase_5_android_test.sqlite',
+        '${temporaryDirectory.path}/campaign_progress_android_test.sqlite',
       );
       if (await databaseFile.exists()) await databaseFile.delete();
 
@@ -38,7 +38,7 @@ void main() {
 
       try {
         final first = _campaignGame(
-          id: 'phase5-device-win-1',
+          id: 'campaign-device-win-1',
           hour: 12,
           result: StoredGameResult.whiteWin,
         );
@@ -59,12 +59,12 @@ void main() {
         expect(levels[1].unlocked, isFalse);
 
         final second = _campaignGame(
-          id: 'phase5-device-loss',
+          id: 'campaign-device-loss',
           hour: 13,
           result: StoredGameResult.blackWin,
         );
         final third = _campaignGame(
-          id: 'phase5-device-win-2',
+          id: 'campaign-device-win-2',
           hour: 14,
           result: StoredGameResult.whiteWin,
         );

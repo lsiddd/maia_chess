@@ -39,7 +39,6 @@ void main() {
     );
     expect(find.text('My performance'), findsOneWidget);
     expect(find.text('Saved games and PGN'), findsOneWidget);
-    expect(find.text('Technical diagnostic (Phase 0)'), findsNothing);
   });
 
   testWidgets('requests confirmation before replacing autosave', (
