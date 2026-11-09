@@ -638,10 +638,18 @@ class GameController extends Notifier<GameState> {
 
   /// Mark the game unrated without changing the board; persist the
   /// eligibility change before assistance is delivered.
-  Future<void> markAsNotEvaluated() async {
-    if (!state.allowsAssistance || !state.evaluated) return;
-    state = state.copyWith(evaluated: false);
-    await _persistCurrentGame();
+  Future<bool> markAsNotEvaluated() async {
+    if (!state.allowsAssistance) return false;
+    if (state.evaluated) state = state.copyWith(evaluated: false);
+    // A prior request may have changed memory while its write failed or is
+    // still pending. Every assistance request must await a durable snapshot.
+    return _persistCurrentGame();
+  }
+
+  Future<void> _persistAssistanceEligibility() async {
+    if (!await markAsNotEvaluated()) {
+      throw StateError('Could not save the unrated game. Try again.');
+    }
   }
 
   /// Calculate a legal Stockfish move for the captured request position.
@@ -676,7 +684,7 @@ class GameController extends Notifier<GameState> {
 
     // Requesting assistance changes eligibility immediately, so engine
     // failure cannot reverse the game rule.
-    final evaluationPersistence = markAsNotEvaluated();
+    final evaluationPersistence = _persistAssistanceEligibility();
 
     final position = state.position;
     cancelOpponentThreats();
@@ -742,7 +750,7 @@ class GameController extends Notifier<GameState> {
     final generation = _threatGeneration;
     final gameGeneration = _gameGeneration;
     final position = opponentThreatPosition(state.position);
-    final prerequisite = markAsNotEvaluated();
+    final prerequisite = _persistAssistanceEligibility();
     final cancellation = Completer<Never>();
     final future = Future.any<ThreatResult>([
       _calculateThreats(
@@ -1347,8 +1355,9 @@ class GameController extends Notifier<GameState> {
     }
   }
 
-  Future<void> _persistCurrentGame() async {
-    if (state.gameId == null || state.startedAtUtc == null) return;
+  Future<bool> _persistCurrentGame() async {
+    // Unsaved local sessions have no rated autosave that could be restored.
+    if (state.gameId == null || state.startedAtUtc == null) return true;
     final snapshotState = state;
     final completed = snapshotState.isGameOver;
     final snapshot = _snapshot(
@@ -1366,10 +1375,12 @@ class GameController extends Notifier<GameState> {
           state.persistenceError != null) {
         state = state.copyWith(clearPersistenceError: true);
       }
+      return true;
     } catch (error) {
       if (!_isDisposed && state.gameId == snapshot.id) {
         state = state.copyWith(persistenceError: 'Autosave failed: $error');
       }
+      return false;
     }
   }
 
