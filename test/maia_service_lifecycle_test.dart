@@ -85,6 +85,29 @@ void main() {
     expect(service.isReady, isTrue);
     await service.dispose();
   });
+
+  test('startup queued during shutdown still shares a single worker', () async {
+    var handles = 0;
+    final service = MaiaService(
+      worker: _worker,
+      runOptionsFromAddress: (_) {
+        handles++;
+        return _RunOptions();
+      },
+    );
+    await service.init('drain');
+    final closing = service.dispose();
+    final restarting = service.init('healthy');
+    await closing;
+    final duplicate = service.init('healthy');
+    await Future.wait([
+      restarting,
+      duplicate,
+    ]).timeout(const Duration(seconds: 1));
+    expect(handles, 2);
+    expect(service.isReady, isTrue);
+    await service.dispose();
+  });
 }
 
 class _RunOptions extends Fake implements OrtRunOptions {
@@ -118,6 +141,11 @@ void _worker((SendPort, String) arguments) async {
       continue;
     }
     if (message[1] == 'close' && phase == 'healthy') {
+      reply.send([message[0], null, null]);
+      break;
+    }
+    if (message[1] == 'close' && phase == 'drain') {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       reply.send([message[0], null, null]);
       break;
     }

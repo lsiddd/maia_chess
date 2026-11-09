@@ -242,6 +242,7 @@ class MaiaService implements MaiaEngine {
   Future<void> _dispose() async {
     final receive = _receive;
     if (receive == null) return;
+    final startup = _startup;
     try {
       await (() async {
         await _commandPortReady!.future;
@@ -259,7 +260,7 @@ class MaiaService implements MaiaEngine {
       _ready = false;
       _runOptions = null;
       _commands = null;
-      _startup = null;
+      if (identical(_startup, startup)) _startup = null;
       _running = null;
       // A close already queued on a native worker remains queued after the
       // deadline. Let that worker release its own handles if native code
