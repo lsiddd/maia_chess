@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theming/app_theme.dart';
 import '../../../core/widgets/error_state_card.dart';
 import '../../../data/repositories/game_repository.dart';
+import '../../game/application/game_controller.dart';
 import '../../history/domain/game_replayer.dart';
 import '../../pgn/application/pgn_service.dart';
 import '../application/game_review_analyzer.dart';
@@ -49,6 +50,7 @@ class GameReviewScreen extends ConsumerStatefulWidget {
 class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
     with WidgetsBindingObserver {
   final _portraitScroll = ScrollController();
+  late final void Function() _releaseReviewEngine;
   late int _ply;
   late Side _orientation;
   GameReview? _review;
@@ -87,6 +89,9 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
   @override
   void initState() {
     super.initState();
+    _releaseReviewEngine = ref
+        .read(gameControllerProvider.notifier)
+        .acquireStockfishForReview();
     _ply = widget.initialPly.clamp(0, _lastPly);
     _orientation = widget.game.playerSide ?? Side.white;
     _retrySide = widget.game.playerSide;
@@ -112,6 +117,7 @@ class _GameReviewScreenState extends ConsumerState<GameReviewScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _request?.cancel();
+    _releaseReviewEngine();
     _portraitScroll.dispose();
     super.dispose();
   }

@@ -86,6 +86,7 @@ class GameController extends Notifier<GameState> {
   _threatInFlight;
   int _threatGeneration = 0;
   Future<void> _stockfishSearchTail = Future.value();
+  int _reviewEngineOwners = 0;
   ({int gameGeneration, String fen, ThreatResult result})? _cachedThreats;
   Completer<Never>? _hintCancellation;
   int _hintGeneration = 0;
@@ -865,6 +866,22 @@ class GameController extends Notifier<GameState> {
   }
 
   /// Share the native singleton and queue without changing live-game state.
+  /// The review route holds a lease until its analysis requests are cancelled.
+  void Function() acquireStockfishForReview() {
+    if (_isDisposed) throw StateError('Controller disposed');
+    final generation = _gameGeneration;
+    _reviewEngineOwners++;
+    var released = false;
+    return () {
+      if (released) return;
+      released = true;
+      if (!_isCurrentGame(generation)) return;
+      if (--_reviewEngineOwners == 0) {
+        _disposeInBackground(_discardStockfish());
+      }
+    };
+  }
+
   Future<List<StockfishLine>> searchStockfishForReview({
     required String fen,
     required String initialFen,
@@ -1605,6 +1622,7 @@ class GameController extends Notifier<GameState> {
   int _invalidateCurrentGame() {
     _stopClock();
     _gameGeneration++;
+    _reviewEngineOwners = 0;
     _cancelMaiaReplyDelay?.call();
     _cancelMaiaReplyDelay = null;
     return _gameGeneration;

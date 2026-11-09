@@ -61,6 +61,11 @@ engine can detect repetition. Known terminal positions use their exact result.
 Review and trial moves use separate positions and leave the stored game and its
 rating unchanged.
 
+Each review route acquires a lease on the shared Stockfish session. Leaving the
+last review cancels its request and releases Stockfish without disposing Maia or
+changing the live game. Starting another game invalidates old leases so a late
+route disposal cannot close the newer game's engine.
+
 The full scan covers up to 400 half-moves, searching each position for 160 ms.
 If Stockfish returns no usable line, the scan retries that position once with
 a 400 ms single-line search. A three-minute limit bounds the scan between
