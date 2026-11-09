@@ -1064,11 +1064,18 @@ class GameController extends Notifier<GameState> {
         _publishClock();
         final failedEngine = _maia;
         _maia = null;
+        var errorMessage = 'Maia-3: $e';
         if (failedEngine != null) {
-          await _trackEngineDisposal([failedEngine.dispose()]);
+          try {
+            await _trackEngineDisposal([failedEngine.dispose()]);
+          } catch (shutdownError) {
+            // Cleanup failure must not prevent the player from retrying.
+            errorMessage =
+                '$errorMessage\nEngine shutdown failed: $shutdownError';
+          }
         }
         if (!_isCurrentGame(gameGeneration)) return false;
-        state = state.copyWith(engineError: 'Maia-3: $e');
+        state = state.copyWith(engineError: errorMessage);
         _publishClock();
         await _persistCurrentGame();
       }
