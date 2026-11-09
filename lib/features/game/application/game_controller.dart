@@ -969,6 +969,7 @@ class GameController extends Notifier<GameState> {
   /// campaign mode.
   Future<void> reset() async {
     _activeStart?.cancel();
+    _settleClock();
     final generation = _invalidateCurrentGame();
     await _gameStartTail;
     if (!_isCurrentGame(generation)) return;
@@ -977,15 +978,49 @@ class GameController extends Notifier<GameState> {
     if (state.aiThinking) {
       await _discardMaia();
       if (!_isCurrentGame(generation)) return;
+      state = state.copyWith(
+        aiThinking: false,
+        engineError: 'Maia-3 reply interrupted. Try again to continue.',
+      );
     }
-    state = _withTimeControl(GameState.initial(), state.timeControl).copyWith(
-      aiSide: state.aiSide,
-      levelRating: state.levelRating,
-      campaignMode: state.campaignMode,
+    final previous = state;
+    final candidate = _withTimeControl(GameState.initial(), state.timeControl)
+        .copyWith(
+          aiSide: state.aiSide,
+          levelRating: state.levelRating,
+          campaignMode: state.campaignMode,
+          gameId: ref.read(gameIdFactoryProvider)(),
+          startedAtUtc: DateTime.now().toUtc(),
+        );
+    final snapshot = _snapshot(
+      candidate,
+      status: StoredGameStatus.ongoing,
+      result: StoredGameResult.ongoing,
     );
-    final playerSide = state.aiSide?.opposite;
-    if (!await _beginPersistedGame(playerSide: playerSide)) return;
+    final repository = ref.read(gameRepositoryProvider);
+    try {
+      await _queuePersistence(
+        () => repository.beginGame(
+          snapshot,
+          // Interaction or another navigation can supersede a pending reset.
+          canCommit: () =>
+              _isCurrentGame(generation) && identical(state, previous),
+        ),
+      );
+    } on GameStartCancelledException {
+      if (_isCurrentGame(generation)) _startClock();
+      return;
+    } catch (error) {
+      if (_isCurrentGame(generation)) {
+        state = state.copyWith(
+          persistenceError: 'Could not start autosave: $error',
+        );
+        _startClock();
+      }
+      return;
+    }
     if (!_isCurrentGame(generation)) return;
+    state = candidate;
     _startClock();
     await _maybePlayAiTurn();
   }
