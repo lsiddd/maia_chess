@@ -94,7 +94,12 @@ autosave initializes them again without changing the game identity or moves.
 
 Initialization, tensor allocation, inference and native disposal run on a Dart
 worker. Cancellation signals ONNX Runtime's thread-safe RunOptions termination;
-resources are retained until the worker has finished. The controller also rejects
+the worker exposes its command port before loading the model so close can be
+queued during startup. Shutdown waits at most five seconds, then fails pending
+requests and detaches the session. A queued close still releases the worker's
+native handles if its native call returns; Dart cannot force that call to return.
+Native workers are not killed in a way that would skip their cleanup.
+The controller also rejects
 stale generations and positions. Failed initialization or inference can be retried.
 
 Stockfish retains its UCI handshake and isolated native implementation. It loads

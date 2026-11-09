@@ -77,6 +77,13 @@ void main() {
         await engine.dispose();
         await expectLater(engine.init('$path.missing'), throwsStateError);
         await engine.dispose();
+        final abandonedStartup = engine.init(path);
+        final startupCancelled = expectLater(
+          abandonedStartup,
+          throwsStateError,
+        );
+        await engine.dispose();
+        await startupCancelled;
         await engine.init(path);
         expect(engine.isReady, isTrue);
         latencies.sort();
