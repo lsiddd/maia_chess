@@ -290,24 +290,31 @@ void main() {
   testWidgets(
     'illegal move returns from the release point without duplicating the piece',
     (tester) async {
-      await mount(tester);
-      final origin = tester.getCenter(square(6, 4));
-      final release = tester.getCenter(square(3, 4));
-      final gesture = await tester.startGesture(origin);
-      await gesture.moveTo(release);
-      await tester.pumpAndSettle();
-      await gesture.up();
-      await tester.pump();
-      Finder flyingPiece() =>
-          find.descendant(of: slide, matching: find.byType(ChessPieceWidget));
-      expect(tester.getCenter(flyingPiece()), release);
-      expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(tester.getCenter(flyingPiece()).dy, greaterThan(release.dy));
-      expect(tester.getCenter(flyingPiece()).dy, lessThan(origin.dy));
-      await tester.pumpAndSettle();
-      expect(slide, findsNothing);
-      expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+      // Live Android frames can outlast the return animation between pumps.
+      final previousDilation = timeDilation;
+      timeDilation = 10;
+      try {
+        await mount(tester);
+        final origin = tester.getCenter(square(6, 4));
+        final release = tester.getCenter(square(3, 4));
+        final gesture = await tester.startGesture(origin);
+        await gesture.moveTo(release);
+        await tester.pumpAndSettle();
+        await gesture.up();
+        await tester.pump();
+        Finder flyingPiece() =>
+            find.descendant(of: slide, matching: find.byType(ChessPieceWidget));
+        expect(tester.getCenter(flyingPiece()), release);
+        expect(find.byKey(const ValueKey('board-piece-6-4')), findsNothing);
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.getCenter(flyingPiece()).dy, greaterThan(release.dy));
+        expect(tester.getCenter(flyingPiece()).dy, lessThan(origin.dy));
+        await tester.pumpAndSettle();
+        expect(slide, findsNothing);
+        expect(find.byType(ChessPieceWidget), findsNWidgets(32));
+      } finally {
+        timeDilation = previousDilation;
+      }
     },
   );
 
