@@ -54,8 +54,8 @@ void main() {
         var levels = await progress.getAll();
         expect(snapshot.evaluatedGames, 1);
         expect(snapshot.ratingHistory, hasLength(1));
-        expect(levels.first.validWins, 1);
-        expect(levels.first.gamesInWindow, 1);
+        expect(levels.first.wins.white, 1);
+        expect(levels.first.wins.black, 0);
         expect(levels[1].unlocked, isFalse);
 
         final second = _campaignGame(
@@ -73,14 +73,30 @@ void main() {
         await games.beginGame(third.ongoing);
         expect(await games.completeGame(third.completed), isTrue);
 
+        levels = await progress.getAll();
+        expect(levels.first.wins.white, 2);
+        expect(levels[1].unlocked, isFalse);
+        final blackWins = [
+          for (final hour in [15, 16])
+            _campaignGame(
+              id: 'black-$hour',
+              hour: hour,
+              playerSide: Side.black,
+              result: StoredGameResult.blackWin,
+            ),
+        ];
+        for (final win in blackWins) {
+          await games.beginGame(win.ongoing);
+          expect(await games.completeGame(win.completed), isTrue);
+        }
         snapshot = await stats.get();
         levels = await progress.getAll();
-        expect(snapshot.evaluatedGames, 3);
-        expect(snapshot.ratingHistory, hasLength(3));
-        expect(snapshot.resultsByLevel[600]?.wins, 2);
+        expect(snapshot.evaluatedGames, 5);
+        expect(snapshot.ratingHistory, hasLength(5));
+        expect(snapshot.resultsByLevel[600]?.wins, 4);
         expect(snapshot.resultsByLevel[600]?.losses, 1);
         expect(levels.first.levelCompleted, isTrue);
-        expect(levels.first.gamesInWindow, 3);
+        expect(levels.first.wins.black, 2);
         expect(levels[1].unlocked, isTrue);
 
         await tester.pumpWidget(
@@ -105,30 +121,30 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('3 rated games'), findsOneWidget);
+        expect(find.text('5 rated games'), findsOneWidget);
         expect(find.text('Current streak'), findsOneWidget);
         expect(
           find.bySemanticsLabel(
-            RegExp(r'Rating chart with 3 points; current rating'),
+            RegExp(r'Rating chart with 5 points; current rating'),
           ),
           findsOneWidget,
         );
         await tester.scrollUntilVisible(
-          find.text('2W  0D  1L'),
+          find.text('4W  0D  1L'),
           250,
           scrollable: find.byType(Scrollable),
         );
-        expect(find.text('2W  0D  1L'), findsOneWidget);
+        expect(find.text('4W  0D  1L'), findsOneWidget);
 
         await games.deleteGame(third.ongoing.id);
         snapshot = await stats.get();
         levels = await progress.getAll();
-        expect(snapshot.evaluatedGames, 2);
-        expect(snapshot.ratingHistory, hasLength(2));
-        expect(snapshot.resultsByLevel[600]?.wins, 1);
+        expect(snapshot.evaluatedGames, 4);
+        expect(snapshot.ratingHistory, hasLength(4));
+        expect(snapshot.resultsByLevel[600]?.wins, 3);
         expect(snapshot.resultsByLevel[600]?.losses, 1);
-        expect(levels.first.validWins, 1);
-        expect(levels.first.gamesInWindow, 2);
+        expect(levels.first.wins.white, 1);
+        expect(levels.first.wins.black, 2);
         expect(levels[1].unlocked, isFalse);
 
         await tester.pumpWidget(
@@ -138,7 +154,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('1/2 wins • 2/3 games'), findsOneWidget);
+        expect(find.text('White 1/2 • Black 2/2'), findsOneWidget);
         await tester.scrollUntilVisible(level800, 150);
         final level800Card = find.ancestor(
           of: level800,
@@ -149,14 +165,17 @@ void main() {
           findsOneWidget,
         );
 
+        for (final win in blackWins) {
+          await games.deleteGame(win.ongoing.id);
+        }
         await games.deleteGame(first.ongoing.id);
         await games.deleteGame(second.ongoing.id);
         snapshot = await stats.get();
         levels = await progress.getAll();
         expect(snapshot.evaluatedGames, 0);
         expect(snapshot.ratingHistory, isEmpty);
-        expect(levels.first.validWins, 0);
-        expect(levels.first.gamesInWindow, 0);
+        expect(levels.first.wins.white, 0);
+        expect(levels.first.wins.black, 0);
         expect(levels.first.unlocked, isTrue);
         expect(levels.skip(1).every((level) => !level.unlocked), isTrue);
         expect(await database.select(database.ratingHistory).get(), isEmpty);
@@ -174,6 +193,7 @@ void main() {
 ({StoredGame ongoing, StoredGame completed}) _campaignGame({
   required String id,
   required int hour,
+  Side playerSide = Side.white,
   required StoredGameResult result,
 }) {
   final startedAt = DateTime.utc(2026, 8, 6, hour);
@@ -183,7 +203,7 @@ void main() {
     lastModifiedAtUtc: startedAt,
     status: StoredGameStatus.ongoing,
     levelRating: 600,
-    playerSide: Side.white,
+    playerSide: playerSide,
     result: StoredGameResult.ongoing,
     evaluated: true,
     campaignMode: true,

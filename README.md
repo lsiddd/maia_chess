@@ -57,7 +57,7 @@ predict the moves a person at that level is likely to play. [Maia-3 project](htt
 
 | What you want to do | What Maia Chess offers |
 | --- | --- |
-| ♟️ Find an opponent | Choose any of 16 Maia-3 levels and play as White or Black. |
+| ♟️ Find an opponent | Play any of 16 Maia-3 levels as White, Black, or a randomly assigned side. |
 | 🏁 Work toward a goal | Start at Maia-3 600 and unlock higher campaign levels as you win. |
 | 💡 Explore a position | Ask for a hint, inspect attacked pieces, or view possible opponent plans. |
 | 🔍 Learn from a game | Review key moments with Stockfish, explore alternatives, and retry mistakes offline. |
@@ -72,9 +72,9 @@ From the home screen, choose how you'd like to play:
 
 - Choose **Free play against Maia-3**, pick your colour and an opponent from
   600 to 2600, then tap **Start game**.
-- **Maia-3 campaign** starts at level 600. Win twice within a rolling window
-  of up to three rated campaign games at the same level to unlock the next
-  opponent. Campaign games disable hints, attacks, plans, and undo.
+- **Maia-3 campaign** starts at level 600. Choose White, Black, or Random in **Game setup**.
+  Win two rated games as White and two as Black at each level to unlock the
+  next opponent. Campaign games disable hints, attacks, plans, and undo.
 - **Play (2 local players):** share the phone with a friend and take turns on
   the same board.
 

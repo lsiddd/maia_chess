@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 
-import '../../core/constants/difficulty_levels.dart';
+import '../../features/difficulty/domain/campaign_wins.dart';
 import '../local/app_database.dart';
 import 'progress_repository.dart';
 
@@ -24,14 +24,10 @@ class DriftProgressRepository implements ProgressRepository {
   }
 
   DifficultyProgressModel _map(DifficultyProgressRow row) {
-    final level = DifficultyLevel.byRating(row.rating);
     return DifficultyProgressModel(
       rating: row.rating,
-      validWins: row.validWins,
-      gamesInWindow: row.windowGames,
+      wins: CampaignWins(white: row.whiteWins, black: row.blackWins),
       unlocked: row.unlocked,
-      winsRequired: level.winsRequired,
-      windowSize: level.windowSize,
       updatedAtUtc: row.updatedAtUtc.toUtc(),
     );
   }

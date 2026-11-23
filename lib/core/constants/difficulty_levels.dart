@@ -1,15 +1,8 @@
 /// A skill input to the shared Maia-3 79M network.
 class DifficultyLevel {
-  const DifficultyLevel({
-    required this.rating,
-    this.winsRequired = 2,
-    this.windowSize = 3,
-  }) : assert(winsRequired > 0),
-       assert(windowSize >= winsRequired);
+  const DifficultyLevel({required this.rating});
 
   final int rating;
-  final int winsRequired;
-  final int windowSize;
 
   @override
   String toString() => 'Maia-3 $rating';

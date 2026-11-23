@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/constants/difficulty_levels.dart';
+import '../../features/difficulty/domain/campaign_wins.dart';
 import '../../features/stats/domain/player_stats.dart';
 import '../repositories/game_repository.dart';
 
@@ -61,8 +62,8 @@ class GameMoves extends Table {
 @DataClassName('DifficultyProgressRow')
 class DifficultyProgress extends Table {
   IntColumn get rating => integer()();
-  IntColumn get validWins => integer().withDefault(const Constant(0))();
-  IntColumn get windowGames => integer().withDefault(const Constant(0))();
+  IntColumn get whiteWins => integer().withDefault(const Constant(0))();
+  IntColumn get blackWins => integer().withDefault(const Constant(0))();
   BoolColumn get unlocked => boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAtUtc => dateTime()();
 
@@ -115,7 +116,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.connect(DatabaseConnection super.connection);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -123,7 +124,7 @@ class AppDatabase extends _$AppDatabase {
       await migrator.createAll();
       await _seedDefaults();
     },
-    onUpgrade: (migrator, from, to) async {
+    onUpgrade: (migrator, from, to) => transaction(() async {
       if (from < 1) {
         await migrator.createAll();
         await _seedDefaults();
@@ -131,13 +132,6 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 6) {
         await migrator.addColumn(games, games.incrementMs);
-      }
-      if (from < 2) {
-        await migrator.addColumn(
-          difficultyProgress,
-          difficultyProgress.windowGames,
-        );
-        await rebuildDerivedState();
       }
       if (from < 4) {
         await migrator.addColumn(appSettings, appSettings.showAttackedPieces);
@@ -152,11 +146,16 @@ class AppDatabase extends _$AppDatabase {
           "UPDATE app_settings SET piece_set = 'cburnett' WHERE piece_set = 'classic'",
         );
       }
+      // The old rolling totals cannot identify the side of a win.
+      await migrator.drop(difficultyProgress);
+      await migrator.createTable(difficultyProgress);
       if (from < 5) {
         await _seedDefaults();
         await _rebuildDerivedState();
+      } else {
+        await _rebuildCampaignProgress();
       }
-    },
+    }),
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement(
@@ -223,10 +222,11 @@ class AppDatabase extends _$AppDatabase {
       await rebuildDerivedState();
       return;
     }
+    final outcome = playerOutcome(game.result, game.playerSide!);
     final value = PlayerStatsCalculator.nextRating(
       last?.rating ?? PlayerStatsCalculator.initialRating,
       game.levelRating!,
-      playerOutcome(game.result, game.playerSide!),
+      outcome,
     );
     await into(ratingHistory).insert(
       RatingHistoryCompanion.insert(
@@ -236,64 +236,29 @@ class AppDatabase extends _$AppDatabase {
         rating: value,
       ),
     );
-    if (!game.campaignMode) return;
-    final level = DifficultyLevel.byRating(game.levelRating!);
-    final progress = await (select(
+    if (!game.campaignMode || outcome != PlayerGameOutcome.win) return;
+    final levels = await (select(
       difficultyProgress,
     )..orderBy([(row) => OrderingTerm.asc(row.rating)])).get();
-    final current = progress.firstWhere((row) => row.rating == level.rating);
-    if (current.validWins >= level.winsRequired) return;
-    final recent =
-        await (select(games)
-              ..where(
-                (row) =>
-                    row.status.equals(StoredGameStatus.completed.name) &
-                    row.evaluated.equals(true) &
-                    row.campaignMode.equals(true) &
-                    row.levelRating.equals(level.rating) &
-                    row.playerSide.isNotNull() &
-                    row.result.isIn(['whiteWin', 'blackWin', 'draw']),
-              )
-              ..orderBy([
-                (row) => OrderingTerm(
-                  expression: const CustomExpression(
-                    'COALESCE(ended_at_utc, last_modified_at_utc)',
-                  ),
-                  mode: OrderingMode.desc,
-                ),
-                (row) => OrderingTerm.desc(row.id),
-              ])
-              ..limit(level.windowSize))
-            .get();
-    final window = evaluateCampaignWindow(
-      recent.reversed.map((row) => _evaluatedSummary(row).outcome),
-      winsRequired: level.winsRequired,
-      windowSize: level.windowSize,
-    );
     var unlocked = true;
-    for (final levelProgress in progress) {
-      final rule = DifficultyLevel.byRating(levelProgress.rating);
-      final wins = levelProgress.rating == level.rating
-          ? window.wins
-          : levelProgress.validWins;
-      final count = levelProgress.rating == level.rating
-          ? window.games
-          : levelProgress.windowGames;
-      if (wins != levelProgress.validWins ||
-          count != levelProgress.windowGames ||
-          unlocked != levelProgress.unlocked) {
+    for (final level in levels) {
+      var wins = CampaignWins(white: level.whiteWins, black: level.blackWins);
+      if (level.rating == game.levelRating) wins = wins.add(game.playerSide!);
+      if (wins.white != level.whiteWins ||
+          wins.black != level.blackWins ||
+          unlocked != level.unlocked) {
         await (update(
           difficultyProgress,
-        )..where((row) => row.rating.equals(levelProgress.rating))).write(
+        )..where((row) => row.rating.equals(level.rating))).write(
           DifficultyProgressCompanion(
-            validWins: Value(wins),
-            windowGames: Value(count),
+            whiteWins: Value(wins.white),
+            blackWins: Value(wins.black),
             unlocked: Value(unlocked),
             updatedAtUtc: Value(DateTime.now().toUtc()),
           ),
         );
       }
-      unlocked = unlocked && wins >= rule.winsRequired;
+      unlocked = unlocked && wins.completed;
     }
   }
 
@@ -349,29 +314,54 @@ class AppDatabase extends _$AppDatabase {
       });
     }
 
+    await _rebuildCampaignProgress();
+  }
+
+  Future<void> _rebuildCampaignProgress() async {
+    final count = games.id.count();
+    final totals =
+        await (selectOnly(games)
+              ..addColumns([games.levelRating, games.playerSide, count])
+              ..where(
+                games.status.equals(StoredGameStatus.completed.name) &
+                    games.evaluated.equals(true) &
+                    games.campaignMode.equals(true) &
+                    games.levelRating.isNotNull() &
+                    ((games.playerSide.equals(Side.white.name) &
+                            games.result.equals(
+                              StoredGameResult.whiteWin.name,
+                            )) |
+                        (games.playerSide.equals(Side.black.name) &
+                            games.result.equals(
+                              StoredGameResult.blackWin.name,
+                            ))),
+              )
+              ..groupBy([games.levelRating, games.playerSide]))
+            .get();
+    final byLevel = <int, CampaignWins>{};
+    for (final row in totals) {
+      final rating = row.read(games.levelRating)!;
+      final side = Side.values.byName(row.read(games.playerSide)!);
+      byLevel[rating] = (byLevel[rating] ?? const CampaignWins()).add(
+        side,
+        row.read(count)!,
+      );
+    }
+
     var levelUnlocked = true;
     final now = DateTime.now().toUtc();
     for (final level in DifficultyLevel.all) {
-      final campaignGames = summaries
-          .where(
-            (game) => game.campaignMode && game.levelRating == level.rating,
-          )
-          .map((game) => game.outcome);
-      final window = evaluateCampaignWindow(
-        campaignGames,
-        winsRequired: level.winsRequired,
-        windowSize: level.windowSize,
-      );
+      final wins = byLevel[level.rating] ?? const CampaignWins();
       await into(difficultyProgress).insertOnConflictUpdate(
         DifficultyProgressCompanion.insert(
           rating: Value(level.rating),
-          validWins: Value(window.wins),
-          windowGames: Value(window.games),
+          whiteWins: Value(wins.white),
+          blackWins: Value(wins.black),
           unlocked: Value(levelUnlocked),
           updatedAtUtc: now,
         ),
       );
-      levelUnlocked = levelUnlocked && window.qualified;
+      levelUnlocked = levelUnlocked && wins.completed;
     }
   }
 
@@ -383,7 +373,6 @@ class AppDatabase extends _$AppDatabase {
       completedAtUtc: (row.endedAtUtc ?? row.lastModifiedAtUtc).toUtc(),
       levelRating: row.levelRating!,
       outcome: playerOutcome(result, side),
-      campaignMode: row.campaignMode,
     );
   }
 }

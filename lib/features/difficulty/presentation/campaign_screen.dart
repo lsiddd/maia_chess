@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +13,8 @@ import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 import '../../game/presentation/time_control_picker.dart';
 import '../../game/application/time_control.dart';
+import '../domain/campaign_wins.dart';
+import 'side_picker.dart';
 
 class CampaignScreen extends ConsumerStatefulWidget {
   const CampaignScreen({super.key});
@@ -23,7 +24,7 @@ class CampaignScreen extends ConsumerStatefulWidget {
 }
 
 class _CampaignScreenState extends ConsumerState<CampaignScreen> {
-  Side _humanSide = Side.white;
+  SideChoice _humanSide = SideChoice.white;
   TimeControl _timeControl = const TimeControl();
   int? _startingRating;
   bool _leaving = false;
@@ -91,7 +92,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
       final pending = _pendingStart = ref
           .read(gameControllerProvider.notifier)
           .startVsAi(
-            humanSide: _humanSide,
+            humanSide: _humanSide.resolve(),
             levelRating: progress.rating,
             campaignMode: true,
             timeControl: _timeControl,
@@ -208,7 +209,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
                           curve: AppMotion.curve,
                         ),
                         subtitle: Text(
-                          '${_humanSide == Side.white ? 'White' : 'Black'} · '
+                          '${_humanSide.label} · '
                           '${timeControlLabel(_timeControl)}',
                         ),
                         leading: const Icon(Icons.tune),
@@ -234,30 +235,12 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> {
                           const SizedBox(height: AppSpacing.s),
                           SizedBox(
                             width: double.infinity,
-                            child: SegmentedButton<Side>(
-                              direction:
-                                  MediaQuery.textScalerOf(context).scale(14) >
-                                      20
-                                  ? Axis.vertical
-                                  : Axis.horizontal,
-                              segments: const [
-                                ButtonSegment(
-                                  value: Side.white,
-                                  icon: Icon(Icons.circle_outlined),
-                                  label: Text('White'),
-                                ),
-                                ButtonSegment(
-                                  value: Side.black,
-                                  icon: Icon(Icons.circle),
-                                  label: Text('Black'),
-                                ),
-                              ],
-                              selected: {_humanSide},
-                              onSelectionChanged: _startingRating != null
+                            child: SidePicker(
+                              value: _humanSide,
+                              onChanged: _startingRating != null
                                   ? null
-                                  : (selection) => setState(
-                                      () => _humanSide = selection.first,
-                                    ),
+                                  : (value) =>
+                                        setState(() => _humanSide = value),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.l),
@@ -406,7 +389,7 @@ class _CampaignHeader extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.l),
         Text(
-          'Win 2 of your last 3 rated games to unlock the next level. '
+          'Win ${CampaignWins.requiredPerSide} rated games as White and ${CampaignWins.requiredPerSide} as Black at each level. '
           'Campaign games are played without assistance.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: colors.onSurfaceVariant,
@@ -444,8 +427,8 @@ class _CampaignLevelCard extends StatelessWidget {
         ? finalLevel
               ? 'Campaign completed'
               : 'Level completed'
-        : '${progress.validWins}/${progress.winsRequired} wins • '
-              '${progress.gamesInWindow}/${progress.windowSize} games';
+        : 'White ${progress.wins.white}/${CampaignWins.requiredPerSide} • '
+              'Black ${progress.wins.black}/${CampaignWins.requiredPerSide}';
 
     return Card(
       margin: EdgeInsets.zero,
@@ -515,12 +498,10 @@ class _CampaignLevelCard extends StatelessWidget {
             if (active) ...[
               const SizedBox(height: AppSpacing.l),
               LinearProgressIndicator(
-                value: (progress.validWins / progress.winsRequired).clamp(0, 1),
+                value: progress.wins.fraction,
                 minHeight: 6,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
-                semanticsLabel:
-                    'Wins toward next level: '
-                    '${progress.validWins} of ${progress.winsRequired} wins',
+                semanticsLabel: 'Wins toward next level: $status',
               ),
             ],
             if (progress.unlocked) ...[

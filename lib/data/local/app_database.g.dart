@@ -1580,24 +1580,24 @@ class $DifficultyProgressTable extends DifficultyProgress
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _validWinsMeta = const VerificationMeta(
-    'validWins',
+  static const VerificationMeta _whiteWinsMeta = const VerificationMeta(
+    'whiteWins',
   );
   @override
-  late final GeneratedColumn<int> validWins = GeneratedColumn<int>(
-    'valid_wins',
+  late final GeneratedColumn<int> whiteWins = GeneratedColumn<int>(
+    'white_wins',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _windowGamesMeta = const VerificationMeta(
-    'windowGames',
+  static const VerificationMeta _blackWinsMeta = const VerificationMeta(
+    'blackWins',
   );
   @override
-  late final GeneratedColumn<int> windowGames = GeneratedColumn<int>(
-    'window_games',
+  late final GeneratedColumn<int> blackWins = GeneratedColumn<int>(
+    'black_wins',
     aliasedName,
     false,
     type: DriftSqlType.int,
@@ -1633,8 +1633,8 @@ class $DifficultyProgressTable extends DifficultyProgress
   @override
   List<GeneratedColumn> get $columns => [
     rating,
-    validWins,
-    windowGames,
+    whiteWins,
+    blackWins,
     unlocked,
     updatedAtUtc,
   ];
@@ -1656,19 +1656,16 @@ class $DifficultyProgressTable extends DifficultyProgress
         rating.isAcceptableOrUnknown(data['rating']!, _ratingMeta),
       );
     }
-    if (data.containsKey('valid_wins')) {
+    if (data.containsKey('white_wins')) {
       context.handle(
-        _validWinsMeta,
-        validWins.isAcceptableOrUnknown(data['valid_wins']!, _validWinsMeta),
+        _whiteWinsMeta,
+        whiteWins.isAcceptableOrUnknown(data['white_wins']!, _whiteWinsMeta),
       );
     }
-    if (data.containsKey('window_games')) {
+    if (data.containsKey('black_wins')) {
       context.handle(
-        _windowGamesMeta,
-        windowGames.isAcceptableOrUnknown(
-          data['window_games']!,
-          _windowGamesMeta,
-        ),
+        _blackWinsMeta,
+        blackWins.isAcceptableOrUnknown(data['black_wins']!, _blackWinsMeta),
       );
     }
     if (data.containsKey('unlocked')) {
@@ -1701,13 +1698,13 @@ class $DifficultyProgressTable extends DifficultyProgress
         DriftSqlType.int,
         data['${effectivePrefix}rating'],
       )!,
-      validWins: attachedDatabase.typeMapping.read(
+      whiteWins: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}valid_wins'],
+        data['${effectivePrefix}white_wins'],
       )!,
-      windowGames: attachedDatabase.typeMapping.read(
+      blackWins: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}window_games'],
+        data['${effectivePrefix}black_wins'],
       )!,
       unlocked: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
@@ -1729,14 +1726,14 @@ class $DifficultyProgressTable extends DifficultyProgress
 class DifficultyProgressRow extends DataClass
     implements Insertable<DifficultyProgressRow> {
   final int rating;
-  final int validWins;
-  final int windowGames;
+  final int whiteWins;
+  final int blackWins;
   final bool unlocked;
   final DateTime updatedAtUtc;
   const DifficultyProgressRow({
     required this.rating,
-    required this.validWins,
-    required this.windowGames,
+    required this.whiteWins,
+    required this.blackWins,
     required this.unlocked,
     required this.updatedAtUtc,
   });
@@ -1744,8 +1741,8 @@ class DifficultyProgressRow extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['rating'] = Variable<int>(rating);
-    map['valid_wins'] = Variable<int>(validWins);
-    map['window_games'] = Variable<int>(windowGames);
+    map['white_wins'] = Variable<int>(whiteWins);
+    map['black_wins'] = Variable<int>(blackWins);
     map['unlocked'] = Variable<bool>(unlocked);
     map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc);
     return map;
@@ -1754,8 +1751,8 @@ class DifficultyProgressRow extends DataClass
   DifficultyProgressCompanion toCompanion(bool nullToAbsent) {
     return DifficultyProgressCompanion(
       rating: Value(rating),
-      validWins: Value(validWins),
-      windowGames: Value(windowGames),
+      whiteWins: Value(whiteWins),
+      blackWins: Value(blackWins),
       unlocked: Value(unlocked),
       updatedAtUtc: Value(updatedAtUtc),
     );
@@ -1768,8 +1765,8 @@ class DifficultyProgressRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return DifficultyProgressRow(
       rating: serializer.fromJson<int>(json['rating']),
-      validWins: serializer.fromJson<int>(json['validWins']),
-      windowGames: serializer.fromJson<int>(json['windowGames']),
+      whiteWins: serializer.fromJson<int>(json['whiteWins']),
+      blackWins: serializer.fromJson<int>(json['blackWins']),
       unlocked: serializer.fromJson<bool>(json['unlocked']),
       updatedAtUtc: serializer.fromJson<DateTime>(json['updatedAtUtc']),
     );
@@ -1779,8 +1776,8 @@ class DifficultyProgressRow extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'rating': serializer.toJson<int>(rating),
-      'validWins': serializer.toJson<int>(validWins),
-      'windowGames': serializer.toJson<int>(windowGames),
+      'whiteWins': serializer.toJson<int>(whiteWins),
+      'blackWins': serializer.toJson<int>(blackWins),
       'unlocked': serializer.toJson<bool>(unlocked),
       'updatedAtUtc': serializer.toJson<DateTime>(updatedAtUtc),
     };
@@ -1788,24 +1785,22 @@ class DifficultyProgressRow extends DataClass
 
   DifficultyProgressRow copyWith({
     int? rating,
-    int? validWins,
-    int? windowGames,
+    int? whiteWins,
+    int? blackWins,
     bool? unlocked,
     DateTime? updatedAtUtc,
   }) => DifficultyProgressRow(
     rating: rating ?? this.rating,
-    validWins: validWins ?? this.validWins,
-    windowGames: windowGames ?? this.windowGames,
+    whiteWins: whiteWins ?? this.whiteWins,
+    blackWins: blackWins ?? this.blackWins,
     unlocked: unlocked ?? this.unlocked,
     updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
   );
   DifficultyProgressRow copyWithCompanion(DifficultyProgressCompanion data) {
     return DifficultyProgressRow(
       rating: data.rating.present ? data.rating.value : this.rating,
-      validWins: data.validWins.present ? data.validWins.value : this.validWins,
-      windowGames: data.windowGames.present
-          ? data.windowGames.value
-          : this.windowGames,
+      whiteWins: data.whiteWins.present ? data.whiteWins.value : this.whiteWins,
+      blackWins: data.blackWins.present ? data.blackWins.value : this.blackWins,
       unlocked: data.unlocked.present ? data.unlocked.value : this.unlocked,
       updatedAtUtc: data.updatedAtUtc.present
           ? data.updatedAtUtc.value
@@ -1817,8 +1812,8 @@ class DifficultyProgressRow extends DataClass
   String toString() {
     return (StringBuffer('DifficultyProgressRow(')
           ..write('rating: $rating, ')
-          ..write('validWins: $validWins, ')
-          ..write('windowGames: $windowGames, ')
+          ..write('whiteWins: $whiteWins, ')
+          ..write('blackWins: $blackWins, ')
           ..write('unlocked: $unlocked, ')
           ..write('updatedAtUtc: $updatedAtUtc')
           ..write(')'))
@@ -1827,14 +1822,14 @@ class DifficultyProgressRow extends DataClass
 
   @override
   int get hashCode =>
-      Object.hash(rating, validWins, windowGames, unlocked, updatedAtUtc);
+      Object.hash(rating, whiteWins, blackWins, unlocked, updatedAtUtc);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is DifficultyProgressRow &&
           other.rating == this.rating &&
-          other.validWins == this.validWins &&
-          other.windowGames == this.windowGames &&
+          other.whiteWins == this.whiteWins &&
+          other.blackWins == this.blackWins &&
           other.unlocked == this.unlocked &&
           other.updatedAtUtc == this.updatedAtUtc);
 }
@@ -1842,35 +1837,35 @@ class DifficultyProgressRow extends DataClass
 class DifficultyProgressCompanion
     extends UpdateCompanion<DifficultyProgressRow> {
   final Value<int> rating;
-  final Value<int> validWins;
-  final Value<int> windowGames;
+  final Value<int> whiteWins;
+  final Value<int> blackWins;
   final Value<bool> unlocked;
   final Value<DateTime> updatedAtUtc;
   const DifficultyProgressCompanion({
     this.rating = const Value.absent(),
-    this.validWins = const Value.absent(),
-    this.windowGames = const Value.absent(),
+    this.whiteWins = const Value.absent(),
+    this.blackWins = const Value.absent(),
     this.unlocked = const Value.absent(),
     this.updatedAtUtc = const Value.absent(),
   });
   DifficultyProgressCompanion.insert({
     this.rating = const Value.absent(),
-    this.validWins = const Value.absent(),
-    this.windowGames = const Value.absent(),
+    this.whiteWins = const Value.absent(),
+    this.blackWins = const Value.absent(),
     this.unlocked = const Value.absent(),
     required DateTime updatedAtUtc,
   }) : updatedAtUtc = Value(updatedAtUtc);
   static Insertable<DifficultyProgressRow> custom({
     Expression<int>? rating,
-    Expression<int>? validWins,
-    Expression<int>? windowGames,
+    Expression<int>? whiteWins,
+    Expression<int>? blackWins,
     Expression<bool>? unlocked,
     Expression<DateTime>? updatedAtUtc,
   }) {
     return RawValuesInsertable({
       if (rating != null) 'rating': rating,
-      if (validWins != null) 'valid_wins': validWins,
-      if (windowGames != null) 'window_games': windowGames,
+      if (whiteWins != null) 'white_wins': whiteWins,
+      if (blackWins != null) 'black_wins': blackWins,
       if (unlocked != null) 'unlocked': unlocked,
       if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
     });
@@ -1878,15 +1873,15 @@ class DifficultyProgressCompanion
 
   DifficultyProgressCompanion copyWith({
     Value<int>? rating,
-    Value<int>? validWins,
-    Value<int>? windowGames,
+    Value<int>? whiteWins,
+    Value<int>? blackWins,
     Value<bool>? unlocked,
     Value<DateTime>? updatedAtUtc,
   }) {
     return DifficultyProgressCompanion(
       rating: rating ?? this.rating,
-      validWins: validWins ?? this.validWins,
-      windowGames: windowGames ?? this.windowGames,
+      whiteWins: whiteWins ?? this.whiteWins,
+      blackWins: blackWins ?? this.blackWins,
       unlocked: unlocked ?? this.unlocked,
       updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
     );
@@ -1898,11 +1893,11 @@ class DifficultyProgressCompanion
     if (rating.present) {
       map['rating'] = Variable<int>(rating.value);
     }
-    if (validWins.present) {
-      map['valid_wins'] = Variable<int>(validWins.value);
+    if (whiteWins.present) {
+      map['white_wins'] = Variable<int>(whiteWins.value);
     }
-    if (windowGames.present) {
-      map['window_games'] = Variable<int>(windowGames.value);
+    if (blackWins.present) {
+      map['black_wins'] = Variable<int>(blackWins.value);
     }
     if (unlocked.present) {
       map['unlocked'] = Variable<bool>(unlocked.value);
@@ -1917,8 +1912,8 @@ class DifficultyProgressCompanion
   String toString() {
     return (StringBuffer('DifficultyProgressCompanion(')
           ..write('rating: $rating, ')
-          ..write('validWins: $validWins, ')
-          ..write('windowGames: $windowGames, ')
+          ..write('whiteWins: $whiteWins, ')
+          ..write('blackWins: $blackWins, ')
           ..write('unlocked: $unlocked, ')
           ..write('updatedAtUtc: $updatedAtUtc')
           ..write(')'))
@@ -3920,16 +3915,16 @@ typedef $$GameMovesTableProcessedTableManager =
 typedef $$DifficultyProgressTableCreateCompanionBuilder =
     DifficultyProgressCompanion Function({
       Value<int> rating,
-      Value<int> validWins,
-      Value<int> windowGames,
+      Value<int> whiteWins,
+      Value<int> blackWins,
       Value<bool> unlocked,
       required DateTime updatedAtUtc,
     });
 typedef $$DifficultyProgressTableUpdateCompanionBuilder =
     DifficultyProgressCompanion Function({
       Value<int> rating,
-      Value<int> validWins,
-      Value<int> windowGames,
+      Value<int> whiteWins,
+      Value<int> blackWins,
       Value<bool> unlocked,
       Value<DateTime> updatedAtUtc,
     });
@@ -3948,13 +3943,13 @@ class $$DifficultyProgressTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get validWins => $composableBuilder(
-    column: $table.validWins,
+  ColumnFilters<int> get whiteWins => $composableBuilder(
+    column: $table.whiteWins,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get windowGames => $composableBuilder(
-    column: $table.windowGames,
+  ColumnFilters<int> get blackWins => $composableBuilder(
+    column: $table.blackWins,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3983,13 +3978,13 @@ class $$DifficultyProgressTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get validWins => $composableBuilder(
-    column: $table.validWins,
+  ColumnOrderings<int> get whiteWins => $composableBuilder(
+    column: $table.whiteWins,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get windowGames => $composableBuilder(
-    column: $table.windowGames,
+  ColumnOrderings<int> get blackWins => $composableBuilder(
+    column: $table.blackWins,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4016,13 +4011,11 @@ class $$DifficultyProgressTableAnnotationComposer
   GeneratedColumn<int> get rating =>
       $composableBuilder(column: $table.rating, builder: (column) => column);
 
-  GeneratedColumn<int> get validWins =>
-      $composableBuilder(column: $table.validWins, builder: (column) => column);
+  GeneratedColumn<int> get whiteWins =>
+      $composableBuilder(column: $table.whiteWins, builder: (column) => column);
 
-  GeneratedColumn<int> get windowGames => $composableBuilder(
-    column: $table.windowGames,
-    builder: (column) => column,
-  );
+  GeneratedColumn<int> get blackWins =>
+      $composableBuilder(column: $table.blackWins, builder: (column) => column);
 
   GeneratedColumn<bool> get unlocked =>
       $composableBuilder(column: $table.unlocked, builder: (column) => column);
@@ -4074,28 +4067,28 @@ class $$DifficultyProgressTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> rating = const Value.absent(),
-                Value<int> validWins = const Value.absent(),
-                Value<int> windowGames = const Value.absent(),
+                Value<int> whiteWins = const Value.absent(),
+                Value<int> blackWins = const Value.absent(),
                 Value<bool> unlocked = const Value.absent(),
                 Value<DateTime> updatedAtUtc = const Value.absent(),
               }) => DifficultyProgressCompanion(
                 rating: rating,
-                validWins: validWins,
-                windowGames: windowGames,
+                whiteWins: whiteWins,
+                blackWins: blackWins,
                 unlocked: unlocked,
                 updatedAtUtc: updatedAtUtc,
               ),
           createCompanionCallback:
               ({
                 Value<int> rating = const Value.absent(),
-                Value<int> validWins = const Value.absent(),
-                Value<int> windowGames = const Value.absent(),
+                Value<int> whiteWins = const Value.absent(),
+                Value<int> blackWins = const Value.absent(),
                 Value<bool> unlocked = const Value.absent(),
                 required DateTime updatedAtUtc,
               }) => DifficultyProgressCompanion.insert(
                 rating: rating,
-                validWins: validWins,
-                windowGames: windowGames,
+                whiteWins: whiteWins,
+                blackWins: blackWins,
                 unlocked: unlocked,
                 updatedAtUtc: updatedAtUtc,
               ),

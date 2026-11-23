@@ -91,7 +91,6 @@ class DriftStatsRepository implements StatsRepository {
       completedAtUtc: (row.endedAtUtc ?? row.lastModifiedAtUtc).toUtc(),
       levelRating: row.levelRating!,
       outcome: playerOutcome(result, side),
-      campaignMode: row.campaignMode,
     );
   }
 }

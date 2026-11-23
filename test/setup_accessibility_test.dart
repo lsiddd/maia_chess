@@ -5,6 +5,7 @@ import 'package:maia_chess/core/theming/app_theme.dart';
 import 'package:maia_chess/data/providers.dart';
 import 'package:maia_chess/data/repositories/progress_repository.dart';
 import 'package:maia_chess/features/difficulty/presentation/campaign_screen.dart';
+import 'package:maia_chess/features/difficulty/domain/campaign_wins.dart';
 import 'package:maia_chess/features/difficulty/presentation/new_game_vs_ai_screen.dart';
 import 'package:maia_chess/features/game/application/time_control.dart';
 import 'package:maia_chess/features/game/presentation/time_control_picker.dart';
@@ -220,6 +221,11 @@ void main() {
       await tester.tap(find.text('Black'));
       await tester.pumpAndSettle();
       expect(find.text('Black · Unlimited time'), findsOneWidget);
+      await tester.ensureVisible(find.text('Random'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Random'));
+      await tester.pumpAndSettle();
+      expect(find.text('Random · Unlimited time'), findsOneWidget);
       await tester.ensureVisible(find.text('Clock'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Clock'));
@@ -228,7 +234,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('3 + 2'));
       await tester.pumpAndSettle();
-      expect(find.text('Black · 3 + 2'), findsOneWidget);
+      expect(find.text('Random · 3 + 2'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -256,10 +262,9 @@ DifficultyProgressModel _level(
   bool unlocked = true,
 }) => DifficultyProgressModel(
   rating: rating,
-  validWins: completed ? 2 : 0,
-  gamesInWindow: completed ? 2 : 0,
+  wins: completed
+      ? const CampaignWins(white: 2, black: 2)
+      : const CampaignWins(),
   unlocked: unlocked,
-  winsRequired: 2,
-  windowSize: 3,
   updatedAtUtc: DateTime.utc(2026),
 );

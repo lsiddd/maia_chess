@@ -273,8 +273,8 @@ void main() {
       expect(stats.resultsByLevel[600]!.losses, 1);
       expect(stats.ratingHistory, hasLength(1));
       final progress = (await DriftProgressRepository(database).getAll()).first;
-      expect(progress.gamesInWindow, 1);
-      expect(progress.validWins, 0);
+      expect(progress.wins.black, 0);
+      expect(progress.wins.white, 0);
     },
   );
 

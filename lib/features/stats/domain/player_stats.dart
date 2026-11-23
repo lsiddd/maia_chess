@@ -3,22 +3,19 @@ import 'dart:math' as math;
 /// Eligible game result from the human player perspective.
 enum PlayerGameOutcome { win, loss, draw }
 
-/// Minimal game projection used for rating, streaks, and campaign
-/// calculations.
+/// Minimal game projection used for ratings and streaks.
 class EvaluatedGameSummary {
   const EvaluatedGameSummary({
     required this.gameId,
     required this.completedAtUtc,
     required this.levelRating,
     required this.outcome,
-    required this.campaignMode,
   });
 
   final String gameId;
   final DateTime completedAtUtc;
   final int levelRating;
   final PlayerGameOutcome outcome;
-  final bool campaignMode;
 }
 
 class RatingPoint {
@@ -169,49 +166,4 @@ class PlayerStatsCalculator {
       evaluatedGames: ordered.length,
     );
   }
-}
-
-class CampaignWindowResult {
-  const CampaignWindowResult({
-    required this.wins,
-    required this.games,
-    required this.qualified,
-  });
-
-  final int wins;
-  final int games;
-  final bool qualified;
-}
-
-/// Evaluate rolling windows chronologically. Once a window qualifies, later
-/// results do not remove qualification. Deleting games still rebuilds from
-/// the remaining history.
-CampaignWindowResult evaluateCampaignWindow(
-  Iterable<PlayerGameOutcome> outcomes, {
-  required int winsRequired,
-  required int windowSize,
-}) {
-  if (winsRequired <= 0 || windowSize < winsRequired) {
-    throw ArgumentError('Invalid campaign rule: $winsRequired/$windowSize');
-  }
-
-  final window = <PlayerGameOutcome>[];
-  for (final outcome in outcomes) {
-    window.add(outcome);
-    if (window.length > windowSize) window.removeAt(0);
-    final wins = window.where((item) => item == PlayerGameOutcome.win).length;
-    if (wins >= winsRequired) {
-      return CampaignWindowResult(
-        wins: winsRequired,
-        games: window.length,
-        qualified: true,
-      );
-    }
-  }
-
-  return CampaignWindowResult(
-    wins: window.where((item) => item == PlayerGameOutcome.win).length,
-    games: window.length,
-    qualified: false,
-  );
 }

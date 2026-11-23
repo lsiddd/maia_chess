@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+
 import 'package:dartchess/dartchess.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -72,7 +74,7 @@ void main() {
             .map((row) => row.read<int>('foreign_keys'))
             .getSingle();
 
-        expect(version, 6);
+        expect(version, 7);
         expect(
           tables,
           containsAll([
@@ -103,9 +105,10 @@ void main() {
         ]);
         expect(progress.first.unlocked, isTrue);
         expect(progress.skip(1).every((row) => !row.unlocked), isTrue);
-        expect(progress.every((row) => row.gamesInWindow == 0), isTrue);
-        expect(progress.every((row) => row.winsRequired == 2), isTrue);
-        expect(progress.every((row) => row.windowSize == 3), isTrue);
+        expect(
+          progress.every((row) => row.wins.white == 0 && row.wins.black == 0),
+          isTrue,
+        );
         expect(settings.showAttackedPieces, isFalse);
         expect(settings.ownAttackedPiecesOnly, isFalse);
         expect(settings.defaultTimeMinutes, 10);
@@ -116,7 +119,7 @@ void main() {
     );
 
     test(
-      'v1 -> v5 migration adds campaign windows and appearance and rebuilds derived state',
+      'v1 migration creates per-side campaign counters and rebuilds derived state',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
@@ -187,16 +190,16 @@ void main() {
             .get();
         final progress = await DriftProgressRepository(migrated).getAll();
 
-        expect(version, 6);
-        expect(columns, contains('window_games'));
+        expect(version, 7);
+        expect(columns, containsAll(['white_wins', 'black_wins']));
         expect(progress, hasLength(16));
         expect(progress.first.unlocked, isTrue);
-        expect(progress.every((item) => item.gamesInWindow == 0), isTrue);
+        expect(progress.every((item) => item.wins.fraction == 0), isTrue);
       },
     );
 
     test(
-      'v2 -> v5 migration preserves preferences and adopts Cburnett and Brown',
+      'v2 migration preserves preferences and adopts Cburnett and Brown',
       () async {
         await database.close();
         final migrated = AppDatabase.forTesting(
@@ -261,6 +264,59 @@ void main() {
             .map((row) => row.read<String>('name'))
             .get();
         expect(indexes, contains('games_library_modified_id'));
+      },
+    );
+
+    test(
+      'v6 migration recounts saved games by side and keeps the autosave',
+      () async {
+        final dir = await io.Directory.systemTemp.createTemp('maia-campaign-');
+        addTearDown(() => dir.delete(recursive: true));
+        final file = io.File('${dir.path}/games.sqlite');
+        final legacy = AppDatabase.forTesting(NativeDatabase(file));
+        try {
+          final repo = DriftGameRepository(legacy);
+          for (final hour in [13, 14]) {
+            await _campaignResult(
+              repo,
+              id: 'white-$hour',
+              result: StoredGameResult.whiteWin,
+              hour: hour,
+            );
+          }
+          await _campaignResult(
+            repo,
+            id: 'black',
+            playerSide: Side.black,
+            result: StoredGameResult.blackWin,
+            hour: 15,
+          );
+          await repo.beginGame(_ongoingGame('saved', []));
+          await legacy.customStatement('DROP TABLE difficulty_progress');
+          await legacy.customStatement(
+            'CREATE TABLE difficulty_progress (rating INTEGER PRIMARY KEY, valid_wins INTEGER NOT NULL DEFAULT 0, window_games INTEGER NOT NULL DEFAULT 0, unlocked INTEGER NOT NULL DEFAULT 0, updated_at_utc INTEGER NOT NULL)',
+          );
+          await legacy.customStatement(
+            'INSERT INTO difficulty_progress VALUES (600, 2, 2, 1, 0), (800, 0, 0, 1, 0)',
+          );
+          await legacy.customStatement('PRAGMA user_version = 6');
+        } finally {
+          await legacy.close();
+        }
+        final migrated = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(migrated.close);
+        final progress = await DriftProgressRepository(migrated).getAll();
+        expect(progress.first.wins.white, 2);
+        expect(progress.first.wins.black, 1);
+        expect(progress[1].unlocked, isFalse);
+        expect(
+          (await DriftGameRepository(migrated).getActiveGame())?.id,
+          'saved',
+        );
+        expect(
+          await migrated.select(migrated.ratingHistory).get(),
+          hasLength(3),
+        );
       },
     );
 
@@ -331,8 +387,8 @@ void main() {
       expect(await games.completeGame(completed), isTrue);
       expect(await games.completeGame(completed), isFalse);
       final progress = await DriftProgressRepository(database).getAll();
-      expect(progress.first.validWins, 1);
-      expect(progress.first.gamesInWindow, 1);
+      expect(progress.first.wins.white, 1);
+      expect(progress.first.wins.black, 0);
       expect(progress[1].unlocked, isFalse);
       expect(await database.select(database.ratingHistory).get(), hasLength(1));
       expect(
@@ -345,7 +401,7 @@ void main() {
       final ongoing = _ongoingGame(
         'not-evaluated',
         ['e2e4'],
-        levelRating: 1100,
+        levelRating: 600,
         playerSide: Side.white,
         campaignMode: true,
         evaluated: false,
@@ -361,7 +417,7 @@ void main() {
       );
 
       final progress = await DriftProgressRepository(database).getAll();
-      expect(progress.first.validWins, 0);
+      expect(progress.first.wins.white, 0);
       expect(await database.select(database.ratingHistory).get(), isEmpty);
     });
 
@@ -433,49 +489,77 @@ void main() {
       );
     });
 
-    test(
-      'campaign unlocks with 2 wins in 3 games and remains unlocked after later losses',
-      () async {
+    test('campaign needs two wins as each side at the same level', () async {
+      final progress = DriftProgressRepository(database);
+      for (var i = 0; i < 4; i++) {
         await _campaignResult(
           games,
-          id: 'campaign-1-win',
+          id: 'white-$i',
           result: StoredGameResult.whiteWin,
-          hour: 13,
+          hour: 13 + i,
         );
-        var progress = await DriftProgressRepository(database).getAll();
-        expect(progress.first.validWins, 1);
-        expect(progress.first.gamesInWindow, 1);
-        expect(progress[1].unlocked, isFalse);
-
-        await _campaignResult(
-          games,
-          id: 'campaign-2-loss',
-          result: StoredGameResult.blackWin,
-          hour: 14,
-        );
-        await _campaignResult(
-          games,
-          id: 'campaign-3-win',
-          result: StoredGameResult.whiteWin,
-          hour: 15,
-        );
-        progress = await DriftProgressRepository(database).getAll();
-        expect(progress.first.validWins, 2);
-        expect(progress.first.gamesInWindow, 3);
-        expect(progress.first.levelCompleted, isTrue);
-        expect(progress[1].unlocked, isTrue);
-
-        await _campaignResult(
-          games,
-          id: 'campaign-4-loss',
-          result: StoredGameResult.blackWin,
-          hour: 16,
-        );
-        progress = await DriftProgressRepository(database).getAll();
-        expect(progress.first.levelCompleted, isTrue);
-        expect(progress[1].unlocked, isTrue);
-      },
-    );
+      }
+      await _campaignResult(
+        games,
+        id: 'black-win',
+        playerSide: Side.black,
+        result: StoredGameResult.blackWin,
+        hour: 17,
+      );
+      await _campaignResult(
+        games,
+        id: 'black-loss',
+        playerSide: Side.black,
+        result: StoredGameResult.whiteWin,
+        hour: 18,
+      );
+      await _campaignResult(
+        games,
+        id: 'draw',
+        playerSide: Side.black,
+        result: StoredGameResult.draw,
+        hour: 19,
+      );
+      await _campaignResult(
+        games,
+        id: 'other-level',
+        levelRating: 800,
+        playerSide: Side.black,
+        result: StoredGameResult.blackWin,
+        hour: 20,
+      );
+      await _complete(
+        games,
+        _ongoingGame('free', [], levelRating: 600, playerSide: Side.black),
+        result: StoredGameResult.blackWin,
+        endedAtUtc: DateTime.utc(2026, 8, 5, 21),
+      );
+      var levels = await progress.getAll();
+      expect(levels.first.wins.white, 2);
+      expect(levels.first.wins.black, 1);
+      expect(levels[1].unlocked, isFalse);
+      await _campaignResult(
+        games,
+        id: 'last-black-win',
+        playerSide: Side.black,
+        result: StoredGameResult.blackWin,
+        hour: 22,
+      );
+      await _campaignResult(
+        games,
+        id: 'later-loss',
+        result: StoredGameResult.blackWin,
+        hour: 23,
+      );
+      levels = await progress.getAll();
+      expect(levels.first.levelCompleted, isTrue);
+      expect(levels[1].unlocked, isTrue);
+      expect(levels[2].unlocked, isFalse);
+      await games.deleteGame('last-black-win');
+      levels = await progress.getAll();
+      expect(levels.first.wins.black, 1);
+      expect(levels[1].unlocked, isFalse);
+    });
 
     test('deletion rebuilds rating, results, and unlocks', () async {
       await _campaignResult(
@@ -498,7 +582,7 @@ void main() {
       );
       expect(
         (await DriftProgressRepository(database).getAll())[1].unlocked,
-        isTrue,
+        isFalse,
       );
 
       await games.deleteGame('rebuild-c-win');
@@ -512,14 +596,12 @@ void main() {
           completedAtUtc: DateTime.utc(2026, 8, 5, 13),
           levelRating: 600,
           outcome: PlayerGameOutcome.win,
-          campaignMode: true,
         ),
         EvaluatedGameSummary(
           gameId: 'rebuild-b-loss',
           completedAtUtc: DateTime.utc(2026, 8, 5, 14),
           levelRating: 600,
           outcome: PlayerGameOutcome.loss,
-          campaignMode: true,
         ),
       ]);
 
@@ -531,8 +613,8 @@ void main() {
         closeTo(expected.estimatedRating, 0.000001),
       );
       expect(history, hasLength(2));
-      expect(progress.first.validWins, 1);
-      expect(progress.first.gamesInWindow, 2);
+      expect(progress.first.wins.white, 1);
+      expect(progress.first.wins.black, 0);
       expect(progress[1].unlocked, isFalse);
     });
 
@@ -661,14 +743,16 @@ Future<void> _campaignResult(
   required String id,
   required StoredGameResult result,
   required int hour,
+  Side playerSide = Side.white,
+  int levelRating = 600,
 }) {
   return _complete(
     repository,
     _ongoingGame(
       id,
       const [],
-      levelRating: 600,
-      playerSide: Side.white,
+      levelRating: levelRating,
+      playerSide: playerSide,
       campaignMode: true,
     ),
     result: result,

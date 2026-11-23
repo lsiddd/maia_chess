@@ -114,7 +114,7 @@ reduce memory use with the 79M model. A Stockfish failure does not dispose Maia-
 ## Storage and eligibility
 
 SQLite lives in `maia_chess.sqlite` in the application documents directory and
-runs through `NativeDatabase.createInBackground`. Schema version 6 contains
+runs through `NativeDatabase.createInBackground`. Schema version 7 contains
 `games`, `game_moves`, `difficulty_progress`, `rating_history`, and `app_settings`.
 Foreign keys are enabled; deleting a game cascades to its moves and rating rows.
 Opening the database also ensures a library index on modification time and ID.
@@ -122,9 +122,9 @@ Opening the database also ensures a library index on modification time and ID.
 Only one ongoing autosave is retained. Starting a new game removes the old
 ongoing game transactionally. Saving compares move histories and writes only
 the changed suffix, including undo. Completion is idempotent. Normal chronological
-completions append a rating point and update the current
-campaign window in the same transaction. Retroactive completions and deletion of
-a rated game rebuild derived state with `computeWithDatabase`, sharing the
+completions append a rating point and update the campaign win counters by side
+in the same transaction. Retroactive completions and deletion of a rated game
+rebuild derived state with `computeWithDatabase`, sharing the
 executor and notifications with a worker. Unrated deletion needs no rebuild.
 Game reads hydrate metadata and moves within one read transaction. Reactive
 reads subscribe to updates before the initial snapshot and observe both tables.
@@ -139,8 +139,9 @@ Statistics include completed AI games with a human side, a known result, and
 `evaluated == true`. Outside the campaign, assistance and undo clear that flag.
 Campaign games disable these tools and ignore the saved attack overlay setting.
 Previously saved campaign games keep their recorded eligibility. Campaign
-progression uses only eligible campaign games. Imported games are completed and
-unrated. Only their mainline is persisted for replay, while the stored PGN preserves
+progression requires two eligible wins per side at each level. Schema 7
+recalculates the counters and unlocks from the saved games during upgrade.
+Imported games are completed and unrated. Only their mainline is persisted for replay, while the stored PGN preserves
 parsed headers, comments, and variations. Validation checks mainline and
 variation legality before writing anything. Android file content is streamed
 asynchronously with a byte cap; UTF-8 decoding

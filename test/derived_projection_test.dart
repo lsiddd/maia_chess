@@ -21,7 +21,7 @@ void main() {
             .map((r) => [r.gameId, r.rating, r.recordedAtUtc])
             .toList(),
         (await db.select(db.difficultyProgress).get())
-            .map((r) => [r.rating, r.validWins, r.windowGames, r.unlocked])
+            .map((r) => [r.rating, r.whiteWins, r.blackWins, r.unlocked])
             .toList(),
       ];
       for (var i = 0; i < 16; i++) {
@@ -37,7 +37,7 @@ void main() {
           evaluated: true,
           campaignMode: true,
           levelRating: i < 8 ? 600 : 800,
-          playerSide: Side.white,
+          playerSide: i.isEven ? Side.white : Side.black,
           initialFen: Chess.initial.fen,
           currentFen: Chess.initial.fen,
           moves: const [],

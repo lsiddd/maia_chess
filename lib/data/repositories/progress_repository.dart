@@ -1,23 +1,19 @@
+import '../../features/difficulty/domain/campaign_wins.dart';
+
 class DifficultyProgressModel {
   const DifficultyProgressModel({
     required this.rating,
-    required this.validWins,
-    required this.gamesInWindow,
+    required this.wins,
     required this.unlocked,
-    required this.winsRequired,
-    required this.windowSize,
     required this.updatedAtUtc,
   });
 
   final int rating;
-  final int validWins;
-  final int gamesInWindow;
+  final CampaignWins wins;
   final bool unlocked;
-  final int winsRequired;
-  final int windowSize;
   final DateTime updatedAtUtc;
 
-  bool get levelCompleted => validWins >= winsRequired;
+  bool get levelCompleted => wins.completed;
 }
 
 abstract interface class ProgressRepository {

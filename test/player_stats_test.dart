@@ -11,21 +11,18 @@ void main() {
           completedAtUtc: DateTime.utc(2026, 8, 5, 14),
           levelRating: 1500,
           outcome: PlayerGameOutcome.loss,
-          campaignMode: false,
         ),
         EvaluatedGameSummary(
           gameId: 'win-1',
           completedAtUtc: DateTime.utc(2026, 8, 5, 12),
           levelRating: 1500,
           outcome: PlayerGameOutcome.win,
-          campaignMode: false,
         ),
         EvaluatedGameSummary(
           gameId: 'win-2',
           completedAtUtc: DateTime.utc(2026, 8, 5, 13),
           levelRating: 1500,
           outcome: PlayerGameOutcome.win,
-          campaignMode: true,
         ),
       ]);
 
@@ -48,14 +45,12 @@ void main() {
           completedAtUtc: DateTime.utc(2026, 8, 5, 12),
           levelRating: 1500,
           outcome: PlayerGameOutcome.win,
-          campaignMode: false,
         ),
         EvaluatedGameSummary(
           gameId: 'draw',
           completedAtUtc: DateTime.utc(2026, 8, 5, 13),
           levelRating: 1500,
           outcome: PlayerGameOutcome.draw,
-          campaignMode: false,
         ),
       ]);
 

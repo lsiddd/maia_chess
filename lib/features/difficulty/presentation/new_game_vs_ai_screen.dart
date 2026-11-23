@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +11,7 @@ import '../../game/application/game_controller.dart';
 import '../../game/presentation/game_screen.dart';
 import '../../game/presentation/time_control_picker.dart';
 import '../../game/application/time_control.dart';
+import 'side_picker.dart';
 
 /// Configure the human side and Maia-3 level for free play. Campaign selection
 /// lives in `CampaignScreen`.
@@ -23,7 +23,7 @@ class NewGameVsAiScreen extends ConsumerStatefulWidget {
 }
 
 class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
-  Side _humanSide = Side.white;
+  SideChoice _humanSide = SideChoice.white;
   TimeControl _timeControl = const TimeControl();
   int _levelRating = DifficultyLevel.all.first.rating;
   bool _starting = false;
@@ -61,7 +61,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
     final controller = ref.read(gameControllerProvider.notifier);
     try {
       final pending = _pendingStart = controller.startVsAi(
-        humanSide: _humanSide,
+        humanSide: _humanSide.resolve(),
         levelRating: _levelRating,
         timeControl: _timeControl,
         request: request,
@@ -121,27 +121,11 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
               const SizedBox(height: AppSpacing.xl),
               const _SectionLabel(icon: Icons.swap_horiz, label: 'Your side'),
               const SizedBox(height: AppSpacing.m),
-              SegmentedButton<Side>(
-                direction: MediaQuery.textScalerOf(context).scale(14) > 20
-                    ? Axis.vertical
-                    : Axis.horizontal,
-                segments: const [
-                  ButtonSegment(
-                    value: Side.white,
-                    icon: Icon(Icons.circle_outlined),
-                    label: Text('White'),
-                  ),
-                  ButtonSegment(
-                    value: Side.black,
-                    icon: Icon(Icons.circle),
-                    label: Text('Black'),
-                  ),
-                ],
-                selected: {_humanSide},
-                onSelectionChanged: _starting
+              SidePicker(
+                value: _humanSide,
+                onChanged: _starting
                     ? null
-                    : (selection) =>
-                          setState(() => _humanSide = selection.first),
+                    : (value) => setState(() => _humanSide = value),
               ),
               const SizedBox(height: AppSpacing.xl),
               const _SectionLabel(
@@ -197,7 +181,7 @@ class _NewGameVsAiScreenState extends ConsumerState<NewGameVsAiScreen> {
                   children: [
                     Text(
                       'Maia-3 $_levelRating · '
-                      '${_humanSide == Side.white ? 'White' : 'Black'} · '
+                      '${_humanSide.label} · '
                       '${timeControlLabel(_timeControl)}',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
