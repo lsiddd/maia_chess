@@ -14,7 +14,11 @@ void registerChessAssetLicenses() {
     ], await rootBundle.loadString('assets/chess_pieces/LICENSE-GPL-2.0.txt'));
     yield LicenseEntryWithLineBreaks(const [
       'Lichess board themes',
-      'Lichess SFX move and capture sounds by Enigmahack',
     ], await rootBundle.loadString('assets/chess_boards/LICENSE-AGPL-3.0.txt'));
+    yield const LicenseEntryWithLineBreaks(
+      ['Lichess Standard move and capture sounds'],
+      'Copyright 2000, Sounddogs.com. '
+      'Distributed with permission in Maia Chess.',
+    );
   });
 }

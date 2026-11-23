@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -5,6 +8,20 @@ import 'package:maia_chess/features/game/application/move_feedback.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('Android resources match the original Lichess Standard recordings', () {
+    const raw = 'android/app/src/main/res/raw';
+    const recordings = {
+      'chess_move.ogg':
+          'bef9236737f601790b1eb30a9eefc0c00de85804d4dfc9d2b51555b5e4b82f5c',
+      'chess_capture.ogg':
+          '3d1352ded44d53e55d001f78bb043fe1288692fb882420ec17677997637762ed',
+    };
+    for (final entry in recordings.entries) {
+      final bytes = File('$raw/${entry.key}').readAsBytesSync();
+      expect(sha256.convert(bytes).toString(), entry.value, reason: entry.key);
+    }
+  });
 
   group('classifyMoveFeedback', () {
     test('recognises a quiet move', () {
